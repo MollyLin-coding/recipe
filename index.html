@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>南坡萬酒廠 酒譜系統</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC',sans-serif}
+:root{
+  --brand:#1D9E75;--bl:#E1F5EE;--bd:#085041;--gold:#BA7517;
+  --r:12px;--bg:#fff;--bg2:#f5f5f3;--tx:#1a1a1a;--mu:#6b7280;--bo:rgba(0,0,0,0.1);--red:#e57373
+}
+.page{display:none;position:fixed;inset:0;flex-direction:column;overflow:hidden;background:#04342C}
+.page.on{display:flex}
+
+/* 登入 */
+#pg-login{background:var(--bd);align-items:center;justify-content:center;padding:2rem 1.5rem;overflow-y:auto}
+.logo-i{font-size:44px;text-align:center;margin-bottom:6px}
+.logo-t{font-size:20px;color:#9FE1CB;text-align:center;font-weight:600}
+.logo-s{font-size:12px;color:rgba(159,225,203,.6);text-align:center;margin-bottom:1.5rem}
+.lcard{background:rgba(255,255,255,.07);border:.5px solid rgba(159,225,203,.2);border-radius:var(--r);padding:1.25rem;width:100%;max-width:340px}
+.plb{font-size:12px;color:rgba(159,225,203,.7);margin-bottom:.6rem;text-align:center}
+.plb select{width:100%;background:rgba(255,255,255,.08);border:.5px solid rgba(159,225,203,.25);color:#9FE1CB;padding:9px;border-radius:8px;font-size:14px;margin-bottom:.9rem}
+.dots{display:flex;gap:7px;justify-content:center;margin-bottom:1rem}
+.dot{width:40px;height:44px;background:rgba(255,255,255,.06);border:.5px solid rgba(159,225,203,.2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;color:#9FE1CB;transition:all .1s}
+.dot.f{background:rgba(29,158,117,.3);border-color:rgba(29,158,117,.6)}
+.kpad{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.k{background:rgba(255,255,255,.07);border:.5px solid rgba(159,225,203,.15);border-radius:9px;height:50px;color:#E1F5EE;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.k:active{background:rgba(29,158,117,.35)}
+.kgo{background:var(--brand);font-size:14px}
+.em{color:#F09595;font-size:12px;text-align:center;margin-top:.4rem;min-height:15px}
+
+/* 共用 header */
+.hd{background:var(--bd);padding:.85rem 1rem;padding-top:max(.85rem,env(safe-area-inset-top));flex-shrink:0}
+.hdr{display:flex;justify-content:space-between;align-items:center}
+.htitle{font-size:15px;font-weight:600;color:#9FE1CB}
+.hsubt{font-size:10px;color:rgba(159,225,203,.55);margin-top:2px}
+.ubadge{background:rgba(159,225,203,.15);border:.5px solid rgba(159,225,203,.3);border-radius:20px;padding:3px 10px;font-size:11px;color:#9FE1CB;cursor:pointer;display:flex;align-items:center;gap:4px;white-space:nowrap}
+.admin-pip{font-size:8px;background:var(--gold);color:white;border-radius:10px;padding:1px 5px;font-weight:600}
+
+/* body 滾動區 */
+.bscroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:.7rem;padding-bottom:calc(65px + env(safe-area-inset-bottom))}
+
+/* 酒譜頁 */
+#pg-recipe{background:var(--bg2)}
+.rsel-bar{display:flex;gap:6px;margin-bottom:.6rem}
+.rsel{flex:1;padding:7px 8px;border-radius:8px;border:.5px solid var(--bo);background:var(--bg);color:var(--tx);font-size:12px;font-weight:500}
+.rsel:focus{outline:none;border-color:var(--brand)}
+.card{background:var(--bg);border:.5px solid var(--bo);border-radius:var(--r);padding:.65rem .85rem;margin-bottom:.6rem}
+.stitle{font-size:10px;color:var(--mu);letter-spacing:.5px;text-transform:uppercase;font-weight:600;margin-bottom:.4rem}
+.vrow{display:flex;align-items:center;gap:8px}
+.vi{width:80px;font-size:14px;font-weight:600;color:var(--bd);text-align:center;padding:5px;border-radius:8px;border:2px solid var(--brand);background:var(--bl)}
+.ing-hd{display:grid;grid-template-columns:minmax(0,1fr) 44px 52px 28px;gap:3px;background:var(--bl);padding:5px 8px;border-radius:6px 6px 0 0}
+.ing-hd span{font-size:9px;color:var(--bd);font-weight:600}
+.ing-hd span:nth-child(2),.ing-hd span:nth-child(3){text-align:right}
+.ing-hd span:nth-child(4){text-align:center}
+.ing-row{display:grid;grid-template-columns:minmax(0,1fr) 44px 52px 28px;gap:3px;padding:6px 8px;border-bottom:.5px solid var(--bo);align-items:center}
+.ing-row:nth-child(even){background:rgba(0,0,0,.018)}
+.ing-name{font-size:11px;color:var(--tx);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ing-ctag{font-size:9px;color:var(--brand);background:var(--bl);border:.5px solid rgba(29,158,117,.3);border-radius:5px;padding:1px 5px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;display:block}
+.ing-ratio{font-size:11px;color:var(--mu);text-align:right}
+.ing-vol{font-size:11px;color:var(--tx);text-align:right}
+.ing-cb-cell{display:flex;justify-content:center}
+.comp-cb{width:14px;height:14px;cursor:pointer;accent-color:var(--brand)}
+.ing-foot{display:grid;grid-template-columns:minmax(0,1fr) 44px 52px 28px;gap:3px;background:var(--bl);padding:6px 8px;border-radius:0 0 6px 6px}
+.ing-foot span{font-size:12px;font-weight:600;color:var(--bd)}
+.ing-foot span:nth-child(2),.ing-foot span:nth-child(3){text-align:right}
+.crow{display:flex;justify-content:space-between;padding:3px 0;font-size:11px;border-bottom:.5px solid var(--bo)}
+.crow:last-of-type{border-bottom:none}
+.ctot{display:flex;justify-content:space-between;border-top:1px solid var(--bo);margin-top:5px;padding-top:6px;font-weight:600;font-size:12px}
+.sbtn{width:100%;background:var(--brand);color:white;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.5rem}
+.sbtn:active{opacity:.8}
+.sok{color:var(--brand);font-size:11px;text-align:center;min-height:14px}
+.igrid{display:grid;grid-template-columns:1fr 1fr;gap:7px 10px}
+.if label{font-size:10px;color:var(--mu);display:block;margin-bottom:2px}
+.if input{width:100%;font-size:12px;padding:5px 7px;border-radius:6px;border:.5px solid var(--bo);background:var(--bg2);color:var(--tx)}
+.if input:focus{outline:none;border-color:var(--brand)}
+
+/* 原料庫 */
+#pg-inv{background:var(--bg2)}
+.rfbar{background:rgba(29,158,117,.15);border-bottom:.5px solid rgba(29,158,117,.3);padding:5px 12px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.rfbar span{font-size:10px;color:#9FE1CB}
+.rfbtn{font-size:10px;color:var(--brand);background:rgba(29,158,117,.15);border:.5px solid rgba(29,158,117,.4);border-radius:12px;padding:2px 9px;cursor:pointer}
+.sbar{display:flex;align-items:center;background:var(--bg);border:.5px solid var(--bo);border-radius:10px;padding:7px 11px;margin-bottom:.6rem;gap:7px}
+.sbar input{flex:1;border:none;outline:none;font-size:13px;background:transparent;color:var(--tx)}
+.ctabs{display:flex;gap:5px;overflow-x:auto;margin-bottom:.6rem;padding-bottom:3px;scrollbar-width:none}
+.ctabs::-webkit-scrollbar{display:none}
+.ctab{flex-shrink:0;padding:4px 10px;border-radius:20px;font-size:11px;border:1px solid var(--bo);background:var(--bg);color:var(--mu);cursor:pointer;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.ctab.on{background:var(--brand);color:white;border-color:var(--brand)}
+.icard{background:var(--bg);border:.5px solid var(--bo);border-radius:var(--r);overflow:hidden;margin-bottom:.6rem}
+.ictitle{background:var(--bl);padding:6px 11px;font-size:11px;font-weight:600;color:var(--bd);border-bottom:.5px solid var(--bo)}
+.irow{display:grid;grid-template-columns:1fr auto;gap:3px 7px;padding:7px 11px;border-bottom:.5px solid var(--bo);align-items:start}
+.irow:last-child{border-bottom:none}
+.irow:nth-child(even){background:rgba(0,0,0,.015)}
+.iname{font-size:12px;color:var(--tx);font-weight:500}
+.ibrand{font-size:10px;color:var(--mu)}
+.iprice{font-size:12px;color:var(--bd);font-weight:600;text-align:right;white-space:nowrap}
+.imeta{font-size:10px;color:var(--mu);text-align:right}
+.itags{display:flex;gap:3px;flex-wrap:wrap;margin-top:2px}
+.itag{font-size:9px;padding:1px 5px;border-radius:10px;background:var(--bg2);color:var(--mu);border:.5px solid var(--bo)}
+.itag.a{background:rgba(186,117,23,.1);color:var(--gold);border-color:rgba(186,117,23,.3)}
+.itag.p{background:rgba(29,158,117,.08);color:var(--brand);border-color:rgba(29,158,117,.2)}
+.iload{text-align:center;padding:2.5rem 1rem;color:var(--mu);font-size:13px}
+
+/* 製作記錄 */
+#pg-rec{background:var(--bg2)}
+.tab-bar{display:flex;gap:0;margin-bottom:.6rem;background:var(--bg);border:.5px solid var(--bo);border-radius:9px;overflow:hidden;flex-shrink:0}
+.tab-btn{flex:1;padding:8px 4px;font-size:11px;border:none;background:transparent;color:var(--mu);cursor:pointer;font-weight:500;-webkit-tap-highlight-color:transparent}
+.tab-btn.on{background:var(--brand);color:white;font-weight:600}
+.rec-item{background:var(--bg);border:.5px solid var(--bo);border-radius:var(--r);padding:.6rem .85rem;margin-bottom:.5rem}
+.rec-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px}
+.rec-name{font-size:12px;font-weight:600;color:var(--tx)}
+.rec-date{font-size:10px;color:var(--mu)}
+.rec-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+.rtag{font-size:10px;background:var(--bg2);border:.5px solid var(--bo);border-radius:6px;padding:2px 6px;color:var(--mu)}
+.rtag.g{background:var(--bl);color:var(--bd);border-color:rgba(29,158,117,.3)}
+.rec-note{font-size:10px;color:var(--mu);margin-top:4px;font-style:italic}
+.apply-item{background:var(--bg);border:.5px solid var(--bo);border-radius:var(--r);padding:.6rem .85rem;margin-bottom:.5rem}
+.apply-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.apply-name{font-size:12px;font-weight:600;color:var(--tx)}
+.apply-meta{font-size:10px;color:var(--mu);margin-bottom:5px}
+.apply-change{background:var(--bg2);border-radius:6px;padding:6px 8px;font-size:11px;color:var(--tx);margin-bottom:4px}
+.apply-clbl{font-size:9px;color:var(--mu);font-weight:600;margin-bottom:2px}
+.approve-row{display:flex;gap:6px;margin-top:7px}
+.btn-approve{flex:1;background:#D1FAE5;color:#065F46;border:none;border-radius:7px;padding:7px;font-size:11px;font-weight:600;cursor:pointer}
+.btn-reject{flex:1;background:#FEE2E2;color:#991B1B;border:none;border-radius:7px;padding:7px;font-size:11px;font-weight:600;cursor:pointer}
+.badge{font-size:9px;padding:2px 7px;border-radius:10px;font-weight:600}
+.b-pending{background:#FEF3C7;color:#92400E}
+.b-approved{background:#D1FAE5;color:#065F46}
+.b-rejected{background:#FEE2E2;color:#991B1B}
+.history-item{background:var(--bg);border:.5px solid var(--bo);border-radius:var(--r);padding:.6rem .85rem;margin-bottom:.5rem}
+.history-change{font-size:11px;color:var(--mu);margin-top:5px;padding-top:5px;border-top:.5px solid var(--bo)}
+.add-btn{width:100%;background:var(--brand);color:white;border:none;border-radius:10px;padding:10px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:.6rem;-webkit-tap-highlight-color:transparent}
+.add-btn:active{opacity:.8}
+.empty-tip{text-align:center;padding:2rem 1rem;color:var(--mu);font-size:12px}
+.info-box{background:var(--bl);border-radius:8px;padding:7px 10px;margin-bottom:.55rem;font-size:11px;color:var(--bd)}
+
+/* 設定 */
+#pg-set{background:var(--bg2)}
+.avatar{width:60px;height:60px;border-radius:50%;background:var(--bd);display:flex;align-items:center;justify-content:center;font-size:22px;margin:0 auto .5rem;color:#9FE1CB;font-weight:600}
+.setting-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:.5px solid var(--bo)}
+.setting-row:last-child{border-bottom:none}
+.setting-lbl{font-size:13px;color:var(--tx)}
+.setting-val{font-size:12px;color:var(--mu)}
+.logout-btn{width:100%;background:none;border:1px solid var(--red);color:var(--red);border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;margin-top:.4rem}
+
+/* 導航 */
+#nav{position:fixed;bottom:0;left:0;right:0;background:var(--bg);border-top:.5px solid var(--bo);display:none;z-index:999;padding:6px 0 calc(6px + env(safe-area-inset-bottom))}
+#nav.on{display:flex}
+.ni{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;-webkit-tap-highlight-color:transparent;position:relative}
+.ni-icon{font-size:18px}
+.ni-lbl{font-size:9px;color:var(--mu)}
+.ni.on .ni-lbl{color:var(--brand);font-weight:600}
+.ndot{position:absolute;top:0;right:14px;width:7px;height:7px;background:var(--red);border-radius:50%;display:none}
+.ndot.on{display:block}
+
+/* 遮罩 */
+#mask{position:fixed;inset:0;background:rgba(4,52,44,.85);display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;z-index:9999}
+#mask.on{display:flex}
+.spin{width:32px;height:32px;border:3px solid rgba(159,225,203,.2);border-top-color:#9FE1CB;border-radius:50%;animation:sp .7s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.mask-txt{color:#9FE1CB;font-size:13px}
+
+/* Modal 通用 */
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center;z-index:8888}
+.modal-ov.on{display:flex}
+.sheet{background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-width:480px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
+.shd{background:var(--bd);padding:.8rem 1rem;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.stitle2{color:#9FE1CB;font-size:13px;font-weight:600}
+.scl{color:#9FE1CB;font-size:20px;cursor:pointer;line-height:1}
+.sbody{flex:1;overflow-y:auto;padding:.85rem;-webkit-overflow-scrolling:touch}
+.form-row{margin-bottom:.55rem}
+.form-row label{font-size:10px;color:var(--mu);display:block;margin-bottom:3px;font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+.form-inp,.form-sel,.form-ta{width:100%;padding:7px 9px;border-radius:7px;border:.5px solid var(--bo);background:var(--bg2);color:var(--tx);font-size:13px}
+.form-ta{resize:none;height:60px}
+.form-inp:focus,.form-sel:focus,.form-ta:focus{outline:none;border-color:var(--brand)}
+.csave{width:100%;background:var(--brand);color:white;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;margin-top:.4rem}
+.csave:active{opacity:.8}
+.warn{font-size:11px;color:var(--red);text-align:center;margin-top:4px;min-height:14px}
+
+/* 複合材料 modal */
+.lbl3{font-size:9px;color:var(--mu);font-weight:600;margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px}
+.comp-srow{display:flex;gap:6px;margin-bottom:.45rem}
+.comp-csel{flex:1;padding:6px 7px;border-radius:7px;border:.5px solid var(--bo);background:var(--bg2);color:var(--tx);font-size:12px}
+.comp-skw{flex:1.4;padding:6px 7px;border-radius:7px;border:.5px solid var(--bo);background:var(--bg2);color:var(--tx);font-size:12px}
+.comp-csel:focus,.comp-skw:focus{outline:none;border-color:var(--brand)}
+.comp-dd{background:var(--bg);border:.5px solid var(--bo);border-radius:8px;max-height:130px;overflow-y:auto;margin-bottom:.5rem;display:none}
+.comp-dd.on{display:block}
+.dopt{padding:6px 9px;font-size:12px;cursor:pointer;border-bottom:.5px solid var(--bo)}
+.dopt:last-child{border-bottom:none}
+.dopt:active,.dopt:hover{background:var(--bl)}
+.dn{font-weight:500;color:var(--tx)}
+.dm{font-size:10px;color:var(--mu);margin-top:1px}
+.sub-hd{display:grid;grid-template-columns:minmax(0,1fr) 58px 68px 22px;gap:5px;padding:4px 0;margin-bottom:3px;border-bottom:.5px solid var(--bo)}
+.sub-hd span{font-size:9px;color:var(--mu);font-weight:600}
+.sub-hd span:nth-child(2){text-align:center}
+.sub-hd span:nth-child(3){text-align:right}
+.subrow{display:grid;grid-template-columns:minmax(0,1fr) 58px 68px 22px;gap:5px;align-items:center;padding:7px 0;border-bottom:.5px solid var(--bo)}
+.subrow:last-child{border-bottom:none}
+.sn{font-size:12px;color:var(--tx);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb2{font-size:10px;color:var(--mu)}
+.sp{width:100%;padding:5px 4px;border-radius:6px;border:.5px solid var(--bo);background:var(--bg2);font-size:13px;text-align:center;color:var(--tx)}
+.sc{font-size:11px;color:var(--gold);font-weight:500;text-align:right}
+.sc-ml{font-size:9px;color:var(--mu);text-align:right}
+.sdel{background:none;border:none;color:var(--red);font-size:16px;cursor:pointer;line-height:1;padding:0;text-align:center}
+.subtot{background:var(--bl);border-radius:8px;padding:7px 10px;margin:.45rem 0;display:flex;justify-content:space-between;align-items:center}
+.subtot-lbl{font-size:11px;color:var(--bd)}
+.subtot-val{font-size:13px;color:var(--gold);font-weight:600}
+.hi{background:#FFF9C4;font-weight:600}
+</style>
+</head>
+<body>
+
+<div id="mask"><div class="spin"></div><div class="mask-txt" id="mask-txt">載入中...</div></div>
+
+<!-- ══ 登入 ══ -->
+<div id="pg-login" class="page on">
+  <div class="logo-i">🍶</div>
+  <div class="logo-t">南坡萬酒廠</div>
+  <div class="logo-s">酒譜管理系統 v2.0</div>
+  <div class="lcard">
+    <div class="plb">選擇調酒師帳號</div>
+    <div class="plb">
+      <select id="usel">
+        <option value="">-- 請選擇 --</option>
+        <option>Kevin</option><option>Molly</option>
+        <option>阿軒</option><option>小卷</option><option>Vic</option>
+      </select>
+    </div>
+    <div class="plb">輸入 6 碼密碼</div>
+    <div class="dots">
+      <div class="dot" id="d0">·</div><div class="dot" id="d1">·</div>
+      <div class="dot" id="d2">·</div><div class="dot" id="d3">·</div>
+      <div class="dot" id="d4">·</div><div class="dot" id="d5">·</div>
+    </div>
+    <div class="kpad">
+      <div class="k" onclick="pk('1')">1</div><div class="k" onclick="pk('2')">2</div><div class="k" onclick="pk('3')">3</div>
+      <div class="k" onclick="pk('4')">4</div><div class="k" onclick="pk('5')">5</div><div class="k" onclick="pk('6')">6</div>
+      <div class="k" onclick="pk('7')">7</div><div class="k" onclick="pk('8')">8</div><div class="k" onclick="pk('9')">9</div>
+      <div class="k" onclick="pk('del')">⌫</div><div class="k" onclick="pk('0')">0</div>
+      <div class="k kgo" onclick="doLogin()">確認</div>
+    </div>
+    <div class="em" id="em"></div>
+  </div>
+</div>
+
+<!-- ══ 酒譜 ══ -->
+<div id="pg-recipe" class="page">
+  <div class="hd">
+    <div class="hdr">
+      <div><div class="htitle" id="hd-recipe">紫芋茉莉奶酒</div><div class="hsubt" id="hd-client">FeelingBar</div></div>
+      <div class="ubadge" onclick="doLogout()">
+        <span id="lu">-</span>
+        <span class="admin-pip" id="admin-pip" style="display:none">管理者</span>
+        <span style="font-size:9px;opacity:.6">登出</span>
+      </div>
+    </div>
+  </div>
+  <div class="bscroll">
+    <div class="rsel-bar">
+      <select class="rsel" id="sel-client" onchange="onClientChange()">
+        <option value="FeelingBar">FeelingBar</option>
+        <option value="南坡萬公版">南坡萬公版</option>
+      </select>
+      <select class="rsel" id="sel-recipe" onchange="onRecipeChange()">
+        <option value="紫芋茉莉奶酒">紫芋茉莉奶酒</option>
+      </select>
+    </div>
+    <div class="card">
+      <div class="stitle">訂單資訊（請填寫）</div>
+      <div class="igrid">
+        <div class="if"><label>訂單編號/下單數</label><input type="text" id="f1" placeholder="請輸入..."></div>
+        <div class="if"><label>產品PM</label><input type="text" id="f2" placeholder="請輸入..."></div>
+        <div class="if"><label>生產日期</label><input type="date" id="f3"></div>
+        <div class="if"><label>交貨日</label><input type="date" id="f4"></div>
+        <div class="if"><label>前標/後標</label><input type="text" id="f5" placeholder="請輸入..."></div>
+        <div class="if"><label>瓶蓋/瓶型/封膜</label><input type="text" id="f6" placeholder="請輸入..."></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="stitle">製酒總體積</div>
+      <div class="vrow">
+        <span style="font-size:12px;color:var(--mu);flex:1">調酒師輸入批量</span>
+        <input class="vi" type="number" id="tvol" value="2000" min="100" step="100" onchange="recalc()" onblur="recalc()">
+        <span style="font-size:11px;color:var(--mu)">ml</span>
+      </div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="stitle" style="padding:.6rem .85rem 0">材料配方</div>
+      <div style="padding:0 .6rem .6rem">
+        <div class="ing-hd"><span>材料名稱</span><span>比例</span><span>用量ml</span><span>複合</span></div>
+        <div id="inglist"></div>
+        <div class="ing-foot"><span>總計</span><span>100%</span><span id="tvd">2000</span><span></span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="stitle">成本試算</div>
+      <div id="clist"></div>
+      <div class="ctot"><span>總成本估算</span><span id="tcost" style="color:var(--gold)">NT$ —</span></div>
+    </div>
+    <button class="sbtn" onclick="saveHeader()">儲存訂單資訊 ↗</button>
+    <div class="sok" id="sok"></div>
+  </div>
+</div>
+
+<!-- ══ 原料庫 ══ -->
+<div id="pg-inv" class="page">
+  <div class="hd">
+    <div class="hdr">
+      <div class="htitle">📦 原料庫</div>
+      <div class="ubadge" onclick="doLogout()"><span id="ilu">-</span> 登出</div>
+    </div>
+    <div style="font-size:10px;color:rgba(159,225,203,.5);margin-top:3px">即時同步自 Google Sheets</div>
+  </div>
+  <div class="rfbar">
+    <span id="inv-time">尚未載入</span>
+    <div class="rfbtn" onclick="loadInv()">🔄 重新整理</div>
+  </div>
+  <div class="bscroll">
+    <div class="sbar"><span style="font-size:15px">🔍</span><input type="text" id="srch" placeholder="搜尋原料名稱、品牌..." oninput="filterInv()"></div>
+    <div class="ctabs" id="ctabs"></div>
+    <div id="ilist"><div class="iload">載入中...</div></div>
+  </div>
+</div>
+
+<!-- ══ 製作記錄 ══ -->
+<div id="pg-rec" class="page">
+  <div class="hd">
+    <div class="hdr">
+      <div class="htitle">📝 製作記錄</div>
+      <div class="ubadge" onclick="doLogout()"><span id="rlu">-</span> 登出</div>
+    </div>
+  </div>
+  <div class="bscroll">
+    <div class="tab-bar">
+      <button class="tab-btn on" id="tb0" onclick="switchRecTab(0)">製作批次</button>
+      <button class="tab-btn" id="tb1" onclick="switchRecTab(1)">申請記錄</button>
+      <button class="tab-btn" id="tb2" onclick="switchRecTab(2)">歷史變更</button>
+    </div>
+    <div id="rec-batch">
+      <button class="add-btn" onclick="openRecModal()">＋ 新增製作記錄</button>
+      <div id="batch-list"><div class="iload">載入中...</div></div>
+    </div>
+    <div id="rec-apply" style="display:none">
+      <button class="add-btn" onclick="openApplyModal()">＋ 申請酒譜修改</button>
+      <div id="apply-list"><div class="iload">載入中...</div></div>
+    </div>
+    <div id="rec-history" style="display:none">
+      <div id="history-list"><div class="iload">載入中...</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 設定 ══ -->
+<div id="pg-set" class="page">
+  <div class="hd">
+    <div class="hdr">
+      <div class="htitle">⚙️ 設定</div>
+      <div class="ubadge" onclick="doLogout()"><span id="slu">-</span> 登出</div>
+    </div>
+  </div>
+  <div class="bscroll">
+    <div class="card" style="text-align:center;padding:1rem .85rem">
+      <div class="avatar" id="set-av">-</div>
+      <div style="font-size:16px;font-weight:600;color:var(--tx)" id="set-name">-</div>
+      <div style="font-size:12px;color:var(--mu)" id="set-role">-</div>
+      <div id="set-admin-note" style="display:none;margin-top:6px;font-size:11px;background:#FEF3C7;color:#92400E;border-radius:8px;padding:5px 10px">管理者帳號 — 可審核申請</div>
+    </div>
+    <div class="card">
+      <div class="stitle">個人資料</div>
+      <div class="setting-row"><span class="setting-lbl">帳號</span><span class="setting-val" id="set-user">-</span></div>
+      <div class="setting-row"><span class="setting-lbl">角色</span><span class="setting-val" id="set-role2">-</span></div>
+      <div class="setting-row"><span class="setting-lbl">所屬酒廠</span><span class="setting-val">南坡萬酒廠</span></div>
+    </div>
+    <div class="card">
+      <div class="stitle">APP 資訊</div>
+      <div class="setting-row"><span class="setting-lbl">版本</span><span class="setting-val">v2.0</span></div>
+      <div class="setting-row"><span class="setting-lbl">資料來源</span><span class="setting-val">Google Sheets</span></div>
+    </div>
+    <button class="logout-btn" onclick="doLogout()">登出</button>
+  </div>
+</div>
+
+<!-- 導航 -->
+<div id="nav">
+  <div class="ni on" id="n0" onclick="goTab(0)"><span class="ni-icon">📋</span><span class="ni-lbl">酒譜</span></div>
+  <div class="ni" id="n1" onclick="goTab(1)"><span class="ni-icon">📦</span><span class="ni-lbl">原料庫</span></div>
+  <div class="ni" id="n2" onclick="goTab(2)"><span class="ni-icon">📝</span><span class="ni-lbl">製作記錄</span><div class="ndot" id="ndot"></div></div>
+  <div class="ni" id="n3" onclick="goTab(3)"><span class="ni-icon">⚙️</span><span class="ni-lbl">設定</span></div>
+</div>
+
+<!-- Modal 複合材料 -->
+<div class="modal-ov" id="comp-modal">
+  <div class="sheet">
+    <div class="shd"><div class="stitle2" id="comp-title">複合材料設定</div><div class="scl" onclick="closeComp()">✕</div></div>
+    <div class="sbody">
+      <div class="lbl3">選擇子原料</div>
+      <div class="comp-srow">
+        <select class="comp-csel" id="ccat" onchange="onCat()">
+          <option value="">分類選擇</option>
+        </select>
+        <input class="comp-skw" id="skw" type="text" placeholder="關鍵字搜尋..." oninput="onKw()">
+      </div>
+      <div class="comp-dd" id="comp-dd"></div>
+      <div class="lbl3">子原料明細</div>
+      <div class="sub-hd"><span>原料名稱</span><span style="text-align:center">比例%</span><span style="text-align:right">成本/用量</span><span></span></div>
+      <div id="subrows"></div>
+      <div class="subtot"><span class="subtot-lbl">複合成本小計</span><span class="subtot-val" id="stval">NT$ 0.00</span></div>
+      <div class="warn" id="comp-warn"></div>
+      <button class="csave" onclick="saveComp()">確認儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal 新增批次記錄 -->
+<div class="modal-ov" id="rec-modal">
+  <div class="sheet">
+    <div class="shd"><div class="stitle2">新增製作記錄</div><div class="scl" onclick="document.getElementById('rec-modal').classList.remove('on')">✕</div></div>
+    <div class="sbody">
+      <div class="form-row"><label>酒款</label><select class="form-sel" id="rm-recipe"><option>紫芋茉莉奶酒</option></select></div>
+      <div class="form-row"><label>客戶</label><select class="form-sel" id="rm-client"><option>FeelingBar</option><option>南坡萬公版</option></select></div>
+      <div class="form-row"><label>製作日期</label><input class="form-inp" type="date" id="rm-date"></div>
+      <div class="form-row"><label>製作體積 (ml)</label><input class="form-inp" type="number" id="rm-vol" placeholder="例：2000"></div>
+      <div class="form-row"><label>調酒師</label><input class="form-inp" id="rm-user" readonly style="color:var(--mu)"></div>
+      <div class="form-row"><label>備註</label><textarea class="form-ta" id="rm-note" placeholder="製作過程、調整說明..."></textarea></div>
+      <button class="csave" onclick="saveRec()">儲存記錄</button>
+      <div class="warn" id="rec-warn"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal 申請酒譜修改 -->
+<div class="modal-ov" id="apply-modal">
+  <div class="sheet">
+    <div class="shd"><div class="stitle2">申請酒譜修改</div><div class="scl" onclick="document.getElementById('apply-modal').classList.remove('on')">✕</div></div>
+    <div class="sbody">
+      <div class="info-box">⚠️ 申請送出後需經管理者（Kevin / Molly）審核，核准後才會更新酒譜資料庫</div>
+      <div class="form-row"><label>酒款</label><select class="form-sel"><option>紫芋茉莉奶酒</option></select></div>
+      <div class="form-row"><label>修改內容說明</label><textarea class="form-ta" id="am-change" placeholder="例：茉莉香片茶比例 35% → 40%"></textarea></div>
+      <div class="form-row"><label>申請原因</label><textarea class="form-ta" id="am-reason" placeholder="說明修改原因..."></textarea></div>
+      <div class="form-row"><label>申請人</label><input class="form-inp" id="am-user" readonly style="color:var(--mu)"></div>
+      <button class="csave" onclick="submitApply()">送出申請</button>
+      <div class="warn" id="apply-warn"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal 審核（管理者） -->
+<div class="modal-ov" id="review-modal">
+  <div class="sheet">
+    <div class="shd"><div class="stitle2" id="rv-title">審核申請</div><div class="scl" onclick="document.getElementById('review-modal').classList.remove('on')">✕</div></div>
+    <div class="sbody">
+      <div class="form-row"><label>申請內容</label><div class="form-inp" id="rv-change" style="min-height:40px;height:auto;padding:8px"></div></div>
+      <div class="form-row"><label>申請原因</label><div class="form-inp" id="rv-reason" style="min-height:36px;height:auto;padding:8px"></div></div>
+      <div class="form-row"><label>申請人</label><input class="form-inp" id="rv-applicant" readonly style="color:var(--mu)"></div>
+      <div class="form-row"><label>拒絕原因（拒絕時填寫）</label><textarea class="form-ta" id="rv-reject-reason" placeholder="選填..."></textarea></div>
+      <div style="display:flex;gap:8px;margin-top:.3rem">
+        <button style="flex:1;background:#D1FAE5;color:#065F46;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer" onclick="doReview('approve')">✓ 核准</button>
+        <button style="flex:1;background:#FEE2E2;color:#991B1B;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer" onclick="doReview('reject')">✕ 拒絕</button>
+      </div>
+      <div class="warn" id="rv-warn"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API='https://script.google.com/macros/s/AKfycbxNBe-YRbu3GSyKGbad06tDAVDaZrMvpzglxfwc8IxJJNJzVuXoI_TqrReLuJLDsrGP7A/exec';
+const RECIPES_MAP={'FeelingBar':['紫芋茉莉奶酒'],'南坡萬公版':['（尚未新增）']};
+const CAT_ORDER_FE=['茶葉/茶包','糖漿','南坡萬自製','南坡萬散桶'];
+const PAGES=['pg-login','pg-recipe','pg-inv','pg-rec','pg-set'];
+
+let pin='',user='',pass='',role='';
+let rdata=null,idata=null,curCat='全部';
+let compData={},curCompIdx=-1,curCompVol=0;
+let curApplyId='';
+let pendingCount=0;
+
+function showMask(t){document.getElementById('mask').classList.add('on');document.getElementById('mask-txt').textContent=t||'載入中...'}
+function hideMask(){document.getElementById('mask').classList.remove('on')}
+function showPage(id){PAGES.forEach(p=>document.getElementById(p).classList.remove('on'));document.getElementById(id).classList.add('on')}
+
+// PIN
+function pk(k){
+  if(k==='del'){pin=pin.slice(0,-1)}
+  else if(pin.length<6){pin+=k;if(pin.length===6)setTimeout(doLogin,100)}
+  for(let i=0;i<6;i++){const d=document.getElementById('d'+i);d.textContent=i<pin.length?'●':'·';d.classList.toggle('f',i<pin.length)}
+}
+
+// 登入
+async function doLogin(){
+  user=document.getElementById('usel').value;
+  if(!user){document.getElementById('em').textContent='請先選擇帳號';return}
+  if(pin.length<6){document.getElementById('em').textContent='請輸入完整6碼';return}
+  pass=pin;showMask('登入中...');
+  try{
+    const r=await fetch(API,{method:'POST',body:JSON.stringify({action:'login',username:user,password:pass})});
+    const d=await r.json();
+    if(d.success){
+      role=d.role;
+      document.getElementById('em').textContent='';
+      showMask('載入資料中...');
+      await Promise.all([loadRecipe(),loadInv(),loadBatchRecords(),loadApplies(),loadHistory()]);
+      hideMask();
+      showAfterLogin();
+    }else{
+      hideMask();document.getElementById('em').textContent=d.message||'密碼錯誤';
+      pin='';for(let i=0;i<6;i++){const d=document.getElementById('d'+i);d.textContent='·';d.classList.remove('f')}
+    }
+  }catch(e){hideMask();document.getElementById('em').textContent='網路錯誤，請重試'}
+}
+
+function showAfterLogin(){
+  ['lu','ilu','rlu','slu'].forEach(id=>document.getElementById(id).textContent=user);
+  const isAdmin=role==='admin';
+  document.getElementById('admin-pip').style.display=isAdmin?'inline':'none';
+  document.getElementById('set-av').textContent=user.charAt(0);
+  document.getElementById('set-name').textContent=user;
+  document.getElementById('set-role').textContent=(isAdmin?'管理者':'調酒師')+' · 南坡萬酒廠';
+  document.getElementById('set-role2').textContent=isAdmin?'管理者':'調酒師';
+  document.getElementById('set-user').textContent=user;
+  document.getElementById('set-admin-note').style.display=isAdmin?'block':'none';
+  document.getElementById('rm-user').value=user;
+  document.getElementById('am-user').value=user;
+  showPage('pg-recipe');
+  document.getElementById('nav').classList.add('on');
+  goTab(0);
+  buildCompCatOptions();
+}
+
+// 頁籤
+function goTab(i){
+  const pgs=['pg-recipe','pg-inv','pg-rec','pg-set'];
+  pgs.forEach((p,j)=>{document.getElementById(p).classList.toggle('on',j===i)});
+  document.querySelectorAll('.ni').forEach((n,j)=>n.classList.toggle('on',j===i));
+  if(i===1)loadInv();
+}
+
+// 酒譜選單
+function onClientChange(){
+  const c=document.getElementById('sel-client').value;
+  const r=document.getElementById('sel-recipe');
+  r.innerHTML='';
+  (RECIPES_MAP[c]||[]).forEach(x=>{const o=document.createElement('option');o.value=x;o.textContent=x;r.appendChild(o)});
+  document.getElementById('hd-client').textContent=c;
+  document.getElementById('hd-recipe').textContent=r.value||c;
+}
+function onRecipeChange(){
+  document.getElementById('hd-recipe').textContent=document.getElementById('sel-recipe').value;
+}
+
+// 讀取酒譜
+async function loadRecipe(){
+  const r=await fetch(API,{method:'POST',body:JSON.stringify({action:'getRecipe',username:user,password:pass})});
+  const d=await r.json();
+  if(!d.success)throw new Error(d.message);
+  rdata=d;renderRecipe();
+}
+function renderRecipe(){
+  const h=rdata.header;
+  if(h.orderNumber)document.getElementById('f1').value=h.orderNumber;
+  if(h.productPM)document.getElementById('f2').value=h.productPM;
+  if(h.productionDate)document.getElementById('f3').value=h.productionDate;
+  if(h.deliveryDate)document.getElementById('f4').value=h.deliveryDate;
+  if(h.frontLabel)document.getElementById('f5').value=h.frontLabel;
+  if(h.bottleCap)document.getElementById('f6').value=h.bottleCap;
+  recalc();
+}
+
+// 計算
+function recalc(){
+  const tv=parseFloat(document.getElementById('tvol').value)||2000;
+  const ings=rdata?rdata.ingredients:[];
+  const il=document.getElementById('inglist'),cl=document.getElementById('clist');
+  il.innerHTML='';cl.innerHTML='';let tc=0;
+  ings.forEach((g,i)=>{
+    const v=Math.round((typeof g.ratio==='string'?parseFloat(g.ratio):g.ratio)*tv);
+    const cd=compData[i];
+    const cost=cd&&cd.length>0?cd.reduce((s,si)=>s+v*((si.pct||0)/100)*(si.unitCost||0),0):v*(parseFloat(g.unitPrice)||0)/(parseFloat(g.unitVolume)||1);
+    tc+=cost;
+    const hasComp=cd&&cd.length>0;
+    const tagTxt=hasComp?cd.map(si=>`${si.name} ${si.pct||0}%`).join(' · '):'';
+    const row=document.createElement('div');row.className='ing-row';
+    row.innerHTML=`<div><div class="ing-name">${g.name}</div>${hasComp?`<div class="ing-ctag" onclick="openComp(${i},${v},'${g.name.replace(/'/g,"\\'")}')">✏️ ${tagTxt}</div>`:''}</div><div class="ing-ratio">${((typeof g.ratio==='string'?parseFloat(g.ratio):g.ratio)*100).toFixed(0)}%</div><div class="ing-vol">${v}</div><div class="ing-cb-cell"><input type="checkbox" class="comp-cb" ${hasComp?'checked':''} onchange="toggleComp(${i},this,${v},'${g.name.replace(/'/g,"\\'")}')"></div>`;
+    il.appendChild(row);
+    const cr=document.createElement('div');cr.className='crow';
+    cr.innerHTML=`<span>${g.name}${hasComp?' 🔗':''}</span><span>NT$ ${cost.toFixed(1)}</span>`;
+    cl.appendChild(cr);
+  });
+  document.getElementById('tvd').textContent=tv;
+  document.getElementById('tcost').textContent='NT$ '+tc.toFixed(0);
+}
+
+// 儲存表頭
+async function saveHeader(){
+  const fields={orderNumber:document.getElementById('f1').value,productPM:document.getElementById('f2').value,productionDate:document.getElementById('f3').value,deliveryDate:document.getElementById('f4').value,frontLabel:document.getElementById('f5').value,bottleCap:document.getElementById('f6').value};
+  showMask('儲存中...');
+  try{
+    const r=await fetch(API,{method:'POST',body:JSON.stringify({action:'saveHeader',username:user,password:pass,fields})});
+    const d=await r.json();hideMask();
+    const ok=document.getElementById('sok');
+    ok.textContent=d.success?'✓ 已儲存至 Google Sheets':'✗ '+d.message;
+    setTimeout(()=>ok.textContent='',3000);
+  }catch(e){hideMask();document.getElementById('sok').textContent='✗ 網路錯誤'}
+}
+
+// 原料庫（1號問題：每次切換重新fetch）
+async function loadInv(){
+  document.getElementById('ilist').innerHTML='<div class="iload">⏳ 載入中...</div>';
+  document.getElementById('ctabs').innerHTML='';
+  document.getElementById('inv-time').textContent='載入中...';
+  try{
+    const r=await fetch(API,{method:'POST',body:JSON.stringify({action:'getInventory',username:user,password:pass})});
+    const d=await r.json();
+    if(!d.success)throw new Error(d.message);
+    idata=d.categories;curCat='全部';
+    const now=new Date();
+    document.getElementById('inv-time').textContent='更新：'+now.getHours()+':'+String(now.getMinutes()).padStart(2,'0');
+    renderInv(idata);
+    buildCompCatOptions();
+  }catch(e){
+    document.getElementById('ilist').innerHTML=`<div class="iload">❌ ${e.message}<br><br><button onclick="loadInv()" style="padding:8px 16px;background:var(--brand);color:white;border:none;border-radius:8px;font-size:13px;cursor:pointer">重試</button></div>`;
+  }
+}
+function renderInv(cats){
+  const te=document.getElementById('ctabs');te.innerHTML='';
+  ['全部',...cats.map(c=>c.name)].forEach(n=>{
+    const t=document.createElement('div');t.className='ctab'+(curCat===n?' on':'');t.textContent=n;
+    t.onclick=()=>{curCat=n;document.querySelectorAll('.ctab').forEach(x=>x.classList.remove('on'));t.classList.add('on');renderInvList(cats)};
+    te.appendChild(t);
+  });
+  renderInvList(cats);
+}
+function renderInvList(cats){
+  const sv=(document.getElementById('srch').value||'').toLowerCase();
+  const le=document.getElementById('ilist');le.innerHTML='';let tot=0;
+  (curCat==='全部'?cats:cats.filter(c=>c.name===curCat)).forEach(cat=>{
+    const items=cat.items.filter(x=>!sv||(x.name||'').toLowerCase().includes(sv)||(x.brand||'').toLowerCase().includes(sv));
+    if(!items.length)return;tot+=items.length;
+    const card=document.createElement('div');card.className='icard';
+    card.innerHTML=`<div class="ictitle">▌ ${cat.name} <span style="font-size:9px;font-weight:400;opacity:.7">(${items.length})</span></div>`;
+    items.forEach(x=>{
+      const row=document.createElement('div');row.className='irow';
+      const tags=[];
+      if(x.alcoholPct&&x.alcoholPct!=='')tags.push(`<span class="itag a">🍷${x.alcoholPct}%</span>`);
+      if(x.platform)tags.push(`<span class="itag p">${x.platform}</span>`);
+      if(x.unitVolume)tags.push(`<span class="itag">${x.unitVolume}ml</span>`);
+      row.innerHTML=`<div><div class="iname">${x.name}</div><div class="ibrand">${x.brand||''}</div><div class="itags">${tags.join('')}</div></div><div><div class="iprice">NT$ ${x.unitPrice||'—'}</div><div class="imeta">${x.unitCost?'單位 $'+Number(x.unitCost).toFixed(2):''}</div></div>`;
+      card.appendChild(row);
+    });
+    le.appendChild(card);
+  });
+  if(!tot)le.innerHTML='<div class="iload">🔍 沒有符合結果</div>';
+}
+function filterInv(){if(idata)renderInvList(idata)}
+
+// 複合材料
+function buildCompCatOptions(){
+  const sel=document.getElementById('ccat');
+  sel.innerHTML='<option value="">分類選擇</option>';
+  if(!idata)return;
+  const ordered=[...idata].sort((a,b)=>{const ai=CAT_ORDER_FE.indexOf(a.name),bi=CAT_ORDER_FE.indexOf(b.name);if(ai>=0&&bi>=0)return ai-bi;if(ai>=0)return -1;if(bi>=0)return 1;return 0});
+  ordered.forEach(cat=>{const o=document.createElement('option');o.value=cat.name;o.textContent=cat.name;sel.appendChild(o)});
+}
+function catPri(c){const i=CAT_ORDER_FE.indexOf(c);return i>=0?i:CAT_ORDER_FE.length}
+function sortRes(items,kw){
+  return [...items].sort((a,b)=>{
+    const an=a.name.toLowerCase(),bn=b.name.toLowerCase(),k=kw.toLowerCase();
+    if(an===k&&bn!==k)return -1;if(bn===k&&an!==k)return 1;
+    if(an.startsWith(k)&&!bn.startsWith(k))return -1;if(bn.startsWith(k)&&!an.startsWith(k))return 1;
+    const ai=an.includes(k),bi=bn.includes(k);if(ai&&!bi)return -1;if(bi&&!ai)return 1;
+    return catPri(a.cat)-catPri(b.cat);
+  });
+}
+function hl(t,kw){if(!kw)return t;const i=t.toLowerCase().indexOf(kw.toLowerCase());if(i<0)return t;return t.slice(0,i)+'<span class="hi">'+t.slice(i,i+kw.length)+'</span>'+t.slice(i+kw.length)}
+function showCompDd(items,kw){
+  const dd=document.getElementById('comp-dd');dd.innerHTML='';
+  if(!items.length){dd.classList.remove('on');return}
+  items.slice(0,25).forEach(item=>{
+    const d=document.createElement('div');d.className='dopt';
+    d.innerHTML=`<div class="dn">${hl(item.name,kw)}</div><div class="dm">${item.cat} · ${item.brand} · $${Number(item.unitCost).toFixed(3)}/ml</div>`;
+    d.onclick=()=>addSub(item);dd.appendChild(d);
+  });
+  dd.classList.add('on');
+}
+function onCat(){
+  const cat=document.getElementById('ccat').value;
+  document.getElementById('skw').value='';
+  if(!cat){document.getElementById('comp-dd').classList.remove('on');return}
+  if(!idata)return;
+  showCompDd(idata.find(c=>c.name===cat)?.items||[],'');
+}
+function onKw(){
+  const kw=document.getElementById('skw').value.trim();
+  document.getElementById('ccat').value='';
+  if(!kw){document.getElementById('comp-dd').classList.remove('on');return}
+  if(!idata){loadInv().then(()=>{if(idata){const all=idata.flatMap(c=>c.items);showCompDd(sortRes(all.filter(x=>(x.name||'').toLowerCase().includes(kw.toLowerCase())||(x.brand||'').toLowerCase().includes(kw.toLowerCase())),kw),kw)}});return}
+  const all=idata.flatMap(c=>c.items);
+  showCompDd(sortRes(all.filter(x=>(x.name||'').toLowerCase().includes(kw.toLowerCase())||(x.brand||'').toLowerCase().includes(kw.toLowerCase())),kw),kw);
+}
+function addSub(item){
+  if(compData[curCompIdx].find(s=>s.name===item.name&&s.brand===item.brand)){document.getElementById('comp-warn').textContent='此原料已加入';setTimeout(()=>document.getElementById('comp-warn').textContent='',1500);return}
+  compData[curCompIdx].push({...item,pct:''});
+  document.getElementById('comp-dd').classList.remove('on');document.getElementById('skw').value='';document.getElementById('ccat').value='';
+  renderSubs();updateStot();
+}
+function toggleComp(i,cb,vol,name){cb.checked?openComp(i,vol,name):(delete compData[i],recalc())}
+function openComp(i,vol,name){
+  curCompIdx=i;curCompVol=vol;
+  document.getElementById('comp-title').textContent='複合：'+name+' ('+vol+'ml)';
+  document.getElementById('skw').value='';document.getElementById('ccat').value='';
+  document.getElementById('comp-dd').classList.remove('on');document.getElementById('comp-warn').textContent='';
+  if(!compData[i])compData[i]=[];
+  renderSubs();updateStot();document.getElementById('comp-modal').classList.add('on');
+}
+function closeComp(){document.getElementById('comp-modal').classList.remove('on');if(!compData[curCompIdx]||!compData[curCompIdx].length){delete compData[curCompIdx];recalc()}}
+function renderSubs(){
+  const c=document.getElementById('subrows');c.innerHTML='';
+  if(!compData[curCompIdx]||!compData[curCompIdx].length){c.innerHTML='<div style="font-size:11px;color:var(--mu);padding:8px 0">尚未選擇子原料</div>';return}
+  compData[curCompIdx].forEach((si,i)=>{
+    const pct=parseFloat(si.pct)||0;const vol=(curCompVol*(pct/100)).toFixed(1);const cost=curCompVol*(pct/100)*(si.unitCost||0);
+    const row=document.createElement('div');row.className='subrow';
+    row.innerHTML=`<div><div class="sn">${si.name}</div><div class="sb2">${si.brand}</div></div><input class="sp" type="number" value="${si.pct}" placeholder="%" min="0" step="1" onchange="updPct(${i},this.value)" onblur="updPct(${i},this.value)"><div><div class="sc">NT$ ${cost.toFixed(1)}</div><div class="sc-ml">${vol} ml</div></div><button class="sdel" onclick="delSub(${i})">×</button>`;
+    c.appendChild(row);
+  });
+}
+function updPct(i,v){compData[curCompIdx][i].pct=parseFloat(v)||0;renderSubs();updateStot()}
+function delSub(i){compData[curCompIdx].splice(i,1);renderSubs();updateStot()}
+function updateStot(){if(!compData[curCompIdx]||!compData[curCompIdx].length){document.getElementById('stval').textContent='NT$ 0.00';return}const tc=compData[curCompIdx].reduce((s,si)=>s+curCompVol*((si.pct||0)/100)*(si.unitCost||0),0);document.getElementById('stval').textContent='NT$ '+tc.toFixed(2)}
+function saveComp(){if(!compData[curCompIdx]||!compData[curCompIdx].length){document.getElementById('comp-warn').textContent='請至少加入一項子原料';return}document.getElementById('comp-modal').classList.remove('on');recalc()}
+
+// 製作記錄子頁籤
+function switchRecTab(i){
+  ['batch','apply','history'].forEach((t,j)=>{
+    document.getElementById('rec-'+t).style.display=j===i?'block':'none';
+    document.getElementById('tb'+j).classList.toggle('on',j===i);
+  });
+}
+
+// 批次記錄
+async function loadBatchRecords(){
+  try{
+    const r=await fetch(API,{method:'POST',body:JSON.stringify({action:'getBatchRecords',username:user,password:pass})});
+    const d=await r.json();
+    if(!d.success)return;
+    renderBatch(d.records);
+  }catch(e){}
+}
+function renderBatch(records){
+  const el=document.getElementById('batch-list');el.innerHTML='';
+  if(!records||!records.length){el.innerHTML='<div class="empty-tip">尚無製作記錄</div>';return}
+  records.forEach(r=>{
+    const item=document.createElement('div');item.className='rec-item';
+    item.innerHTML=`<div class="rec-top"><div class="rec-name">${r.recipeName||''}</div><div class="rec-date">${r.date||''}</div></div><div class="rec-row"><span class="rtag g">${r.client||''}</span><span class="rtag g">${r.volume||0} ml</span><span class="rtag">${r.user||''}</span>${r.cost?`<span class="rtag">NT$ ${r.cost}</span>`:''}</div>${r.note?`<div class="rec-note">備註：${r.note}</div>`:''}`;
+    el.appendChild(item);
+  });
+}
+function openRecModal(){
+  document.getElementById('rm-date').value=new Date().toISOString().slice(0,10);
+  document.getElementById('rm-vol').value='';document.getElementById('rm-note').value='';
+  document.getElementById('rec-warn').textContent='';
+  document.getElementById('rec-modal').classList.add('on');
+}
+async function saveRec(){
+  const vol=document.getElementById('rm-vol').value;
+  if(!vol){document.getElementById('rec-warn').textContent='請輸入製作體積';return}
+  const tv=parseFloat(document.getElementById('tvol').value)||2000;
+  let tc=0;
+  if(rdata)rdata.ingredients.forEach((g,i)=>{const v=Math.round((typeof g.ratio==='string'?parseFloat(g.ratio):g.ratio)*tv);const cd=compData[i];tc+=cd&&cd.length>0?cd.reduce((s,si)=>s+v*((si.pct||0)/100)*(si.unitCost||0),0):v*(parseFloat(g.unitPrice)||0)/(parseFloat(g.unitVolume)||1)});
+  const record={date:document.getElementById('rm-date').value,recipeName:document.getElementById('rm-recipe').value,client:document.getElementById('rm-client').value,volume:parseInt(vol),user,cost:Math.round(tc*(parseInt(vol)/tv)),note:document.getElementById('rm-note').value};
+  showMask('儲存中...');
+  try{
+    const r=await fetch(API,{method:'POST',body:JSON.stringify({action:'addBatchRecord',username:user,password:pass,record})});
+    const d=await r.json();hideMask();
+    if(d.success){document.getElementById('rec-modal').classList.remove('on');await loadBatchRecords()}
+    else alert('儲存失敗：'+d.message);
+  }catch(e){hideMask();alert('網路錯誤')}
+}
+
+// 申請記錄
+async function loadApplies(){
+  try{
+    const r=await fetch(API,{method:'POST',body:JSON.stringify({action:'getApplies',username:user,password:pass})});
+    const d=await r.json();
+    if(!d.success)return;
+    pendingCount=d.applies.filter(a=>a.status==='待審核').length;
+    document.getElementById('ndot').classList.toggle('on',pendingCount>0&&role==='admin');
+    renderApplies(d.applies);
+  }catch(e){}
+}
+function renderApplies(applies){
+  const el=document.getElementById('apply-list');el.innerHTML='';
+  if(!applies||!applies.length){el.innerHTML='<div class="empty-tip">尚無申請記錄</div>';return}
+  applies.forEach(a=>{
+    const item=document.createElement('div');item.className='apply-item';
+    const badgeCls=a.status==='待審核'?'b-pending':a.status==='已核准'?'b-approved':'b-rejected';
+    const isAdmin=role==='admin';
+    const isPending=a.status==='待審核';
+    item.innerHTML=`
+      <div class="apply-hd"><div class="apply-name">${a.recipeName}</div><span class="badge ${badgeCls}">${a.status}</span></div>
+      <div class="apply-meta">申請人：${a.applicant}　${a.applyTime}</div>
+      <div class="apply-change"><div class="apply-clbl">修改內容</div>${a.changeDesc}</div>
+      <div class="apply-change" style="margin-top:4px"><div class="apply-clbl">申請原因</div>${a.reason}</div>
+      ${isAdmin&&isPending?`<div class="approve-row"><button class="btn-approve" onclick="openReview('${a.id}','${(a.changeDesc||'').replace(/'/g,"\\'")}','${(a.reason||'').replace(/'/g,"\\'")}','${a.applicant}')">✓ 核准</button><button class="btn-reject" onclick="openReview('${a.id}','${(a.changeDesc||'').replace(/'/g,"\\'")}','${(a.reason||'').replace(/'/g,"\\'")}','${a.applicant}')">✕ 拒絕</button></div>`:''}`;
+    el.appendChild(item);
+  });
+}
+function openApplyModal(){
+  document.getElementById('am-change').value='';document.getElementById('am-reason').value='';
+  document.getElementById('apply-warn').textContent='';
+  document.getElementById('apply-modal').classList.add('on');
+}
+async function submitApply(){
+  const change=document.getElementById('am-change').value.trim();
+  const reason=document.getElementById('am-reason').value.trim();
+  if(!change){document.getElementById('apply-warn').textContent='請填寫修改內容';return}
+  if(!reason){document.getElementById('apply-warn').textContent='請填寫申請原因';return}
+  const apply={recipeName:document.getElementById('sel-recipe').value||'紫芋茉莉奶酒',changeDesc:change,reason,applicant:user};
+  showMask('送出申請中...');
+  try{
+    const r=await fetch(API,{method:'POST',body:JSON.stringify({action:'submitApply',username:user,password:pass,apply})});
+    const d=await r.json();hideMask();
+    if(d.success){document.getElementById('apply-modal').classList.remove('on');await loadApplies();alert('申請已送出！等待管理者審核。')}
+    else alert('送出失敗：'+d.message);
+  }catch(e){hideMask();alert('網路錯誤')}
+}
+
+// 審核
+function openReview(id,change,reason,applicant){
+  curApplyId=id;
+  document.getElementById('rv-title').textContent='審核申請 — '+applicant;
+  document.getElementById('rv-change').textContent=change;
+  document.getElementById('rv-reason').textContent=reason;
+  document.getElementById('rv-applicant').value=applicant;
+  document.getElementById('rv-reject-reason').value='';
+  document.getElementById('rv-warn').textContent='';
+  document.getElementById('review-modal').classList.add('on');
+}
+async function doReview(action){
+  const rejectReason=document.getElementById('rv-reject-reason').value;
+  if(action==='reject'&&!rejectReason){document.getElementById('rv-warn').textContent='請填寫拒絕原因';return}
+  showMask('審核中...');
+  try{
+    const r=await fetch(API,{method:'POST',body:JSON.stringify({action:'reviewApply',username:user,password:pass,applyId:curApplyId,action,rejectReason})});
+    const d=await r.json();hideMask();
+    if(d.success){
+      document.getElementById('review-modal').classList.remove('on');
+      await Promise.all([loadApplies(),loadHistory()]);
+      alert(d.message);
+    }else alert('審核失敗：'+d.message);
+  }catch(e){hideMask();alert('網路錯誤')}
+}
+
+// 歷史記錄
+async function loadHistory(){
+  try{
+    const r=await fetch(API,{method:'POST',body:JSON.stringify({action:'getHistory',username:user,password:pass})});
+    const d=await r.json();
+    if(!d.success)return;
+    renderHistory(d.history);
+  }catch(e){}
+}
+function renderHistory(history){
+  const el=document.getElementById('history-list');el.innerHTML='';
+  if(!history||!history.length){el.innerHTML='<div class="empty-tip">尚無歷史變更記錄</div>';return}
+  history.forEach(h=>{
+    const item=document.createElement('div');item.className='history-item';
+    item.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><div class="rec-name">${h.recipeName}</div><span class="badge b-approved">已核准</span></div><div class="apply-meta" style="margin-top:3px">申請：${h.applicant}　核准：${h.approver}　${h.approveTime}</div><div class="history-change">${h.changeDesc}</div>`;
+    el.appendChild(item);
+  });
+}
+
+// 登出
+function doLogout(){
+  if(!confirm('確定要登出嗎？'))return;
+  user='';pass='';pin='';role='';rdata=null;idata=null;curCat='全部';compData={};pendingCount=0;
+  showPage('pg-login');
+  document.getElementById('nav').classList.remove('on');
+  document.getElementById('usel').value='';
+  document.getElementById('ndot').classList.remove('on');
+  for(let i=0;i<6;i++){const d=document.getElementById('d'+i);d.textContent='·';d.classList.remove('f')}
+  pin='';
+}
+</script>
+</body>
+</html>
