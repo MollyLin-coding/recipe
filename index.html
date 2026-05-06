@@ -11,8 +11,6 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
 :root{--brand:#1D9E75;--bl:#E1F5EE;--bd:#085041;--gold:#BA7517;--r:12px;--bg:#fff;--bg2:#f5f5f3;--tx:#1a1a1a;--mu:#6b7280;--bo:rgba(0,0,0,0.1);--red:#e57373}
 .page{display:none;position:fixed;inset:0;flex-direction:column;overflow:hidden;background:#04342C}
 .page.on{display:flex}
-
-/* 登入 */
 #pg-login{background:var(--bd);align-items:center;justify-content:center;padding:2rem 1.5rem;overflow-y:auto}
 .logo-i{font-size:44px;text-align:center;margin-bottom:6px}
 .logo-t{font-size:20px;color:#9FE1CB;text-align:center;font-weight:600}
@@ -28,21 +26,14 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
 .k:active{background:rgba(29,158,117,.35)}
 .kgo{background:var(--brand);font-size:14px}
 .em{color:#F09595;font-size:12px;text-align:center;margin-top:.4rem;min-height:15px}
-
-/* header */
 .hd{background:var(--bd);padding:.85rem 1rem;padding-top:max(.85rem,env(safe-area-inset-top));flex-shrink:0}
 .hdr{display:flex;justify-content:space-between;align-items:center}
 .htitle{font-size:15px;font-weight:600;color:#9FE1CB}
 .hsubt{font-size:10px;color:rgba(159,225,203,.55);margin-top:2px}
 .ubadge{background:rgba(159,225,203,.15);border:.5px solid rgba(159,225,203,.3);border-radius:20px;padding:3px 10px;font-size:11px;color:#9FE1CB;cursor:pointer;display:flex;align-items:center;gap:4px;white-space:nowrap}
 .admin-pip{font-size:8px;background:var(--gold);color:white;border-radius:10px;padding:1px 5px;font-weight:600}
-.hd-refresh{font-size:11px;color:rgba(159,225,203,.6);cursor:pointer;padding:2px 8px;border:.5px solid rgba(159,225,203,.3);border-radius:12px;margin-top:5px;display:inline-block}
-.hd-refresh:active{opacity:.7}
-
-/* body */
+.hd-refresh{font-size:10px;color:rgba(159,225,203,.6);cursor:pointer;padding:2px 8px;border:.5px solid rgba(159,225,203,.3);border-radius:12px;margin-top:5px;display:inline-block;-webkit-tap-highlight-color:transparent}
 .bscroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:.7rem;padding-bottom:calc(65px + env(safe-area-inset-bottom))}
-
-/* 酒譜 */
 #pg-recipe{background:var(--bg2)}
 .rsel-bar{display:flex;gap:6px;margin-bottom:.6rem}
 .rsel{flex:1;padding:7px 8px;border-radius:8px;border:.5px solid var(--bo);background:var(--bg);color:var(--tx);font-size:12px;font-weight:500}
@@ -58,40 +49,36 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
 .ing-row{display:grid;grid-template-columns:minmax(0,1fr) 44px 52px 28px;gap:3px;padding:6px 8px;border-bottom:.5px solid var(--bo);align-items:center}
 .ing-row:nth-child(even){background:rgba(0,0,0,.018)}
 .ing-name{font-size:11px;color:var(--tx);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ing-ctag{font-size:9px;color:var(--brand);background:var(--bl);border:.5px solid rgba(29,158,117,.3);border-radius:5px;padding:1px 5px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;display:block}
-.ing-compound-badge{font-size:9px;color:var(--gold);background:rgba(186,117,23,.1);border:.5px solid rgba(186,117,23,.3);border-radius:5px;padding:1px 5px;margin-top:2px;display:inline-block}
 .ing-ratio{font-size:11px;color:var(--mu);text-align:right}
-.ing-vol{font-size:11px;color:var(--tx);text-align:right}
-.ing-cb-cell{display:flex;justify-content:center}
+.ing-vol{font-size:11px;color:var(--tx);text-align:right;font-weight:500}
+.ing-cb-cell{display:flex;justify-content:center;align-items:center;font-size:13px}
 .comp-cb{width:14px;height:14px;cursor:pointer;accent-color:var(--brand)}
 .ing-foot{display:grid;grid-template-columns:minmax(0,1fr) 44px 52px 28px;gap:3px;background:var(--bl);padding:6px 8px;border-radius:0 0 6px 6px}
 .ing-foot span{font-size:12px;font-weight:600;color:var(--bd)}
 .ing-foot span:nth-child(2),.ing-foot span:nth-child(3){text-align:right}
+/* 複合原料明細區塊 */
+.comp-block{background:rgba(186,117,23,.06);border:.5px solid rgba(186,117,23,.2);border-radius:8px;padding:7px 10px;margin-bottom:.6rem}
+.comp-block-title{font-size:10px;color:var(--gold);font-weight:600;margin-bottom:5px}
+.comp-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:.5px solid rgba(186,117,23,.1)}
+.comp-row:last-child{border-bottom:none}
+.comp-name{font-size:11px;color:var(--tx)}
+.comp-val{font-size:11px;color:var(--gold);font-weight:500;text-align:right;white-space:nowrap}
 .crow{display:flex;justify-content:space-between;padding:3px 0;font-size:11px;border-bottom:.5px solid var(--bo)}
 .crow:last-of-type{border-bottom:none}
 .ctot{display:flex;justify-content:space-between;border-top:1px solid var(--bo);margin-top:5px;padding-top:6px;font-weight:600;font-size:12px}
-.sbtn{width:100%;background:var(--brand);color:white;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.5rem}
+.sbtn{width:100%;background:var(--brand);color:white;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:.5rem;-webkit-tap-highlight-color:transparent}
 .sbtn:active{opacity:.8}
 .sok{color:var(--brand);font-size:11px;text-align:center;min-height:14px}
 .igrid{display:grid;grid-template-columns:1fr 1fr;gap:7px 10px}
 .if label{font-size:10px;color:var(--mu);display:block;margin-bottom:2px}
 .if input{width:100%;font-size:12px;padding:5px 7px;border-radius:6px;border:.5px solid var(--bo);background:var(--bg2);color:var(--tx)}
 .if input:focus{outline:none;border-color:var(--brand)}
-
-/* 複合原料資訊框 */
-.compound-info{background:rgba(186,117,23,.08);border:.5px solid rgba(186,117,23,.25);border-radius:8px;padding:7px 10px;margin-bottom:.6rem}
-.compound-info-title{font-size:10px;color:var(--gold);font-weight:600;margin-bottom:4px}
-.compound-info-row{display:flex;justify-content:space-between;font-size:11px;padding:2px 0;border-bottom:.5px solid rgba(186,117,23,.15)}
-.compound-info-row:last-child{border-bottom:none}
-
-/* 原料庫 */
 #pg-inv{background:var(--bg2)}
 .rfbar{background:rgba(29,158,117,.15);border-bottom:.5px solid rgba(29,158,117,.3);padding:5px 12px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
 .rfbar span{font-size:10px;color:#9FE1CB}
-.rfbtn{font-size:10px;color:var(--brand);background:rgba(29,158,117,.15);border:.5px solid rgba(29,158,117,.4);border-radius:12px;padding:2px 9px;cursor:pointer}
+.rfbtn{font-size:10px;color:var(--brand);background:rgba(29,158,117,.15);border:.5px solid rgba(29,158,117,.4);border-radius:12px;padding:2px 9px;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .sbar{display:flex;align-items:center;background:var(--bg);border:.5px solid var(--bo);border-radius:10px;padding:7px 11px;margin-bottom:.6rem;gap:7px}
 .sbar input{flex:1;border:none;outline:none;font-size:13px;background:transparent;color:var(--tx)}
-/* 更改2：電腦版自動換行，手機版橫向捲動 */
 .ctabs{display:flex;gap:5px;overflow-x:auto;margin-bottom:.6rem;padding-bottom:3px;scrollbar-width:none;flex-wrap:nowrap}
 .ctabs::-webkit-scrollbar{display:none}
 @media(min-width:600px){.ctabs{flex-wrap:wrap;overflow-x:visible;padding-bottom:0}}
@@ -111,8 +98,6 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
 .itag.a{background:rgba(186,117,23,.1);color:var(--gold);border-color:rgba(186,117,23,.3)}
 .itag.p{background:rgba(29,158,117,.08);color:var(--brand);border-color:rgba(29,158,117,.2)}
 .iload{text-align:center;padding:2.5rem 1rem;color:var(--mu);font-size:13px}
-
-/* 製作記錄 */
 #pg-rec{background:var(--bg2)}
 .tab-bar{display:flex;gap:0;margin-bottom:.6rem;background:var(--bg);border:.5px solid var(--bo);border-radius:9px;overflow:hidden;flex-shrink:0}
 .tab-btn{flex:1;padding:8px 4px;font-size:11px;border:none;background:transparent;color:var(--mu);cursor:pointer;font-weight:500;-webkit-tap-highlight-color:transparent}
@@ -129,11 +114,17 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
 .apply-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
 .apply-name{font-size:12px;font-weight:600;color:var(--tx)}
 .apply-meta{font-size:10px;color:var(--mu);margin-bottom:5px}
+/* 比例對比顯示 */
+.ratio-compare{display:flex;align-items:center;gap:8px;background:var(--bg2);border-radius:8px;padding:7px 10px;margin-bottom:6px}
+.ratio-old{font-size:14px;font-weight:600;color:var(--red)}
+.ratio-arrow{font-size:16px;color:var(--mu)}
+.ratio-new{font-size:14px;font-weight:600;color:var(--brand)}
+.ratio-label{font-size:10px;color:var(--mu);margin-top:2px}
 .apply-change{background:var(--bg2);border-radius:6px;padding:6px 8px;font-size:11px;color:var(--tx);margin-bottom:4px}
 .apply-clbl{font-size:9px;color:var(--mu);font-weight:600;margin-bottom:2px}
 .approve-row{display:flex;gap:6px;margin-top:7px}
-.btn-approve{flex:1;background:#D1FAE5;color:#065F46;border:none;border-radius:7px;padding:7px;font-size:11px;font-weight:600;cursor:pointer}
-.btn-reject{flex:1;background:#FEE2E2;color:#991B1B;border:none;border-radius:7px;padding:7px;font-size:11px;font-weight:600;cursor:pointer}
+.btn-approve{flex:1;background:#D1FAE5;color:#065F46;border:none;border-radius:7px;padding:7px;font-size:11px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.btn-reject{flex:1;background:#FEE2E2;color:#991B1B;border:none;border-radius:7px;padding:7px;font-size:11px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent}
 .badge{font-size:9px;padding:2px 7px;border-radius:10px;font-weight:600}
 .b-pending{background:#FEF3C7;color:#92400E}
 .b-approved{background:#D1FAE5;color:#065F46}
@@ -144,17 +135,13 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
 .add-btn:active{opacity:.8}
 .empty-tip{text-align:center;padding:2rem 1rem;color:var(--mu);font-size:12px}
 .info-box{background:var(--bl);border-radius:8px;padding:7px 10px;margin-bottom:.55rem;font-size:11px;color:var(--bd)}
-
-/* 設定 */
 #pg-set{background:var(--bg2)}
 .avatar{width:60px;height:60px;border-radius:50%;background:var(--bd);display:flex;align-items:center;justify-content:center;font-size:22px;margin:0 auto .5rem;color:#9FE1CB;font-weight:600}
 .setting-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:.5px solid var(--bo);cursor:pointer}
 .setting-row:last-child{border-bottom:none}
 .setting-lbl{font-size:13px;color:var(--tx)}
-.setting-val{font-size:12px;color:var(--mu);display:flex;align-items:center;gap:4px}
+.setting-val{font-size:12px;color:var(--mu)}
 .logout-btn{width:100%;background:none;border:1px solid var(--red);color:var(--red);border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;margin-top:.4rem}
-
-/* 導航 */
 #nav{position:fixed;bottom:0;left:0;right:0;background:var(--bg);border-top:.5px solid var(--bo);display:none;z-index:999;padding:6px 0 calc(6px + env(safe-area-inset-bottom))}
 #nav.on{display:flex}
 .ni{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;-webkit-tap-highlight-color:transparent;position:relative}
@@ -163,15 +150,11 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
 .ni.on .ni-lbl{color:var(--brand);font-weight:600}
 .ndot{position:absolute;top:0;right:14px;width:7px;height:7px;background:var(--red);border-radius:50%;display:none}
 .ndot.on{display:block}
-
-/* 遮罩 */
 #mask{position:fixed;inset:0;background:rgba(4,52,44,.85);display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;z-index:9999}
 #mask.on{display:flex}
 .spin{width:32px;height:32px;border:3px solid rgba(159,225,203,.2);border-top-color:#9FE1CB;border-radius:50%;animation:sp .7s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 .mask-txt{color:#9FE1CB;font-size:13px}
-
-/* Modal */
 .modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;justify-content:center;z-index:8888}
 .modal-ov.on{display:flex}
 .sheet{background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-width:480px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden}
@@ -184,10 +167,13 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
 .form-inp,.form-sel,.form-ta{width:100%;padding:7px 9px;border-radius:7px;border:.5px solid var(--bo);background:var(--bg2);color:var(--tx);font-size:13px}
 .form-ta{resize:none;height:60px}
 .form-inp:focus,.form-sel:focus,.form-ta:focus{outline:none;border-color:var(--brand)}
-.csave{width:100%;background:var(--brand);color:white;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;margin-top:.4rem}
+.csave{width:100%;background:var(--brand);color:white;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;margin-top:.4rem;-webkit-tap-highlight-color:transparent}
 .csave:active{opacity:.8}
 .warn{font-size:11px;color:var(--red);text-align:center;margin-top:4px;min-height:14px}
-
+/* 申請用比例選擇 */
+.ratio-preview{background:var(--bl);border-radius:8px;padding:8px 10px;margin:.4rem 0;display:flex;justify-content:space-between;align-items:center}
+.ratio-preview-lbl{font-size:11px;color:var(--bd)}
+.ratio-preview-val{font-size:13px;font-weight:600;color:var(--bd)}
 /* 複合材料 modal */
 .lbl3{font-size:9px;color:var(--mu);font-weight:600;margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px}
 .comp-srow{display:flex;gap:6px;margin-bottom:.45rem}
@@ -220,29 +206,18 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
 </style>
 </head>
 <body>
-
 <div id="mask"><div class="spin"></div><div class="mask-txt" id="mask-txt">載入中...</div></div>
 
 <!-- 登入 -->
 <div id="pg-login" class="page on">
   <div class="logo-i">🍶</div>
   <div class="logo-t">南坡萬酒廠</div>
-  <div class="logo-s">酒譜管理系統 v3.0</div>
+  <div class="logo-s">酒譜管理系統 v5.0</div>
   <div class="lcard">
     <div class="plb">選擇調酒師帳號</div>
-    <div class="plb">
-      <select id="usel">
-        <option value="">-- 請選擇 --</option>
-        <option>Kevin</option><option>Molly</option>
-        <option>阿軒</option><option>小卷</option><option>Vic</option>
-      </select>
-    </div>
+    <div class="plb"><select id="usel"><option value="">-- 請選擇 --</option><option>Kevin</option><option>Molly</option><option>阿軒</option><option>小卷</option><option>Vic</option></select></div>
     <div class="plb">輸入 6 碼密碼</div>
-    <div class="dots">
-      <div class="dot" id="d0">·</div><div class="dot" id="d1">·</div>
-      <div class="dot" id="d2">·</div><div class="dot" id="d3">·</div>
-      <div class="dot" id="d4">·</div><div class="dot" id="d5">·</div>
-    </div>
+    <div class="dots"><div class="dot" id="d0">·</div><div class="dot" id="d1">·</div><div class="dot" id="d2">·</div><div class="dot" id="d3">·</div><div class="dot" id="d4">·</div><div class="dot" id="d5">·</div></div>
     <div class="kpad">
       <div class="k" onclick="pk('1')">1</div><div class="k" onclick="pk('2')">2</div><div class="k" onclick="pk('3')">3</div>
       <div class="k" onclick="pk('4')">4</div><div class="k" onclick="pk('5')">5</div><div class="k" onclick="pk('6')">6</div>
@@ -258,26 +233,14 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
 <div id="pg-recipe" class="page">
   <div class="hd">
     <div class="hdr">
-      <div>
-        <div class="htitle" id="hd-recipe">-</div>
-        <div class="hsubt" id="hd-client">-</div>
-      </div>
-      <div class="ubadge" onclick="doLogout()">
-        <span id="lu">-</span>
-        <span class="admin-pip" id="admin-pip" style="display:none">管理者</span>
-        <span style="font-size:9px;opacity:.6">登出</span>
-      </div>
+      <div><div class="htitle" id="hd-recipe">-</div><div class="hsubt" id="hd-client">-</div></div>
+      <div class="ubadge" onclick="doLogout()"><span id="lu">-</span><span class="admin-pip" id="admin-pip" style="display:none">管理者</span><span style="font-size:9px;opacity:.6">登出</span></div>
     </div>
-    <div style="margin-top:5px">
-      <span class="hd-refresh" onclick="refreshRecipe()">🔄 重新整理酒譜</span>
-    </div>
+    <div style="margin-top:5px"><span class="hd-refresh" onclick="refreshRecipe()">🔄 重新整理酒譜</span></div>
   </div>
   <div class="bscroll">
     <div class="rsel-bar">
-      <select class="rsel" id="sel-client" onchange="onClientChange()">
-        <option value="FeelingBar">FeelingBar</option>
-        <option value="南坡萬公版">南坡萬公版</option>
-      </select>
+      <select class="rsel" id="sel-client" onchange="onClientChange()"><option value="FeelingBar">FeelingBar</option><option value="南坡萬公版">南坡萬公版</option></select>
       <select class="rsel" id="sel-recipe" onchange="onRecipeChange()"></select>
     </div>
     <div class="card">
@@ -293,13 +256,8 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
     </div>
     <div class="card">
       <div class="stitle">製酒總體積</div>
-      <div class="vrow">
-        <span style="font-size:12px;color:var(--mu);flex:1">調酒師輸入批量</span>
-        <input class="vi" type="number" id="tvol" value="2000" min="100" step="100" onchange="recalc()" onblur="recalc()">
-        <span style="font-size:11px;color:var(--mu)">ml</span>
-      </div>
+      <div class="vrow"><span style="font-size:12px;color:var(--mu);flex:1">調酒師輸入批量</span><input class="vi" type="number" id="tvol" value="2000" min="100" step="100" onchange="recalc()" onblur="recalc()"><span style="font-size:11px;color:var(--mu)">ml</span></div>
     </div>
-    <div id="compound-infos"></div>
     <div class="card" style="padding:0;overflow:hidden">
       <div class="stitle" style="padding:.6rem .85rem 0">材料配方</div>
       <div style="padding:0 .6rem .6rem">
@@ -308,6 +266,7 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
         <div class="ing-foot"><span>總計</span><span>100%</span><span id="tvd">-</span><span></span></div>
       </div>
     </div>
+    <div id="compound-blocks"></div>
     <div class="card">
       <div class="stitle">成本試算</div>
       <div id="clist"></div>
@@ -321,16 +280,10 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
 <!-- 原料庫 -->
 <div id="pg-inv" class="page">
   <div class="hd">
-    <div class="hdr">
-      <div class="htitle">📦 原料庫</div>
-      <div class="ubadge" onclick="doLogout()"><span id="ilu">-</span> 登出</div>
-    </div>
+    <div class="hdr"><div class="htitle">📦 原料庫</div><div class="ubadge" onclick="doLogout()"><span id="ilu">-</span> 登出</div></div>
     <div style="font-size:10px;color:rgba(159,225,203,.5);margin-top:3px">即時同步自 Google Sheets</div>
   </div>
-  <div class="rfbar">
-    <span id="inv-time">尚未載入</span>
-    <div class="rfbtn" onclick="loadInv()">🔄 重新整理</div>
-  </div>
+  <div class="rfbar"><span id="inv-time">尚未載入</span><div class="rfbtn" onclick="loadInv()">🔄 重新整理</div></div>
   <div class="bscroll">
     <div class="sbar"><span style="font-size:15px">🔍</span><input type="text" id="srch" placeholder="搜尋原料名稱、品牌..." oninput="filterInv()"></div>
     <div class="ctabs" id="ctabs"></div>
@@ -340,12 +293,7 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
 
 <!-- 製作記錄 -->
 <div id="pg-rec" class="page">
-  <div class="hd">
-    <div class="hdr">
-      <div class="htitle">📝 製作記錄</div>
-      <div class="ubadge" onclick="doLogout()"><span id="rlu">-</span> 登出</div>
-    </div>
-  </div>
+  <div class="hd"><div class="hdr"><div class="htitle">📝 製作記錄</div><div class="ubadge" onclick="doLogout()"><span id="rlu">-</span> 登出</div></div></div>
   <div class="bscroll">
     <div class="tab-bar">
       <button class="tab-btn on" id="tb0" onclick="switchRecTab(0)">製作批次</button>
@@ -368,12 +316,7 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
 
 <!-- 設定 -->
 <div id="pg-set" class="page">
-  <div class="hd">
-    <div class="hdr">
-      <div class="htitle">⚙️ 設定</div>
-      <div class="ubadge" onclick="doLogout()"><span id="slu">-</span> 登出</div>
-    </div>
-  </div>
+  <div class="hd"><div class="hdr"><div class="htitle">⚙️ 設定</div><div class="ubadge" onclick="doLogout()"><span id="slu">-</span> 登出</div></div></div>
   <div class="bscroll">
     <div class="card" style="text-align:center;padding:1rem .85rem">
       <div class="avatar" id="set-av">-</div>
@@ -389,14 +332,11 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
     </div>
     <div class="card">
       <div class="stitle">帳號安全</div>
-      <div class="setting-row" onclick="openChangePwModal()">
-        <span class="setting-lbl">更換密碼</span>
-        <span class="setting-val">› </span>
-      </div>
+      <div class="setting-row" onclick="openChangePwModal()"><span class="setting-lbl">更換密碼</span><span class="setting-val">›</span></div>
     </div>
     <div class="card">
       <div class="stitle">APP 資訊</div>
-      <div class="setting-row"><span class="setting-lbl">版本</span><span class="setting-val">v3.0</span></div>
+      <div class="setting-row"><span class="setting-lbl">版本</span><span class="setting-val">v5.0</span></div>
       <div class="setting-row"><span class="setting-lbl">資料來源</span><span class="setting-val">Google Sheets</span></div>
     </div>
     <button class="logout-btn" onclick="doLogout()">登出</button>
@@ -411,17 +351,13 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
   <div class="ni" id="n3" onclick="goTab(3)"><span class="ni-icon">⚙️</span><span class="ni-lbl">設定</span></div>
 </div>
 
-<!-- Modal 強制換密碼 / 更換密碼 -->
+<!-- Modal 換密碼 -->
 <div class="modal-ov" id="pw-modal">
   <div class="sheet">
-    <div class="shd"><div class="stitle2" id="pw-title">首次登入請更換密碼</div><div class="scl" id="pw-close" style="display:none" onclick="document.getElementById('pw-modal').classList.remove('on')">✕</div></div>
+    <div class="shd"><div class="stitle2" id="pw-title">更換密碼</div><div class="scl" id="pw-close" onclick="document.getElementById('pw-modal').classList.remove('on')">✕</div></div>
     <div class="sbody">
       <div id="pw-info" class="info-box" style="display:none">首次登入必須更換密碼後才能使用系統</div>
-      <div class="form-row"><label>目前密碼</label>
-        <div style="position:relative">
-          <input class="form-inp" type="password" id="pw-current" placeholder="輸入目前密碼">
-        </div>
-      </div>
+      <div class="form-row"><label>目前密碼</label><input class="form-inp" type="password" id="pw-current" placeholder="輸入目前密碼"></div>
       <div class="form-row"><label>新密碼（6碼數字）</label><input class="form-inp" type="password" id="pw-new" placeholder="輸入新6碼密碼" maxlength="6"></div>
       <div class="form-row"><label>確認新密碼</label><input class="form-inp" type="password" id="pw-confirm" placeholder="再次輸入新密碼" maxlength="6"></div>
       <button class="csave" onclick="doChangePassword()">確認更換</button>
@@ -468,14 +404,31 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
   </div>
 </div>
 
-<!-- Modal 申請修改 -->
+<!-- Modal 申請酒譜修改（結構化） -->
 <div class="modal-ov" id="apply-modal">
   <div class="sheet">
     <div class="shd"><div class="stitle2">申請酒譜修改</div><div class="scl" onclick="document.getElementById('apply-modal').classList.remove('on')">✕</div></div>
     <div class="sbody">
-      <div class="info-box">⚠️ 申請送出後需經管理者（Kevin / Molly）審核，核准後才會更新酒譜資料庫</div>
-      <div class="form-row"><label>酒款</label><select class="form-sel" id="am-recipe"></select></div>
-      <div class="form-row"><label>修改內容說明</label><textarea class="form-ta" id="am-change" placeholder="例：茉莉香片茶比例 35% → 40%"></textarea></div>
+      <div class="info-box">⚠️ 申請送出後需經管理者（Kevin / Molly）審核，核准後才會自動更新酒譜資料庫</div>
+      <div class="form-row">
+        <label>選擇酒款</label>
+        <select class="form-sel" id="am-recipe" onchange="onApplyRecipeChange()"></select>
+      </div>
+      <div class="form-row">
+        <label>選擇材料</label>
+        <select class="form-sel" id="am-ing" onchange="onApplyIngChange()"><option value="">-- 請先選擇酒款 --</option></select>
+      </div>
+      <div id="am-ratio-preview" style="display:none">
+        <div class="ratio-preview">
+          <div><div class="ratio-preview-lbl">目前比例</div><div class="ratio-preview-val" id="am-old-ratio">-</div></div>
+          <div style="font-size:20px;color:var(--mu)">→</div>
+          <div style="flex:1">
+            <div class="ratio-preview-lbl">修改為（%）</div>
+            <input class="form-inp" type="number" id="am-new-ratio" placeholder="例：40" min="0" max="100" step="0.1" oninput="onNewRatioInput()">
+          </div>
+        </div>
+        <div id="am-ratio-check" style="font-size:11px;color:var(--mu);text-align:right;margin-top:3px"></div>
+      </div>
       <div class="form-row"><label>申請原因</label><textarea class="form-ta" id="am-reason" placeholder="說明修改原因..."></textarea></div>
       <div class="form-row"><label>申請人</label><input class="form-inp" id="am-user" readonly style="color:var(--mu)"></div>
       <button class="csave" onclick="submitApply()">送出申請</button>
@@ -484,17 +437,28 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
   </div>
 </div>
 
-<!-- Modal 審核 -->
+<!-- Modal 審核（管理者） -->
 <div class="modal-ov" id="review-modal">
   <div class="sheet">
     <div class="shd"><div class="stitle2" id="rv-title">審核申請</div><div class="scl" onclick="document.getElementById('review-modal').classList.remove('on')">✕</div></div>
     <div class="sbody">
-      <div class="form-row"><label>申請內容</label><div class="form-inp" id="rv-change" style="min-height:40px;height:auto;padding:8px"></div></div>
-      <div class="form-row"><label>申請原因</label><div class="form-inp" id="rv-reason" style="min-height:36px;height:auto;padding:8px"></div></div>
+      <div class="form-row"><label>酒款 / 材料</label><div class="form-inp" id="rv-ing" style="padding:8px;color:var(--tx)"></div></div>
+      <div class="ratio-compare">
+        <div style="text-align:center">
+          <div class="ratio-label">原比例</div>
+          <div class="ratio-old" id="rv-old">-</div>
+        </div>
+        <div class="ratio-arrow">→</div>
+        <div style="text-align:center">
+          <div class="ratio-label">新比例</div>
+          <div class="ratio-new" id="rv-new">-</div>
+        </div>
+      </div>
+      <div class="form-row"><label>申請原因</label><div class="form-inp" id="rv-reason" style="min-height:40px;padding:8px;color:var(--tx)"></div></div>
       <div class="form-row"><label>申請人</label><input class="form-inp" id="rv-applicant" readonly style="color:var(--mu)"></div>
-      <div class="form-row"><label>拒絕原因（拒絕時填寫）</label><textarea class="form-ta" id="rv-reject-reason" placeholder="選填..."></textarea></div>
+      <div class="form-row"><label>拒絕原因（拒絕時填寫）</label><textarea class="form-ta" id="rv-reject-reason" placeholder="請說明拒絕原因..."></textarea></div>
       <div style="display:flex;gap:8px;margin-top:.3rem">
-        <button style="flex:1;background:#D1FAE5;color:#065F46;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer" onclick="doReview('approve')">✓ 核准</button>
+        <button style="flex:1;background:#D1FAE5;color:#065F46;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer" onclick="doReview('approve')">✓ 核准並更新酒譜</button>
         <button style="flex:1;background:#FEE2E2;color:#991B1B;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer" onclick="doReview('reject')">✕ 拒絕</button>
       </div>
       <div class="warn" id="rv-warn"></div>
@@ -509,24 +473,23 @@ const PAGES=['pg-login','pg-recipe','pg-inv','pg-rec','pg-set'];
 
 let pin='',user='',pass='',role='';
 let rdata=null,idata=null,curCat='全部';
-let recipeMap={'FeelingBar':['紫芋茉莉奶酒','薰衣草花果茶'],'南坡萬公版':[]};
+let recipeMap={'FeelingBar':['紫芋茉莉奶酒','薰衣草花果茶','芭樂紫蘇梅冰茶','櫻桃長島冰茶','野格梅子冰茶','島嶼鳳梨冰茶','泰奶烏龍蘭姆酒','伯爵茶Old Fashion','(原)梔子花金萱威士忌'],'南坡萬公版':[]};
 let curSheetName='紫芋茉莉奶酒';
 let compData={},curCompIdx=-1,curCompVol=0;
 let curApplyId='',isForceChangePw=false;
+let batchLoaded=false,applyLoaded=false,historyLoaded=false;
 
 function showMask(t){document.getElementById('mask').classList.add('on');document.getElementById('mask-txt').textContent=t||'載入中...'}
 function hideMask(){document.getElementById('mask').classList.remove('on')}
 function showPage(id){PAGES.forEach(p=>document.getElementById(p).classList.remove('on'));document.getElementById(id).classList.add('on')}
 function post(body){return fetch(API,{method:'POST',body:JSON.stringify(body)}).then(r=>r.json())}
 
-// PIN
 function pk(k){
   if(k==='del'){pin=pin.slice(0,-1)}
   else if(pin.length<6){pin+=k;if(pin.length===6)setTimeout(doLogin,100)}
   for(let i=0;i<6;i++){const d=document.getElementById('d'+i);d.textContent=i<pin.length?'●':'·';d.classList.toggle('f',i<pin.length)}
 }
 
-// 登入
 async function doLogin(){
   user=document.getElementById('usel').value;
   if(!user){document.getElementById('em').textContent='請先選擇帳號';return}
@@ -538,21 +501,18 @@ async function doLogin(){
       role=d.role;
       document.getElementById('em').textContent='';
       if(d.needChangePassword){
-        hideMask();
-        isForceChangePw=true;
+        hideMask();isForceChangePw=true;
         document.getElementById('pw-title').textContent='首次登入請更換密碼';
         document.getElementById('pw-info').style.display='block';
         document.getElementById('pw-close').style.display='none';
         document.getElementById('pw-current').value=pass;
-        document.getElementById('pw-new').value='';
-        document.getElementById('pw-confirm').value='';
+        document.getElementById('pw-new').value='';document.getElementById('pw-confirm').value='';
         document.getElementById('pw-warn').textContent='';
         document.getElementById('pw-modal').classList.add('on');
-      } else {
-        showMask('載入資料中...');
-        await loadAllData();
-        hideMask();
-        showAfterLogin();
+      }else{
+        showMask('載入酒譜中...');
+        await loadRecipe();
+        hideMask();showAfterLogin();
       }
     }else{
       hideMask();document.getElementById('em').textContent=d.message||'密碼錯誤';
@@ -561,15 +521,12 @@ async function doLogin(){
   }catch(e){hideMask();document.getElementById('em').textContent='網路錯誤，請重試'}
 }
 
-// 換密碼
 function openChangePwModal(){
   isForceChangePw=false;
   document.getElementById('pw-title').textContent='更換密碼';
   document.getElementById('pw-info').style.display='none';
   document.getElementById('pw-close').style.display='block';
-  document.getElementById('pw-current').value='';
-  document.getElementById('pw-new').value='';
-  document.getElementById('pw-confirm').value='';
+  document.getElementById('pw-current').value='';document.getElementById('pw-new').value='';document.getElementById('pw-confirm').value='';
   document.getElementById('pw-warn').textContent='';
   document.getElementById('pw-modal').classList.add('on');
 }
@@ -585,24 +542,11 @@ async function doChangePassword(){
     const d=await post({action:'changePassword',username:user,currentPassword:cur,newPassword:nw});
     hideMask();
     if(d.success){
-      pass=nw;
-      document.getElementById('pw-modal').classList.remove('on');
-      if(isForceChangePw){
-        showMask('載入資料中...');
-        await loadAllData();
-        hideMask();
-        showAfterLogin();
-      } else {
-        alert('密碼已更換成功！');
-      }
-    } else {
-      document.getElementById('pw-warn').textContent=d.message||'更換失敗';
-    }
+      pass=nw;document.getElementById('pw-modal').classList.remove('on');
+      if(isForceChangePw){showMask('載入酒譜中...');await loadRecipe();hideMask();showAfterLogin();}
+      else alert('密碼已更換成功！');
+    }else{document.getElementById('pw-warn').textContent=d.message||'更換失敗';}
   }catch(e){hideMask();document.getElementById('pw-warn').textContent='網路錯誤'}
-}
-
-async function loadAllData(){
-  await Promise.all([loadRecipe(),loadInv(),loadBatchRecords(),loadApplies(),loadHistory()]);
 }
 
 function showAfterLogin(){
@@ -617,7 +561,6 @@ function showAfterLogin(){
   document.getElementById('set-admin-note').style.display=isAdmin?'block':'none';
   document.getElementById('rm-user').value=user;
   document.getElementById('am-user').value=user;
-  // 初始化酒款選單
   initRecipeSelectors();
   showPage('pg-recipe');
   document.getElementById('nav').classList.add('on');
@@ -625,21 +568,17 @@ function showAfterLogin(){
   buildCompCatOptions();
 }
 
-// 酒款選單初始化
 function initRecipeSelectors(){
   const client=document.getElementById('sel-client').value||'FeelingBar';
   const recipes=recipeMap[client]||[];
   const rsel=document.getElementById('sel-recipe');
   rsel.innerHTML='';
   recipes.forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;rsel.appendChild(o)});
-  // 製作記錄 modal 酒款
-  const rmr=document.getElementById('rm-recipe');
-  rmr.innerHTML='';
-  Object.values(recipeMap).flat().forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;rmr.appendChild(o)});
-  // 申請 modal 酒款
-  const amr=document.getElementById('am-recipe');
-  amr.innerHTML='';
-  Object.values(recipeMap).flat().forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;amr.appendChild(o)});
+  const allRecipes=Object.values(recipeMap).flat();
+  ['rm-recipe','am-recipe'].forEach(id=>{
+    const el=document.getElementById(id);el.innerHTML='';
+    allRecipes.forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;el.appendChild(o)});
+  });
   updateHdTitles();
 }
 
@@ -649,13 +588,9 @@ function onClientChange(){
   const rsel=document.getElementById('sel-recipe');
   rsel.innerHTML='';
   recipes.forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;rsel.appendChild(o)});
-  updateHdTitles();
-  loadRecipe();
+  updateHdTitles();loadRecipe();
 }
-function onRecipeChange(){
-  updateHdTitles();
-  loadRecipe();
-}
+function onRecipeChange(){updateHdTitles();loadRecipe();}
 function updateHdTitles(){
   const c=document.getElementById('sel-client').value;
   const r=document.getElementById('sel-recipe').value;
@@ -664,31 +599,31 @@ function updateHdTitles(){
   curSheetName=r||'紫芋茉莉奶酒';
 }
 
-// 更改1：重新整理酒譜
-async function refreshRecipe(){
-  showMask('重新整理酒譜...');
-  try{await loadRecipe();hideMask()}
-  catch(e){hideMask();alert('重新整理失敗：'+e.message)}
-}
+async function refreshRecipe(){showMask('重新整理酒譜...');try{await loadRecipe();hideMask()}catch(e){hideMask();alert('重新整理失敗：'+e.message)}}
 
-// 頁籤切換（更改1：切換到酒譜頁時自動 fetch）
+// 更改1：切換酒譜頁時自動fetch
 function goTab(i){
   const pgs=['pg-recipe','pg-inv','pg-rec','pg-set'];
-  pgs.forEach((p,j)=>{document.getElementById(p).classList.toggle('on',j===i)});
+  pgs.forEach((p,j)=>document.getElementById(p).classList.toggle('on',j===i));
   document.querySelectorAll('.ni').forEach((n,j)=>n.classList.toggle('on',j===i));
-  if(i===0)loadRecipe();       // 更改1
-  else if(i===1)loadInv();     // 1號問題
+  if(i===0)loadRecipe();
+  else if(i===1)loadInv();
+  else if(i===2){
+    if(!batchLoaded)loadBatchRecords();
+    if(!applyLoaded)loadApplies();
+    if(!historyLoaded)loadHistory();
+  }
 }
 
-// 讀取酒譜
 async function loadRecipe(){
   const sn=document.getElementById('sel-recipe').value||curSheetName;
   try{
     const d=await post({action:'getRecipe',username:user,password:pass,sheetName:sn});
     if(!d.success)throw new Error(d.message);
-    rdata=d;renderRecipe();
+    rdata=d;compData={};renderRecipe();
   }catch(e){console.error('loadRecipe:',e)}
 }
+
 function renderRecipe(){
   const h=rdata.header;
   if(h.orderNumber)document.getElementById('f1').value=h.orderNumber;
@@ -697,82 +632,69 @@ function renderRecipe(){
   if(h.deliveryDate)document.getElementById('f4').value=h.deliveryDate;
   if(h.frontLabel)document.getElementById('f5').value=h.frontLabel;
   if(h.bottleCap)document.getElementById('f6').value=h.bottleCap;
-  compData={};
   recalc();
 }
 
-// 計算（含複合原料自動帶入成本）
 function recalc(){
   const tv=parseFloat(document.getElementById('tvol').value)||2000;
   const ings=rdata?rdata.ingredients:[];
-  const il=document.getElementById('inglist'),cl=document.getElementById('clist');
-  const ci=document.getElementById('compound-infos');
-  il.innerHTML='';cl.innerHTML='';ci.innerHTML='';
+  const il=document.getElementById('inglist'),cl=document.getElementById('clist'),cb=document.getElementById('compound-blocks');
+  il.innerHTML='';cl.innerHTML='';cb.innerHTML='';
   let tc=0;
-
   ings.forEach((g,i)=>{
     const ratio=typeof g.ratio==='string'?parseFloat(g.ratio):g.ratio;
     const v=Math.round(ratio*tv);
     const cd=compData[i];
-
-    // 成本計算
     let cost=0;
     if(cd&&cd.length>0){
-      // 調酒師手動設定的複合材料
       cost=cd.reduce((s,si)=>s+v*((si.pct||0)/100)*(si.unitCost||0),0);
-    } else if(g.isCompound&&g.compoundInfo){
-      // 從 Sheet 讀取的複合材料（自動計算）
+    }else if(g.isCompound&&g.compoundInfo){
       cost=v*(g.unitCost||0);
-      // 顯示複合原料資訊
-      if(g.compoundInfo.subMaterials&&g.compoundInfo.subMaterials.length>0){
-        const box=document.createElement('div');box.className='compound-info';
-        box.innerHTML=`<div class="compound-info-title">🔗 ${g.name} 複合原料組成</div>`;
-        g.compoundInfo.subMaterials.forEach(sm=>{
-          const smVol=(v*(sm.amount/g.compoundInfo.liquidVol)).toFixed(1);
-          const r=document.createElement('div');r.className='compound-info-row';
-          r.innerHTML=`<span>${sm.name}</span><span>${sm.amount}單位 → ${smVol}g/ml　${g.compoundInfo.hasLossCorrection?'(含耗損修正÷0.8)':''}</span>`;
-          box.appendChild(r);
-        });
-        ci.appendChild(box);
+      // 複合原料明細區塊
+      const ci=g.compoundInfo;
+      const block=document.createElement('div');block.className='comp-block';
+      let html=`<div class="comp-block-title">🔗 ${g.name} 複合組成</div>`;
+      ci.subMaterials.forEach(sm=>{
+        const batches=v/ci.totalVolume;
+        const actualAmt=(sm.amount*batches).toFixed(1);
+        const itemCost=(sm.amount*batches*sm.unitCost).toFixed(1);
+        html+=`<div class="comp-row"><span class="comp-name">◆ ${sm.name}　${sm.amount}單位 → 本次 ${actualAmt}單位</span><span class="comp-val">NT$ ${itemCost}</span></div>`;
+      });
+      // 判斷水（不計費）：totalVolume - sum(subMaterials amounts)
+      const sumAmts=ci.subMaterials.reduce((s,sm)=>s+sm.amount,0);
+      const waterAmt=ci.totalVolume-sumAmts;
+      if(waterAmt>0){
+        const batches=v/ci.totalVolume;
+        const actualWater=(waterAmt*batches).toFixed(1);
+        html+=`<div class="comp-row"><span class="comp-name">◆ 水　${waterAmt}ml → 本次 ${actualWater}ml</span><span class="comp-val">—</span></div>`;
       }
-    } else {
+      if(ci.hasLoss)html+=`<div style="font-size:9px;color:var(--mu);margin-top:4px;text-align:right">含固體耗損修正 ÷0.8</div>`;
+      block.innerHTML=html;cb.appendChild(block);
+    }else{
       cost=v*(g.unitCost||0)||v*(parseFloat(g.unitPrice)||0)/(parseFloat(g.unitVolume)||1);
     }
     tc+=cost;
-
     const hasManualComp=cd&&cd.length>0;
     const hasAutoComp=g.isCompound&&!hasManualComp;
     const tagTxt=hasManualComp?cd.map(si=>`${si.name} ${si.pct||0}%`).join(' · '):'';
-
     const row=document.createElement('div');row.className='ing-row';
-    row.innerHTML=`
-      <div>
-        <div class="ing-name">${g.name}</div>
-        ${hasManualComp?`<div class="ing-ctag" onclick="openComp(${i},${v},'${g.name.replace(/'/g,"\\'")}')">✏️ ${tagTxt}</div>`:''}
-        ${hasAutoComp?`<div class="ing-compound-badge">🔗 複合原料</div>`:''}
-      </div>
-      <div class="ing-ratio">${(ratio*100).toFixed(0)}%</div>
-      <div class="ing-vol">${v}</div>
-      <div class="ing-cb-cell"><input type="checkbox" class="comp-cb" ${hasManualComp?'checked':''} onchange="toggleComp(${i},this,${v},'${g.name.replace(/'/g,"\\'")}')"></div>`;
+    row.innerHTML=`<div><div class="ing-name">${g.name}</div>${hasManualComp?`<div style="font-size:9px;color:var(--brand);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer" onclick="openComp(${i},${v},'${g.name.replace(/'/g,"\\'")}')">✏️ ${tagTxt}</div>`:''}</div><div class="ing-ratio">${(ratio*100).toFixed(0)}%</div><div class="ing-vol">${v}</div><div class="ing-cb-cell">${hasAutoComp?'🔗':''}<input type="checkbox" class="comp-cb" ${hasManualComp?'checked':''} onchange="toggleComp(${i},this,${v},'${g.name.replace(/'/g,"\\'")}')"></div>`;
     il.appendChild(row);
-
     const cr=document.createElement('div');cr.className='crow';
-    cr.innerHTML=`<span>${g.name}${hasManualComp?' 🔗':hasAutoComp?' 🔗':''}</span><span>NT$ ${cost.toFixed(1)}</span>`;
+    cr.innerHTML=`<span>${g.name}${hasAutoComp||hasManualComp?' 🔗':''}</span><span>NT$ ${cost.toFixed(1)}</span>`;
     cl.appendChild(cr);
   });
   document.getElementById('tvd').textContent=tv;
   document.getElementById('tcost').textContent='NT$ '+tc.toFixed(0);
 }
 
-// 儲存表頭
 async function saveHeader(){
   const fields={orderNumber:document.getElementById('f1').value,productPM:document.getElementById('f2').value,productionDate:document.getElementById('f3').value,deliveryDate:document.getElementById('f4').value,frontLabel:document.getElementById('f5').value,bottleCap:document.getElementById('f6').value};
   showMask('儲存中...');
   try{
     const d=await post({action:'saveHeader',username:user,password:pass,sheetName:curSheetName,fields});
     hideMask();
-    const ok=document.getElementById('sok');
-    ok.textContent=d.success?'✓ 已儲存至 Google Sheets':'✗ '+d.message;
+    const ok=document.getElementById('sok');ok.textContent=d.success?'✓ 已儲存至 Google Sheets':'✗ '+d.message;
     setTimeout(()=>ok.textContent='',3000);
   }catch(e){hideMask();document.getElementById('sok').textContent='✗ 網路錯誤'}
 }
@@ -780,8 +702,7 @@ async function saveHeader(){
 // 原料庫（1號問題：每次切換重新fetch）
 async function loadInv(){
   document.getElementById('ilist').innerHTML='<div class="iload">⏳ 載入中...</div>';
-  document.getElementById('ctabs').innerHTML='';
-  document.getElementById('inv-time').textContent='載入中...';
+  document.getElementById('ctabs').innerHTML='';document.getElementById('inv-time').textContent='載入中...';
   try{
     const d=await post({action:'getInventory',username:user,password:pass});
     if(!d.success)throw new Error(d.message);
@@ -825,7 +746,7 @@ function renderInvList(cats){
 }
 function filterInv(){if(idata)renderInvList(idata)}
 
-// 複合材料
+// 複合材料（調酒師手動設定）
 function buildCompCatOptions(){
   const sel=document.getElementById('ccat');sel.innerHTML='<option value="">分類選擇</option>';
   if(!idata)return;
@@ -848,7 +769,7 @@ function showCompDd(items,kw){
   if(!items.length){dd.classList.remove('on');return}
   items.slice(0,25).forEach(item=>{
     const d=document.createElement('div');d.className='dopt';
-    d.innerHTML=`<div class="dn">${hl(item.name,kw)}</div><div class="dm">${item.cat} · ${item.brand} · $${Number(item.unitCost).toFixed(3)}/ml</div>`;
+    d.innerHTML=`<div class="dn">${hl(item.name,kw)}</div><div class="dm">${item.cat||''} · ${item.brand||''} · $${Number(item.unitCost).toFixed(3)}/ml</div>`;
     d.onclick=()=>addSub(item);dd.appendChild(d);
   });
   dd.classList.add('on');
@@ -856,8 +777,7 @@ function showCompDd(items,kw){
 function onCat(){
   const cat=document.getElementById('ccat').value;document.getElementById('skw').value='';
   if(!cat){document.getElementById('comp-dd').classList.remove('on');return}
-  if(!idata)return;
-  showCompDd(idata.find(c=>c.name===cat)?.items||[],'');
+  if(!idata)return;showCompDd(idata.find(c=>c.name===cat)?.items||[],'');
 }
 function onKw(){
   const kw=document.getElementById('skw').value.trim();document.getElementById('ccat').value='';
@@ -878,8 +798,7 @@ function openComp(i,vol,name){
   document.getElementById('comp-title').textContent='複合：'+name+' ('+vol+'ml)';
   document.getElementById('skw').value='';document.getElementById('ccat').value='';
   document.getElementById('comp-dd').classList.remove('on');document.getElementById('comp-warn').textContent='';
-  if(!compData[i])compData[i]=[];
-  renderSubs();updateStot();document.getElementById('comp-modal').classList.add('on');
+  if(!compData[i])compData[i]=[];renderSubs();updateStot();document.getElementById('comp-modal').classList.add('on');
 }
 function closeComp(){document.getElementById('comp-modal').classList.remove('on');if(!compData[curCompIdx]||!compData[curCompIdx].length){delete compData[curCompIdx];recalc()}}
 function renderSubs(){
@@ -888,7 +807,7 @@ function renderSubs(){
   compData[curCompIdx].forEach((si,i)=>{
     const pct=parseFloat(si.pct)||0;const vol=(curCompVol*(pct/100)).toFixed(1);const cost=curCompVol*(pct/100)*(si.unitCost||0);
     const row=document.createElement('div');row.className='subrow';
-    row.innerHTML=`<div><div class="sn">${si.name}</div><div class="sb2">${si.brand}</div></div><input class="sp" type="number" value="${si.pct}" placeholder="%" min="0" step="1" onchange="updPct(${i},this.value)" onblur="updPct(${i},this.value)"><div><div class="sc">NT$ ${cost.toFixed(1)}</div><div class="sc-ml">${vol} ml</div></div><button class="sdel" onclick="delSub(${i})">×</button>`;
+    row.innerHTML=`<div><div class="sn">${si.name}</div><div class="sb2">${si.brand||''}</div></div><input class="sp" type="number" value="${si.pct}" placeholder="%" min="0" step="1" onchange="updPct(${i},this.value)" onblur="updPct(${i},this.value)"><div><div class="sc">NT$ ${cost.toFixed(1)}</div><div class="sc-ml">${vol} ml</div></div><button class="sdel" onclick="delSub(${i})">×</button>`;
     c.appendChild(row);
   });
 }
@@ -899,13 +818,10 @@ function saveComp(){if(!compData[curCompIdx]||!compData[curCompIdx].length){docu
 
 // 製作記錄
 function switchRecTab(i){
-  ['batch','apply','history'].forEach((t,j)=>{
-    document.getElementById('rec-'+t).style.display=j===i?'block':'none';
-    document.getElementById('tb'+j).classList.toggle('on',j===i);
-  });
+  ['batch','apply','history'].forEach((t,j)=>{document.getElementById('rec-'+t).style.display=j===i?'block':'none';document.getElementById('tb'+j).classList.toggle('on',j===i)});
 }
 async function loadBatchRecords(){
-  try{const d=await post({action:'getBatchRecords',username:user,password:pass});if(d.success)renderBatch(d.records)}catch(e){}
+  try{const d=await post({action:'getBatchRecords',username:user,password:pass});if(d.success){renderBatch(d.records);batchLoaded=true}}catch(e){}
 }
 function renderBatch(records){
   const el=document.getElementById('batch-list');el.innerHTML='';
@@ -918,8 +834,7 @@ function renderBatch(records){
 }
 function openRecModal(){
   document.getElementById('rm-date').value=new Date().toISOString().slice(0,10);
-  document.getElementById('rm-vol').value='';document.getElementById('rm-note').value='';
-  document.getElementById('rec-warn').textContent='';
+  document.getElementById('rm-vol').value='';document.getElementById('rm-note').value='';document.getElementById('rec-warn').textContent='';
   document.getElementById('rec-modal').classList.add('on');
 }
 async function saveRec(){
@@ -936,17 +851,85 @@ async function saveRec(){
   showMask('儲存中...');
   try{
     const d=await post({action:'addBatchRecord',username:user,password:pass,record});hideMask();
-    if(d.success){document.getElementById('rec-modal').classList.remove('on');await loadBatchRecords()}
+    if(d.success){document.getElementById('rec-modal').classList.remove('on');batchLoaded=false;await loadBatchRecords();}
     else alert('儲存失敗：'+d.message);
   }catch(e){hideMask();alert('網路錯誤')}
 }
+
+// 申請記錄（結構化）
+function onApplyRecipeChange(){
+  const recipeName=document.getElementById('am-recipe').value;
+  const amIng=document.getElementById('am-ing');
+  amIng.innerHTML='<option value="">-- 請選擇材料 --</option>';
+  document.getElementById('am-ratio-preview').style.display='none';
+  // 如果當前酒譜已載入且名稱符合，直接用
+  if(rdata&&rdata.sheetName===recipeName){
+    rdata.ingredients.forEach(ing=>{
+      const o=document.createElement('option');
+      o.value=JSON.stringify({name:ing.name,rowNum:ing.rowNum,ratio:ing.ratio});
+      o.textContent=ing.name;amIng.appendChild(o);
+    });
+  }else{
+    // 需要先載入該酒譜
+    const o=document.createElement('option');o.value='';o.textContent='（請切換到該酒譜頁籤後再申請）';amIng.appendChild(o);
+  }
+}
+function onApplyIngChange(){
+  const val=document.getElementById('am-ing').value;
+  if(!val){document.getElementById('am-ratio-preview').style.display='none';return}
+  try{
+    const ing=JSON.parse(val);
+    const ratio=typeof ing.ratio==='string'?parseFloat(ing.ratio):ing.ratio;
+    document.getElementById('am-old-ratio').textContent=(ratio*100).toFixed(1)+'%';
+    document.getElementById('am-new-ratio').value='';
+    document.getElementById('am-ratio-check').textContent='';
+    document.getElementById('am-ratio-preview').style.display='block';
+  }catch(e){}
+}
+function onNewRatioInput(){
+  const nw=parseFloat(document.getElementById('am-new-ratio').value)||0;
+  const check=document.getElementById('am-ratio-check');
+  if(nw<=0||nw>100)check.textContent='⚠️ 請輸入 0.1 ~ 100 之間的數值';
+  else check.textContent=`新比例：${nw}% → 小數：${(nw/100).toFixed(4)}`;
+}
+function openApplyModal(){
+  // 確保申請選單使用當前載入的酒譜
+  onApplyRecipeChange();
+  document.getElementById('am-reason').value='';document.getElementById('apply-warn').textContent='';
+  document.getElementById('apply-modal').classList.add('on');
+}
+async function submitApply(){
+  const ingVal=document.getElementById('am-ing').value;
+  const newRatioInput=parseFloat(document.getElementById('am-new-ratio').value);
+  const reason=document.getElementById('am-reason').value.trim();
+  if(!ingVal){document.getElementById('apply-warn').textContent='請選擇材料';return}
+  if(!newRatioInput||newRatioInput<=0||newRatioInput>100){document.getElementById('apply-warn').textContent='請輸入有效的新比例（0.1~100）';return}
+  if(!reason){document.getElementById('apply-warn').textContent='請填寫申請原因';return}
+  const ing=JSON.parse(ingVal);
+  const oldRatio=typeof ing.ratio==='string'?parseFloat(ing.ratio):ing.ratio;
+  const newRatio=newRatioInput/100;
+  const apply={
+    recipeName:document.getElementById('am-recipe').value,
+    sheetName:rdata?rdata.sheetName:curSheetName,
+    ingName:ing.name,ingRowNum:ing.rowNum,
+    oldRatio:oldRatio,newRatio:newRatio,
+    reason,applicant:user
+  };
+  showMask('送出申請中...');
+  try{
+    const d=await post({action:'submitApply',username:user,password:pass,apply});hideMask();
+    if(d.success){document.getElementById('apply-modal').classList.remove('on');applyLoaded=false;await loadApplies();alert('申請已送出！等待管理者審核。');}
+    else alert('送出失敗：'+d.message);
+  }catch(e){hideMask();alert('網路錯誤')}
+}
+
 async function loadApplies(){
   try{
     const d=await post({action:'getApplies',username:user,password:pass});
     if(!d.success)return;
     const pc=d.applies.filter(a=>a.status==='待審核').length;
     document.getElementById('ndot').classList.toggle('on',pc>0&&role==='admin');
-    renderApplies(d.applies);
+    renderApplies(d.applies);applyLoaded=true;
   }catch(e){}
 }
 function renderApplies(applies){
@@ -956,32 +939,28 @@ function renderApplies(applies){
     const item=document.createElement('div');item.className='apply-item';
     const bc=a.status==='待審核'?'b-pending':a.status==='已核准'?'b-approved':'b-rejected';
     const isAdmin=role==='admin',isPending=a.status==='待審核';
-    item.innerHTML=`<div class="apply-hd"><div class="apply-name">${a.recipeName}</div><span class="badge ${bc}">${a.status}</span></div><div class="apply-meta">申請人：${a.applicant}　${a.applyTime}</div><div class="apply-change"><div class="apply-clbl">修改內容</div>${a.changeDesc}</div><div class="apply-change" style="margin-top:4px"><div class="apply-clbl">申請原因</div>${a.reason}</div>${isAdmin&&isPending?`<div class="approve-row"><button class="btn-approve" onclick="openReview('${a.id}','${(a.changeDesc||'').replace(/'/g,"\\'")}','${(a.reason||'').replace(/'/g,"\\'")}','${a.applicant}')">✓ 核准</button><button class="btn-reject" onclick="openReview('${a.id}','${(a.changeDesc||'').replace(/'/g,"\\'")}','${(a.reason||'').replace(/'/g,"\\'")}','${a.applicant}')">✕ 拒絕</button></div>`:''}`;
+    const oldPct=a.oldRatio?(parseFloat(a.oldRatio)*100).toFixed(1)+'%':'-';
+    const newPct=a.newRatio?(parseFloat(a.newRatio)*100).toFixed(1)+'%':'-';
+    item.innerHTML=`
+      <div class="apply-hd"><div class="apply-name">${a.recipeName} — ${a.ingName}</div><span class="badge ${bc}">${a.status}</span></div>
+      <div class="apply-meta">申請人：${a.applicant}　${a.applyTime}</div>
+      <div class="ratio-compare" style="margin:.4rem 0">
+        <div style="text-align:center"><div style="font-size:9px;color:var(--mu)">原比例</div><div class="ratio-old">${oldPct}</div></div>
+        <div class="ratio-arrow">→</div>
+        <div style="text-align:center"><div style="font-size:9px;color:var(--mu)">新比例</div><div class="ratio-new">${newPct}</div></div>
+      </div>
+      <div class="apply-change"><div class="apply-clbl">申請原因</div>${a.reason}</div>
+      ${a.rejectReason?`<div class="apply-change" style="background:#FEE2E2"><div class="apply-clbl">拒絕原因</div>${a.rejectReason}</div>`:''}
+      ${isAdmin&&isPending?`<div class="approve-row"><button class="btn-approve" onclick="openReview('${a.id}','${(a.ingName||'').replace(/'/g,"\\'")}','${(a.recipeName||'').replace(/'/g,"\\'")}',${a.oldRatio},${a.newRatio},'${(a.reason||'').replace(/'/g,"\\'")}','${a.applicant}')">✓ 核准並更新酒譜</button><button class="btn-reject" onclick="openReview('${a.id}','${(a.ingName||'').replace(/'/g,"\\'")}','${(a.recipeName||'').replace(/'/g,"\\'")}',${a.oldRatio},${a.newRatio},'${(a.reason||'').replace(/'/g,"\\'")}','${a.applicant}')">✕ 拒絕</button></div>`:''}`;
     el.appendChild(item);
   });
 }
-function openApplyModal(){
-  document.getElementById('am-change').value='';document.getElementById('am-reason').value='';
-  document.getElementById('apply-warn').textContent='';
-  document.getElementById('apply-modal').classList.add('on');
-}
-async function submitApply(){
-  const change=document.getElementById('am-change').value.trim();
-  const reason=document.getElementById('am-reason').value.trim();
-  if(!change){document.getElementById('apply-warn').textContent='請填寫修改內容';return}
-  if(!reason){document.getElementById('apply-warn').textContent='請填寫申請原因';return}
-  const apply={recipeName:document.getElementById('am-recipe').value,changeDesc:change,reason,applicant:user};
-  showMask('送出申請中...');
-  try{
-    const d=await post({action:'submitApply',username:user,password:pass,apply});hideMask();
-    if(d.success){document.getElementById('apply-modal').classList.remove('on');await loadApplies();alert('申請已送出！等待管理者審核。')}
-    else alert('送出失敗：'+d.message);
-  }catch(e){hideMask();alert('網路錯誤')}
-}
-function openReview(id,change,reason,applicant){
+function openReview(id,ingName,recipeName,oldRatio,newRatio,reason,applicant){
   curApplyId=id;
-  document.getElementById('rv-title').textContent='審核申請 — '+applicant;
-  document.getElementById('rv-change').textContent=change;
+  document.getElementById('rv-title').textContent='審核申請';
+  document.getElementById('rv-ing').textContent=recipeName+' — '+ingName;
+  document.getElementById('rv-old').textContent=(parseFloat(oldRatio)*100).toFixed(1)+'%';
+  document.getElementById('rv-new').textContent=(parseFloat(newRatio)*100).toFixed(1)+'%';
   document.getElementById('rv-reason').textContent=reason;
   document.getElementById('rv-applicant').value=applicant;
   document.getElementById('rv-reject-reason').value='';document.getElementById('rv-warn').textContent='';
@@ -993,29 +972,49 @@ async function doReview(action){
   showMask('審核中...');
   try{
     const d=await post({action:'reviewApply',username:user,password:pass,applyId:curApplyId,action,rejectReason});hideMask();
-    if(d.success){document.getElementById('review-modal').classList.remove('on');await Promise.all([loadApplies(),loadHistory()]);alert(d.message)}
-    else alert('審核失敗：'+d.message);
+    if(d.success){
+      document.getElementById('review-modal').classList.remove('on');
+      applyLoaded=false;historyLoaded=false;
+      await Promise.all([loadApplies(),loadHistory()]);
+      alert(d.message);
+    }else alert('審核失敗：'+d.message);
   }catch(e){hideMask();alert('網路錯誤')}
 }
+
 async function loadHistory(){
-  try{const d=await post({action:'getHistory',username:user,password:pass});if(d.success)renderHistory(d.history)}catch(e){}
+  try{
+    const d=await post({action:'getHistory',username:user,password:pass});
+    if(!d.success)return;renderHistory(d.history);historyLoaded=true;
+  }catch(e){}
 }
 function renderHistory(history){
   const el=document.getElementById('history-list');el.innerHTML='';
   if(!history||!history.length){el.innerHTML='<div class="empty-tip">尚無歷史變更記錄</div>';return}
   history.forEach(h=>{
+    const oldPct=h.oldRatio?(parseFloat(h.oldRatio)*100).toFixed(1)+'%':'-';
+    const newPct=h.newRatio?(parseFloat(h.newRatio)*100).toFixed(1)+'%':'-';
     const item=document.createElement('div');item.className='history-item';
-    item.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center"><div class="rec-name">${h.recipeName}</div><span class="badge b-approved">已核准</span></div><div class="apply-meta" style="margin-top:3px">申請：${h.applicant}　核准：${h.approver}　${h.approveTime}</div><div class="history-change">${h.changeDesc}</div>`;
+    item.innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="rec-name">${h.recipeName} — ${h.ingName}</div>
+        <span class="badge b-approved">已核准</span>
+      </div>
+      <div class="apply-meta" style="margin-top:3px">申請：${h.applicant}　核准：${h.approver}　${h.approveTime}</div>
+      <div class="ratio-compare" style="margin:.4rem 0">
+        <div style="text-align:center"><div style="font-size:9px;color:var(--mu)">原比例</div><div class="ratio-old">${oldPct}</div></div>
+        <div class="ratio-arrow">→</div>
+        <div style="text-align:center"><div style="font-size:9px;color:var(--mu)">新比例</div><div class="ratio-new">${newPct}</div></div>
+      </div>`;
     el.appendChild(item);
   });
 }
+
 function doLogout(){
   if(!confirm('確定要登出嗎？'))return;
   user='';pass='';pin='';role='';rdata=null;idata=null;curCat='全部';compData={};
-  showPage('pg-login');
-  document.getElementById('nav').classList.remove('on');
-  document.getElementById('usel').value='';
-  document.getElementById('ndot').classList.remove('on');
+  batchLoaded=false;applyLoaded=false;historyLoaded=false;
+  showPage('pg-login');document.getElementById('nav').classList.remove('on');
+  document.getElementById('usel').value='';document.getElementById('ndot').classList.remove('on');
   for(let i=0;i<6;i++){const d=document.getElementById('d'+i);d.textContent='·';d.classList.remove('f')}
   pin='';
 }
