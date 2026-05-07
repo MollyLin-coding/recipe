@@ -252,11 +252,17 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
   </div>
   <div class="bscroll">
     <div class="rsel-bar">
-      <select class="rsel" id="sel-client" onchange="onClientChange()">
-        <option value="FeelingBar">FeelingBar</option>
-        <option value="南坡萬公版">南坡萬公版</option>
-      </select>
-      <select class="rsel" id="sel-recipe" onchange="onRecipeChange()"></select>
+      <div style="flex:1">
+        <div style="font-size:9px;color:var(--mu);font-weight:600;margin-bottom:2px;letter-spacing:.4px">客戶名稱</div>
+        <select class="rsel" id="sel-client" onchange="onClientChange()" style="width:100%">
+          <option value="FeelingBar">FeelingBar</option>
+          <option value="南坡萬公版">南坡萬公版</option>
+        </select>
+      </div>
+      <div style="flex:1">
+        <div style="font-size:9px;color:var(--mu);font-weight:600;margin-bottom:2px;letter-spacing:.4px">酒款名稱</div>
+        <select class="rsel" id="sel-recipe" onchange="onRecipeChange()" style="width:100%"></select>
+      </div>
     </div>
     <div class="card">
       <div class="stitle">訂單資訊（請填寫）</div>
@@ -272,7 +278,7 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
     <div class="card">
       <div class="card-hd">
         <div class="stitle" style="margin-bottom:0">製酒總體積</div>
-        <button class="edit-btn off" id="edit-btn" onclick="toggleEdit()">✏️ 編輯</button>
+        <button class="edit-btn off" id="edit-btn" onclick="toggleEdit()">試算</button>
       </div>
       <div class="vrow">
         <span style="font-size:12px;color:var(--mu);flex:1">調酒師輸入批量</span>
@@ -288,12 +294,26 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
         <div id="inglist"></div>
         <div class="ing-foot"><span>總計</span><span id="ratio-sum">100%</span><span id="tvd">-</span><span id="alc-foot">—%</span><span></span></div>
       </div>
+      <div id="ratio-note-wrap" style="display:none;padding:0 .6rem .6rem">
+        <div style="background:rgba(186,117,23,.08);border:.5px solid rgba(186,117,23,.3);border-radius:8px;padding:7px 10px;">
+          <div style="font-size:9px;color:var(--gold);font-weight:600;margin-bottom:4px">⚠️ 比例總和不等於100% — 本批特殊用量備註</div>
+          <textarea id="ratio-note-inp" style="width:100%;font-size:11px;padding:5px 7px;border-radius:6px;border:.5px solid rgba(186,117,23,.3);background:rgba(255,255,255,.7);color:var(--tx);resize:none;height:48px" placeholder="請填寫本批次特殊配比說明..."></textarea>
+        </div>
+      </div>
     </div>
     <div id="compound-blocks"></div>
     <div class="card">
       <div class="stitle">成本試算</div>
       <div id="clist"></div>
       <div class="ctot"><span>總成本估算</span><span id="tcost" style="color:var(--gold)">NT$ —</span></div>
+    </div>
+    <div id="abv-warn-card" style="display:none;background:#FEF3C7;border:.5px solid #F59E0B;border-radius:var(--r);padding:.65rem .85rem;margin-bottom:.6rem">
+      <div style="font-size:11px;font-weight:600;color:#92400E;margin-bottom:3px">⚠️ 實際酒精濃度與預設不符</div>
+      <div id="abv-warn-detail" style="font-size:11px;color:#78350F"></div>
+    </div>
+    <div class="card" id="oem-card">
+      <div class="stitle">代工費用試算</div>
+      <div id="oem-list"></div>
     </div>
     <button class="sbtn" onclick="saveHeader()">儲存訂單資訊 ↗</button>
     <div class="sok" id="sok"></div>
@@ -462,7 +482,31 @@ const CAT_ORDER_FE=['茶葉/茶包','糖漿','南坡萬自製','南坡萬散桶'
 const PAGES=['pg-login','pg-recipe','pg-inv','pg-rec','pg-set'];
 let pin='',user='',pass='',role='';
 let rdata=null,idata=null,curCat='全部';
-let recipeMap={'FeelingBar':['紫芋茉莉奶酒','薰衣草花果茶','芭樂紫蘇梅冰茶','櫻桃長島冰茶','野格梅子冰茶','島嶼鳳梨冰茶','泰奶烏龍蘭姆酒','伯爵茶Old Fashion','(原)梔子花金萱威士忌'],'南坡萬公版':[]};
+let recipeMap={'FeelingBar':['紫芋茉莉奶酒','薰衣草花果茶','芭樂紫蘇梅冰茶','櫻桃長島冰茶','野格梅子冰茶','島嶼鳳梨冰茶','泰奶烏龍蘭姆酒','伯爵茶Old Fashion','(降)梔子花金萱威士忌','熱紅酒','Woody Hot Toddy','海鹽西瓜Mojito','甘蔗檸檬Mojito','白桃葡萄柚Mojito','百香碧螺春Mojito','茉莉香片脆梅琴酒','蜜香紅茶荔枝琴酒','鹹楊桃琴酒','青花椒烏梅蘭姆酒','雲頂珍奶威士忌','太妃糖拿鐵奶酒v2','櫻花白柚綠茶','聖木Coffee Martini','福爾摩沙鳳梨可樂達'],'南坡萬公版':[]};
+
+// FeelingBar 各酒款預設 ABV（用於代工費用計算與警示）
+const FB_DEFAULT_ABV={
+  '(降)梔子花金萱威士忌':14,'聖木Coffee Martini':14,'福爾摩沙鳳梨可樂達':14,
+  '芭樂紫蘇梅冰茶':20,'島嶼鳳梨冰茶':20,'櫻桃長島冰茶':20,'野格梅子冰茶':20
+};
+function getDefaultAbv(recipeName){return FB_DEFAULT_ABV[recipeName]||8;}
+
+// 代工費用計算（規格：{ml, container, label, name}）
+const SPECS_FB=[{ml:4000,container:0,label:1,name:'4000ml（4L空桶）'}];
+const SPECS_OTHER=[{ml:108,container:15,label:3,name:'108ml（江小白）'},{ml:500,container:46,label:3,name:'500ml（伏特加瓶）'}];
+
+function calcTax(abv,ml){
+  if(abv>20) return Math.round(185/1000*ml*100)/100;
+  return Math.round(abv*7/1000*ml*100)/100;
+}
+function calcOem(ingredientCostPer1ml, abv, spec){
+  const food=Math.round(ingredientCostPer1ml*spec.ml*100)/100;
+  const foodPrice=Math.round(food*1.15*100)/100;
+  const tax=calcTax(abv,spec.ml);
+  const totalExTax=Math.round((foodPrice+spec.container+spec.label+tax)*100)/100;
+  const totalInTax=Math.round(totalExTax*1.05*100)/100;
+  return {food,foodPrice,container:spec.container,label:spec.label,tax,totalExTax,totalInTax};
+}
 let curSheetName='紫芋茉莉奶酒';
 let curApplyId='',isForceChangePw=false;
 let batchLoaded=false,applyLoaded=false,historyLoaded=false;
@@ -601,7 +645,7 @@ function goTab(i){
 function toggleEdit(){
   isEditing=!isEditing;
   const btn=document.getElementById('edit-btn');
-  btn.textContent=isEditing?'✓ 完成':'✏️ 編輯';
+  btn.textContent=isEditing?'✓ 完成':'試算';
   btn.className='edit-btn '+(isEditing?'on':'off');
   document.getElementById('edit-bar').classList.toggle('on',isEditing);
   recalc();
@@ -609,7 +653,7 @@ function toggleEdit(){
 function resetEdit(){
   isEditing=false;ratioOverrides={};alcOverrides={};compOverrides={};
   const btn=document.getElementById('edit-btn');
-  if(btn){btn.textContent='✏️ 編輯';btn.className='edit-btn off';}
+  if(btn){btn.textContent='試算';btn.className='edit-btn off';}
   const bar=document.getElementById('edit-bar');
   if(bar)bar.classList.remove('on');
 }
@@ -738,6 +782,53 @@ function recalc(){
   document.getElementById('alc-foot').textContent=alcResult+'%';
   document.getElementById('ratio-sum').textContent=ratioSum.toFixed(1)+'%';
   document.getElementById('ratio-sum').style.color=ratioOk?'var(--bd)':'var(--red)';
+
+  // 比例備註欄
+  document.getElementById('ratio-note-wrap').style.display=ratioOk?'none':'block';
+
+  // ABV 警示
+  const client=document.getElementById('sel-client').value;
+  const recipeName=document.getElementById('sel-recipe').value;
+  const alcNum=parseFloat(alcResult)||0;
+  const alcRounded=Math.round(alcNum);
+  const warnCard=document.getElementById('abv-warn-card');
+  if(client==='FeelingBar'&&alcResult!=='—'){
+    const defaultAbv=getDefaultAbv(recipeName);
+    if(alcRounded!==defaultAbv){
+      warnCard.style.display='block';
+      document.getElementById('abv-warn-detail').textContent=
+        `實際濃度 ${alcRounded}%，預設為 ${defaultAbv}%。請調整酒譜使實際濃度符合預設，或確認配方正確。`;
+    }else{warnCard.style.display='none';}
+  }else{warnCard.style.display='none';}
+
+  // 代工費用試算
+  const oem=document.getElementById('oem-list');
+  oem.innerHTML='';
+  if(tc>0&&tv>0){
+    const costPer1ml=tc/tv;
+    const abvForTax=alcNum;
+    const specs=client==='FeelingBar'?SPECS_FB:[...SPECS_OTHER];
+    specs.forEach(spec=>{
+      const r=calcOem(costPer1ml,abvForTax,spec);
+      const block=document.createElement('div');
+      block.style.cssText='background:var(--bg2);border-radius:8px;padding:8px 10px;margin-bottom:6px';
+      block.innerHTML=`<div style="font-size:10px;font-weight:600;color:var(--bd);margin-bottom:5px;border-bottom:.5px solid var(--bo);padding-bottom:4px">${spec.name}</div>
+        <div class="crow"><span>食材成本</span><span>NT$ ${r.food.toFixed(0)}</span></div>
+        <div class="crow"><span>食材報價（×1.15）</span><span>NT$ ${r.foodPrice.toFixed(0)}</span></div>
+        <div class="crow"><span>容器成本</span><span>NT$ ${r.container}</span></div>
+        <div class="crow"><span>貼紙</span><span>NT$ ${r.label}</span></div>
+        <div class="crow"><span>酒稅（ABV${abvForTax.toFixed(1)}%）</span><span>NT$ ${r.tax.toFixed(0)}</span></div>
+        <div style="display:flex;justify-content:space-between;border-top:1px solid var(--bo);margin-top:4px;padding-top:5px;font-size:11px;font-weight:600;color:var(--bd)">
+          <span>總成本（未含稅）</span><span>NT$ ${r.totalExTax.toFixed(0)}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:var(--brand);margin-top:2px">
+          <span>總成本（含稅）</span><span>NT$ ${r.totalInTax.toFixed(0)}</span>
+        </div>`;
+      oem.appendChild(block);
+    });
+  }else{
+    oem.innerHTML='<div style="font-size:11px;color:var(--mu);text-align:center;padding:8px">載入酒譜後自動計算</div>';
+  }
 }
 
 function setRatio(i,v){ratioOverrides[i]=parseFloat(v)||0;recalc()}
