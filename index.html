@@ -514,6 +514,14 @@ let batchLoaded=false,applyLoaded=false,historyLoaded=false;
 let isEditing=false;
 let ratioOverrides={},alcOverrides={},compOverrides={};
 
+// 數字格式化：去掉末尾 .0，保留有效小數
+function fmt(n,dec=1){
+  const v=parseFloat(n);
+  if(isNaN(v))return'—';
+  const s=v.toFixed(dec);
+  return s.replace(/\.0+$/,'').replace(/(\.\d*?)0+$/,'$1');
+}
+
 function showMask(t){document.getElementById('mask').classList.add('on');document.getElementById('mask-txt').textContent=t||'載入中...'}
 function hideMask(){document.getElementById('mask').classList.remove('on')}
 function showPage(id){PAGES.forEach(p=>document.getElementById(p).classList.remove('on'));document.getElementById(id).classList.add('on')}
@@ -731,7 +739,7 @@ function recalc(){
     // 材料列
     const ratioCell=isEditing
       ?`<input class="ing-ratio-inp" type="number" value="${ratioPct.toFixed(1)}" min="0" max="100" step="0.1" onchange="setRatio(${i},this.value)" onblur="setRatio(${i},this.value)">`
-      :`<div class="ing-ratio-txt">${ratioPct.toFixed(0)}%</div>`;
+      :`<div class="ing-ratio-txt">${fmt(ratioPct,1)}%</div>`;
     const alcCell=isEditing
       ?`<input class="alc-inp" type="number" value="${alc}" min="0" max="100" step="0.1" onchange="setAlc(${i},this.value)" onblur="setAlc(${i},this.value)">`
       :`<div class="alc-txt">${alc>0?alc+'%':'—'}</div>`;
@@ -756,12 +764,12 @@ function recalc(){
       <div class="comp-sub-hd"><span>子原料</span><span>用量(g/ml)</span><span>本次用量／成本</span></div>`;
       items.forEach((si,j)=>{
         const unit=si.unit||'ml';
-        const actualAmt=(si.amount*batches).toFixed(1);
+        const actualAmt=fmt(si.amount*batches,1);
         const itemCost=(si.unitCost||0)*si.amount*batches;
-        const costStr=si.isWater?'—':`NT$ ${itemCost.toFixed(1)}`;
+        const costStr=si.isWater?'—':`NT$ ${fmt(itemCost,1)}`;
         const amtCell=isEditing
           ?`<input class="comp-sub-inp" type="number" value="${si.amount}" min="0" step="0.1" onchange="setSubAmt(${i},${j},this.value)" onblur="setSubAmt(${i},${j},this.value)">`
-          :`<div style="font-size:11px;color:var(--mu);text-align:center">${si.amount}${unit}</div>`;
+          :`<div style="font-size:11px;color:var(--mu);text-align:center">${fmt(si.amount,1)}${unit}</div>`;
         html+=`<div class="comp-sub-row">
           <span class="comp-sub-name">◆ ${si.name}</span>
           ${amtCell}
