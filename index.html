@@ -199,7 +199,7 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
 <div id="pg-login" class="page on">
   <div class="logo-i">🍶</div>
   <div class="logo-t">南坡萬酒廠</div>
-  <div class="logo-s">酒譜管理系統 v5.2</div>
+  <div class="logo-s">酒譜管理系統 v5.3</div>
   <div class="lcard">
     <div class="plb">選擇調酒師帳號</div>
     <div class="plb">
@@ -229,9 +229,15 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
 <div id="pg-recipe" class="page">
   <div class="hd">
     <div class="hdr">
-      <div>
-        <div class="htitle" id="hd-recipe">-</div>
-        <div class="alc-badge">🍷 <span id="alc-display">—</span>%</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <div class="htitle" id="hd-recipe">-</div>
+          <div class="alc-badge">🍷 <span id="alc-display">—</span>%</div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:3px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:10px;color:rgba(159,225,203,.6)">Ver. <span id="hd-version">1</span></span>
+          <span style="font-size:10px;color:rgba(159,225,203,.45)">Updated <span id="hd-updated">2026/05/01</span></span>
+        </div>
       </div>
       <div class="ubadge" onclick="doLogout()">
         <span id="lu">-</span>
@@ -364,7 +370,7 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
     </div>
     <div class="card">
       <div class="stitle">APP 資訊</div>
-      <div class="setting-row"><span class="setting-lbl">版本</span><span class="setting-val">v5.2</span></div>
+      <div class="setting-row"><span class="setting-lbl">版本</span><span class="setting-val">v5.3</span></div>
       <div class="setting-row"><span class="setting-lbl">資料來源</span><span class="setting-val">Google Sheets</span></div>
     </div>
     <button class="logout-btn" onclick="doLogout()">登出</button>
@@ -399,22 +405,27 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
   <div class="sheet">
     <div class="shd"><div class="stitle2">新增製作記錄</div><div class="scl" onclick="document.getElementById('rec-modal').classList.remove('on')">✕</div></div>
     <div class="sbody">
-      <!-- 基本資訊 -->
-      <div style="font-size:10px;color:var(--mu);font-weight:600;letter-spacing:.4px;margin-bottom:.4rem">基本資訊</div>
-      <div class="form-row"><label>酒款</label><select class="form-sel" id="rm-recipe"></select></div>
-      <div class="form-row"><label>客戶</label><select class="form-sel" id="rm-client"><option>FeelingBar</option><option>南坡萬公版</option></select></div>
-      <div class="form-row"><label>製作日期</label><input class="form-inp" type="date" id="rm-date"></div>
-      <div class="form-row"><label>製作體積 (ml)</label><input class="form-inp" type="number" id="rm-vol" placeholder="例：4000"></div>
-      <div class="form-row"><label>調酒師</label><input class="form-inp" id="rm-user" readonly style="color:var(--mu)"></div>
-      <!-- 訂單資訊 -->
-      <div style="font-size:10px;color:var(--mu);font-weight:600;letter-spacing:.4px;margin:.6rem 0 .4rem">訂單資訊</div>
-      <div class="form-row"><label>訂單編號</label><input class="form-inp" type="text" id="rm-order" placeholder="請輸入訂單編號"></div>
-      <div class="form-row"><label>產品PM</label>
-        <select class="form-sel" id="rm-pm">
-          <option value="">-- 請選擇 --</option>
-        </select>
+      <!-- 第一列：客戶名稱 / PM -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="form-row"><label>客戶名稱</label><select class="form-sel" id="rm-client"><option>FeelingBar</option><option>南坡萬公版</option></select></div>
+        <div class="form-row"><label>PM</label>
+          <select class="form-sel" id="rm-pm">
+            <option value="">-- 請選擇 --</option>
+          </select>
+        </div>
       </div>
-      <!-- 瓶型 -->
+      <!-- 第二列：訂單編號 / 酒款 / 製作體積 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="form-row"><label>訂單編號</label><input class="form-inp" type="text" id="rm-order" placeholder="請輸入"></div>
+        <div class="form-row"><label>製作體積 (ml)</label><input class="form-inp" type="number" id="rm-vol" placeholder="例：4000"></div>
+      </div>
+      <div class="form-row"><label>酒款</label><select class="form-sel" id="rm-recipe"></select></div>
+      <!-- 第三列：製作日期 / 交貨日期 -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="form-row"><label>製作日期</label><input class="form-inp" type="date" id="rm-date"></div>
+        <div class="form-row"><label>交貨日期</label><input class="form-inp" type="date" id="rm-delivery"></div>
+      </div>
+      <!-- 第四列：瓶型 / 瓶蓋 / 前後標 -->
       <div class="form-row"><label>瓶型</label>
         <select class="form-sel" id="rm-bottle" onchange="onBottleChange()">
           <option value="">-- 請選擇 --</option>
@@ -424,17 +435,20 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
           <option value="4L塑膠桶">4L塑膠桶（4000ml）</option>
         </select>
       </div>
-      <!-- 瓶蓋（依瓶型連動）-->
-      <div class="form-row" id="rm-cap-row" style="display:none">
-        <label>瓶蓋</label>
-        <div id="rm-cap-content"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="form-row" id="rm-cap-row" style="display:none!important">
+          <label>瓶蓋</label>
+          <div id="rm-cap-content"></div>
+        </div>
+        <div class="form-row" id="rm-label-row" style="display:none!important">
+          <label>前後標</label>
+          <div id="rm-label-content"></div>
+        </div>
       </div>
-      <!-- 貼紙（依瓶型連動）-->
-      <div class="form-row" id="rm-label-row" style="display:none">
-        <label>貼紙</label>
-        <div id="rm-label-content"></div>
-      </div>
+      <!-- 第五列：備註 -->
       <div class="form-row"><label>備註</label><textarea class="form-ta" id="rm-note" placeholder="製作過程、調整說明..."></textarea></div>
+      <!-- 隱藏欄位（調酒師，由系統帶入） -->
+      <input type="hidden" id="rm-user">
       <button class="csave" onclick="saveRec()">儲存記錄</button>
       <div class="warn" id="rec-warn"></div>
     </div>
@@ -497,12 +511,12 @@ const CAT_ORDER_FE=['茶葉/茶包','糖漿','南坡萬自製','南坡萬散桶'
 const PAGES=['pg-login','pg-recipe','pg-inv','pg-rec','pg-set'];
 let pin='',user='',pass='',role='',pmList=[];
 let rdata=null,idata=null,curCat='全部';
-let recipeMap={'FeelingBar':['紫芋茉莉奶酒','薰衣草花果茶','芭樂紫蘇梅冰茶','櫻桃長島冰茶','野格梅子冰茶','島嶼鳳梨冰茶','泰奶烏龍蘭姆酒','伯爵茶Old Fashion','(降)梔子花金萱威士忌','熱紅酒','Woody Hot Toddy','海鹽西瓜Mojito','甘蔗檸檬Mojito','白桃葡萄柚Mojito','百香碧螺春Mojito','茉莉香片脆梅琴酒','蜜香紅茶荔枝琴酒','鹹楊桃琴酒','青花椒烏梅蘭姆酒','雲頂珍奶威士忌','太妃糖拿鐵奶酒v2','櫻花白柚綠茶','聖木Coffee Martini','福爾摩沙鳳梨可樂達'],'南坡萬公版':[]};
+let recipeMap={'FeelingBar':['紫芋茉莉奶酒','薰衣草花果茶','芭樂紫蘇梅冰茶','櫻桃長島冰茶','野格梅子冰茶','島嶼鳳梨冰茶','泰奶烏龍蘭姆酒','伯爵茶Old Fashion','梔子花金萱威士忌','熱紅酒','Woody Hot Toddy','海鹽西瓜Mojito','甘蔗檸檬Mojito','白桃葡萄柚Mojito','百香碧螺春Mojito','茉莉香片脆梅琴酒','蜜香紅茶荔枝琴酒','鹹楊桃琴酒','青花椒烏梅蘭姆酒','雲頂珍奶威士忌','太妃糖拿鐵奶酒','櫻花白柚綠茶','聖木Coffee Martini','福爾摩沙鳳梨可樂達'],'南坡萬公版':[]};
 
 // ── FeelingBar 預設 ABV（代工費用酒稅計算基準）──
 // 梔子花/聖木/可樂達 = 14%；冰茶系列 = 20%；其他 = 8%
 const FB_DEFAULT_ABV={
-  '(降)梔子花金萱威士忌':14,
+  '梔子花金萱威士忌':14,
   '聖木Coffee Martini':14,
   '福爾摩沙鳳梨可樂達':14,
   '芭樂紫蘇梅冰茶':20,
@@ -643,7 +657,7 @@ function showAfterLogin(){
   document.getElementById('set-admin-note').style.display=isAdmin?'block':'none';
   document.getElementById('rm-user').value=user;
   document.getElementById('am-user').value=user;
-  // 產品PM下拉（非管理者）
+  // PM下拉（非管理者）
   const pmSel=document.getElementById('rm-pm');
   pmSel.innerHTML='<option value="">-- 請選擇 --</option>';
   pmList.forEach(name=>{
@@ -653,6 +667,8 @@ function showAfterLogin(){
   showPage('pg-recipe');
   document.getElementById('nav').classList.add('on');
   document.querySelectorAll('.ni').forEach((n,j)=>n.classList.toggle('on',j===0));
+  // 登入後背景預載原料庫（不 showMask，靜默載入）
+  if(!idata) loadInv();
 }
 
 function initRecipeSelectors(){
@@ -693,7 +709,11 @@ function goTab(i){
   pgs.forEach((p,j)=>document.getElementById(p).classList.toggle('on',j===i));
   document.querySelectorAll('.ni').forEach((n,j)=>n.classList.toggle('on',j===i));
   if(i===0)loadRecipe();
-  else if(i===1)loadInv();
+  else if(i===1){
+    // 有快取直接顯示，不重新 fetch（手動按🔄才重新 fetch）
+    if(idata)renderInv(idata);
+    else loadInv();
+  }
   else if(i===2){if(!batchLoaded)loadBatchRecords();if(!applyLoaded)loadApplies();if(!historyLoaded)loadHistory();}
 }
 
@@ -832,18 +852,21 @@ function recalc(){
     }else{warnCard.style.display='none';}
   }else{warnCard.style.display='none';}
 
-  // ── 代工費用試算（四種瓶型，依預設ABV計算酒稅）──
+  // ── 代工費用試算（FeelingBar 預設只顯示4L，其他規格可展開）──
   const oem=document.getElementById('oem-list');
   oem.innerHTML='';
   if(tc>0&&tv>0){
     const costPer1ml=tc/tv;
     const defaultAbv=getDefaultAbv(recipeName);
-    // 顯示四種瓶型
-    Object.keys(BOTTLE_SPECS).forEach(bottleKey=>{
+    const isFB=client==='FeelingBar';
+    // 主要顯示：FeelingBar 只顯示4L；其他客戶顯示全部
+    const mainKeys=isFB?['4L塑膠桶']:Object.keys(BOTTLE_SPECS);
+    const extraKeys=isFB?['江小白','伏特加','波士頓']:[];
+
+    const renderBottle=(bottleKey)=>{
       const spec=BOTTLE_SPECS[bottleKey];
-      // 預設前後標都勾（select型）
       const r=calcOem(costPer1ml,defaultAbv,bottleKey,true,true);
-      if(!r)return;
+      if(!r)return null;
       const capStr=bottleKey==='江小白'?'（黑/白色蓋）':bottleKey==='4L塑膠桶'?'':`（瓶塞+封膜）`;
       const labelStr=spec.labelType==='select'?'前標+後標各NT$1.5':'自行打印 NT$1';
       const block=document.createElement('div');
@@ -860,8 +883,30 @@ function recalc(){
         <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:var(--brand);margin-top:2px">
           <span>總成本（含稅）</span><span>NT$ ${fmt(r.totalInTax,0)}</span>
         </div>`;
-      oem.appendChild(block);
-    });
+      return block;
+    };
+
+    // 顯示主要規格
+    mainKeys.forEach(k=>{const b=renderBottle(k);if(b)oem.appendChild(b);});
+
+    // 其他規格展開按鈕（FeelingBar 才有）
+    if(extraKeys.length){
+      const extraWrap=document.createElement('div');
+      extraWrap.id='oem-extra';extraWrap.style.display='none';
+      extraKeys.forEach(k=>{const b=renderBottle(k);if(b)extraWrap.appendChild(b);});
+      oem.appendChild(extraWrap);
+      const toggleBtn=document.createElement('button');
+      toggleBtn.id='oem-toggle-btn';
+      toggleBtn.style.cssText='width:100%;background:none;border:.5px solid var(--bo);border-radius:8px;padding:7px;font-size:11px;color:var(--mu);cursor:pointer;margin-top:2px';
+      toggleBtn.textContent='▾ 其他規格（江小白 / 伏特加 / 波士頓）';
+      toggleBtn.onclick=()=>{
+        const ex=document.getElementById('oem-extra');
+        const show=ex.style.display==='none';
+        ex.style.display=show?'block':'none';
+        toggleBtn.textContent=show?'▴ 收起其他規格':'▾ 其他規格（江小白 / 伏特加 / 波士頓）';
+      };
+      oem.appendChild(toggleBtn);
+    }
   }else{
     oem.innerHTML='<div style="font-size:11px;color:var(--mu);text-align:center;padding:8px">載入酒譜後自動計算</div>';
   }
@@ -878,7 +923,7 @@ function setSubAmt(i,j,v){
 }
 function resetComp(i){delete compOverrides[i];recalc()}
 
-// ── 原料庫 ──
+// ── 原料庫（登入時載入一次，手動重新整理才重新 fetch）──
 async function loadInv(){
   document.getElementById('ilist').innerHTML='<div class="iload">⏳ 載入中...</div>';
   document.getElementById('ctabs').innerHTML='';document.getElementById('inv-time').textContent='載入中...';
@@ -954,7 +999,7 @@ function renderBatch(records){
   });
 }
 
-// ── 瓶型連動：瓶蓋 + 貼紙 ──
+// ── 瓶型連動：瓶蓋 + 前後標 ──
 function onBottleChange(){
   const bv=document.getElementById('rm-bottle').value;
   const capRow=document.getElementById('rm-cap-row');
@@ -963,26 +1008,25 @@ function onBottleChange(){
   const labelContent=document.getElementById('rm-label-content');
 
   if(!bv){
-    capRow.style.display='none';labelRow.style.display='none';return;
+    capRow.style.cssText='';labelRow.style.cssText='';return;
   }
 
   // 瓶蓋
   if(bv==='江小白'){
-    capRow.style.display='block';
+    capRow.style.cssText='display:block';
     capContent.innerHTML=`<select class="form-sel" id="rm-cap-sel">
       <option value="黑色">黑色</option>
       <option value="白色">白色</option>
     </select>`;
   }else if(bv==='伏特加'||bv==='波士頓'){
-    capRow.style.display='block';
+    capRow.style.cssText='display:block';
     capContent.innerHTML=`<div style="font-size:13px;color:var(--mu);padding:7px 0">瓶塞 + 封膜</div>`;
   }else{
-    // 4L塑膠桶：不顯示瓶蓋
-    capRow.style.display='none';
+    capRow.style.cssText='display:none';
   }
 
-  // 貼紙
-  labelRow.style.display='block';
+  // 前後標
+  labelRow.style.cssText='display:block';
   if(bv==='江小白'||bv==='伏特加'){
     labelContent.innerHTML=`
       <div class="cb-row"><input type="checkbox" id="rm-front" checked><label for="rm-front">前標（NT$1.5）</label></div>
@@ -994,13 +1038,14 @@ function onBottleChange(){
 
 function openRecModal(){
   document.getElementById('rm-date').value=new Date().toISOString().slice(0,10);
+  document.getElementById('rm-delivery').value='';
   document.getElementById('rm-vol').value='';
   document.getElementById('rm-note').value='';
   document.getElementById('rm-order').value='';
   document.getElementById('rm-pm').value='';
   document.getElementById('rm-bottle').value='';
-  document.getElementById('rm-cap-row').style.display='none';
-  document.getElementById('rm-label-row').style.display='none';
+  document.getElementById('rm-cap-row').style.cssText='display:none';
+  document.getElementById('rm-label-row').style.cssText='display:none';
   document.getElementById('rec-warn').textContent='';
   document.getElementById('rec-modal').classList.add('on');
 }
