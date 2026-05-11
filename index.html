@@ -9,6 +9,10 @@
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC',sans-serif}
 :root{--brand:#1D9E75;--bl:#E1F5EE;--bd:#085041;--gold:#BA7517;--r:12px;--bg:#fff;--bg2:#f5f5f3;--tx:#1a1a1a;--mu:#6b7280;--bo:rgba(0,0,0,0.1);--red:#e57373}
+/* 移除所有數字欄位的上下箭頭 */
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
 .page{display:none;position:fixed;inset:0;flex-direction:column;overflow:hidden;background:#04342C}
 .page.on{display:flex}
 #pg-login{background:var(--bd);align-items:center;justify-content:center;padding:2rem 1.5rem;overflow-y:auto}
@@ -117,7 +121,6 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
 .tab-bar{display:flex;gap:0;margin-bottom:.6rem;background:var(--bg);border:.5px solid var(--bo);border-radius:9px;overflow:hidden;flex-shrink:0}
 .tab-btn{flex:1;padding:8px 4px;font-size:11px;border:none;background:transparent;color:var(--mu);cursor:pointer;font-weight:500;-webkit-tap-highlight-color:transparent}
 .tab-btn.on{background:var(--brand);color:white;font-weight:600}
-/* 訂單卡片 */
 .order-card{background:var(--bg);border:.5px solid var(--bo);border-radius:var(--r);margin-bottom:.6rem;overflow:hidden}
 .order-hd{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bl);border-bottom:.5px solid rgba(29,158,117,.2)}
 .order-hd-left{font-size:12px;font-weight:600;color:var(--bd)}
@@ -132,7 +135,6 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
 .rtag.g{background:var(--bl);color:var(--bd);border-color:rgba(29,158,117,.3)}
 .order-item-cost{font-size:12px;font-weight:600;color:var(--brand);white-space:nowrap;margin-left:8px}
 .order-total{display:flex;justify-content:space-between;padding:6px 12px;background:var(--bg2);font-size:11px;font-weight:600;color:var(--bd)}
-/* 申請相關 */
 .apply-item{background:var(--bg);border:.5px solid var(--bo);border-radius:var(--r);padding:.6rem .85rem;margin-bottom:.5rem}
 .apply-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
 .apply-name{font-size:12px;font-weight:600;color:var(--tx)}
@@ -196,21 +198,28 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
 .ratio-preview{background:var(--bl);border-radius:8px;padding:8px 10px;margin:.4rem 0;display:flex;justify-content:space-between;align-items:center}
 .ratio-preview-lbl{font-size:11px;color:var(--bd)}
 .ratio-preview-val{font-size:13px;font-weight:600;color:var(--bd)}
-/* 酒款明細區塊 */
 .item-block{background:var(--bg2);border:.5px solid var(--bo);border-radius:10px;padding:10px 12px;margin-bottom:8px;position:relative}
 .item-block-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
 .item-block-lbl{font-size:11px;font-weight:600;color:var(--bd)}
 .item-del-btn{font-size:10px;color:var(--red);background:none;border:.5px solid rgba(229,115,115,.4);border-radius:8px;padding:2px 8px;cursor:pointer}
 .add-item-btn{width:100%;background:rgba(29,158,117,.1);border:.5px solid rgba(29,158,117,.3);color:var(--brand);border-radius:9px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:.55rem}
-/* 申請材料列 */
 .apply-ing-row{background:var(--bg2);border:.5px solid var(--bo);border-radius:8px;padding:8px 10px;margin-bottom:6px}
 .apply-ing-del{font-size:10px;color:var(--red);background:none;border:none;cursor:pointer;float:right}
-/* 勾選框 */
 .cb-row{display:flex;align-items:center;gap:8px;padding:4px 0}
 .cb-row input[type=checkbox]{width:16px;height:16px;accent-color:var(--brand);cursor:pointer}
 .cb-row label{font-size:13px;color:var(--tx);cursor:pointer}
-/* 瓶型說明文字 */
 .cap-fixed-txt{font-size:12px;color:var(--mu);padding:7px 0}
+/* 申請酒譜材料列表 */
+.am-ing-list{background:var(--bg);border:.5px solid var(--bo);border-radius:8px;overflow:hidden;margin-bottom:8px}
+.am-ing-hd{display:grid;grid-template-columns:minmax(0,1.5fr) 60px 60px;gap:4px;background:var(--bl);padding:5px 10px}
+.am-ing-hd span{font-size:9px;color:var(--bd);font-weight:600}
+.am-ing-hd span:nth-child(2),.am-ing-hd span:nth-child(3){text-align:center}
+.am-ing-item{display:grid;grid-template-columns:minmax(0,1.5fr) 60px 60px;gap:4px;padding:6px 10px;border-top:.5px solid var(--bo);align-items:center}
+.am-ing-item:nth-child(even){background:rgba(0,0,0,.015)}
+.am-ing-name{font-size:11px;color:var(--tx);font-weight:500}
+.am-ing-old{font-size:11px;color:var(--mu);text-align:center}
+.am-ing-inp{width:100%;padding:3px 5px;border-radius:5px;border:.5px solid var(--brand);background:var(--bl);font-size:11px;text-align:center;color:var(--tx)}
+.am-ing-inp:focus{outline:none;border-color:var(--brand)}
 </style>
 </head>
 <body>
@@ -421,7 +430,6 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
   <div class="sheet">
     <div class="shd"><div class="stitle2">新增製作記錄</div><div class="scl" onclick="closeRecModal()">✕</div></div>
     <div class="sbody">
-      <!-- 訂單標頭 -->
       <div style="font-size:10px;color:var(--mu);font-weight:600;letter-spacing:.4px;margin-bottom:6px;padding-bottom:4px;border-bottom:.5px solid var(--bo)">▌ 訂單資訊</div>
       <div class="form-row-2">
         <div class="form-row"><label>客戶名稱</label><select class="form-sel" id="rm-client"><option>FeelingBar</option><option>南坡萬公版</option></select></div>
@@ -431,7 +439,6 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
         <div class="form-row"><label>訂單編號</label><input class="form-inp" type="text" id="rm-order" placeholder="請輸入"></div>
         <div class="form-row"><label>交貨日期</label><input class="form-inp" type="date" id="rm-delivery"></div>
       </div>
-      <!-- 酒款明細 -->
       <div style="font-size:10px;color:var(--mu);font-weight:600;letter-spacing:.4px;margin-bottom:6px;padding-bottom:4px;border-bottom:.5px solid var(--bo);display:flex;justify-content:space-between;align-items:center">
         <span>▌ 酒款明細</span>
         <span style="font-size:9px;color:var(--mu)">可新增多筆</span>
@@ -473,16 +480,20 @@ html,body{height:100%;background:#04342C;font-family:-apple-system,'Noto Sans TC
   </div>
 </div>
 
-<!-- Modal 申請修改（多筆材料）-->
+<!-- Modal 申請修改 -->
 <div class="modal-ov" id="apply-modal">
   <div class="sheet">
     <div class="shd"><div class="stitle2">申請酒譜修改</div><div class="scl" onclick="document.getElementById('apply-modal').classList.remove('on')">✕</div></div>
     <div class="sbody">
       <div class="info-box">⚠️ 申請送出後需經管理者（Kevin / Molly）審核。比例總和須為 100% 才可送出。</div>
-      <div class="form-row"><label>選擇酒款</label><select class="form-sel" id="am-recipe" onchange="onApplyRecipeChange()"></select></div>
+      <div class="form-row"><label>選擇酒款</label>
+        <select class="form-sel" id="am-recipe" onchange="onApplyRecipeChange()"></select>
+      </div>
+      <!-- 載入中提示 -->
+      <div id="am-loading" style="display:none;text-align:center;padding:12px;font-size:12px;color:var(--mu)">⏳ 載入材料中...</div>
+      <!-- 材料列表（直接全列，有預設比例可手動輸入新比例） -->
       <div id="am-ings-wrap"></div>
       <div id="am-ratio-total" style="font-size:11px;text-align:right;margin-bottom:8px;color:var(--mu)"></div>
-      <button class="add-item-btn" onclick="addApplyIng()">＋ 新增材料修改</button>
       <div class="form-row"><label>申請原因</label><textarea class="form-ta" id="am-reason" placeholder="說明修改原因..."></textarea></div>
       <div class="form-row"><label>申請人</label><input class="form-inp" id="am-user" readonly style="color:var(--mu)"></div>
       <button class="csave" onclick="submitApply()">送出申請</button>
@@ -525,7 +536,6 @@ const FB_DEFAULT_ABV={
 };
 function getDefaultAbv(n){return FB_DEFAULT_ABV[n]||8;}
 
-// 瓶型規格
 const BOTTLE_SPECS={
   '江小白': {ml:108,  container:15, labelType:'select', labelUnit:1.5},
   '伏特加':  {ml:535,  container:46, labelType:'select', labelUnit:1.5},
@@ -555,6 +565,9 @@ let isForceChangePw=false;
 let batchLoaded=false,applyLoaded=false,historyLoaded=false;
 let isEditing=false;
 let ratioOverrides={},alcOverrides={},compOverrides={},volOverrides={};
+
+// 申請酒譜用：快取各酒款材料，避免重複呼叫 API
+let applyRecipeCache={};
 
 function fmt(n,dec=1){
   const v=parseFloat(n);if(isNaN(v))return'—';
@@ -595,7 +608,7 @@ async function doLogin(){
         showMask('載入酒譜中...');
         await loadRecipe();
         hideMask();showAfterLogin();
-        loadInv(); // 背景預載原料庫
+        loadInv();
       }
     }else{
       hideMask();document.getElementById('em').textContent=d.message||'密碼錯誤';
@@ -642,11 +655,9 @@ function showAfterLogin(){
   document.getElementById('set-role2').textContent=isAdmin?'管理者':'調酒師';
   document.getElementById('set-user').textContent=user;
   document.getElementById('set-admin-note').style.display=isAdmin?'block':'none';
-  // PM 下拉（非管理者）
   const pmSel=document.getElementById('rm-pm');
   pmSel.innerHTML='<option value="">-- 請選擇 --</option>';
   pmList.forEach(n=>{const o=document.createElement('option');o.value=n;o.textContent=n;pmSel.appendChild(o);});
-  // 預設 PM 為登入帳號（若在 pmList 內）
   if(pmList.includes(user)) pmSel.value=user;
   initRecipeSelectors();
   showPage('pg-recipe');
@@ -661,10 +672,16 @@ function initRecipeSelectors(){
   rsel.innerHTML='';
   recipes.forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;rsel.appendChild(o)});
   const allRecipes=Object.values(recipeMap).flat();
-  ['rm-recipe','am-recipe','ei-recipe'].forEach(id=>{
+  ['rm-recipe','ei-recipe'].forEach(id=>{
     const el=document.getElementById(id);if(!el)return;el.innerHTML='';
     allRecipes.forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;el.appendChild(o)});
   });
+  // am-recipe 申請酒譜下拉
+  const amSel=document.getElementById('am-recipe');
+  if(amSel){
+    amSel.innerHTML='';
+    allRecipes.forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;amSel.appendChild(o)});
+  }
   updateHdTitles();
 }
 function onClientChange(){
@@ -721,7 +738,6 @@ function getCompItems(i,g){
   }
   return items;
 }
-// 用量輸入回推比例
 function setVolInput(i,volVal,tv){
   const v=parseFloat(volVal)||0;
   ratioOverrides[i]=tv>0?(v/tv*100):0;
@@ -735,7 +751,6 @@ function setSubAmt(i,j,v){
 }
 function resetComp(i){delete compOverrides[i];recalc()}
 
-// 點擊 🔗 跳轉到複合原料區塊
 function scrollToComp(name){
   const blocks=document.querySelectorAll('.comp-block');
   for(const b of blocks){
@@ -779,11 +794,9 @@ function recalc(){
     }
     tc+=cost;
 
-    // 比例輸入
     const ratioCell=isEditing
       ?`<input class="ing-ratio-inp" type="number" value="${fmt(ratioPct,1)}" min="0" max="100" step="0.1" onchange="setRatio(${i},this.value)" onblur="setRatio(${i},this.value)">`
       :`<div class="ing-ratio-txt">${fmt(ratioPct,1)}%</div>`;
-    // 用量輸入（試算模式可調整，自動回推比例）
     const volCell=isEditing
       ?`<input class="ing-vol-inp" type="number" value="${v}" min="0" step="1" onchange="setVolInput(${i},this.value,${tv})" onblur="setVolInput(${i},this.value,${tv})">`
       :`<div class="ing-vol">${v}</div>`;
@@ -957,11 +970,14 @@ function switchRecTab(i){
 }
 
 async function loadBatchRecords(){
+  document.getElementById('batch-list').innerHTML='<div class="iload">⏳ 載入中...</div>';
   try{
     const d=await post({action:'getBatchRecords',username:user,password:pass});
     if(d.success){renderOrders(d.orders||[]);batchLoaded=true;}
-    else document.getElementById('batch-list').innerHTML=`<div class="iload">❌ ${d.message}</div>`;
-  }catch(e){document.getElementById('batch-list').innerHTML='<div class="iload">❌ 網路錯誤</div>';}
+    else document.getElementById('batch-list').innerHTML=`<div class="iload">❌ ${d.message}<br><br><button onclick="loadBatchRecords()" style="padding:8px 16px;background:var(--brand);color:white;border:none;border-radius:8px;font-size:13px;cursor:pointer">重試</button></div>`;
+  }catch(e){
+    document.getElementById('batch-list').innerHTML=`<div class="iload">❌ 網路錯誤<br><br><button onclick="loadBatchRecords()" style="padding:8px 16px;background:var(--brand);color:white;border:none;border-radius:8px;font-size:13px;cursor:pointer">重試</button></div>`;
+  }
 }
 
 function renderOrders(orders){
@@ -969,7 +985,6 @@ function renderOrders(orders){
   if(!orders||!orders.length){el.innerHTML='<div class="empty-tip">尚無製作記錄</div>';return}
   orders.forEach(order=>{
     const card=document.createElement('div');card.className='order-card';
-    // 訂單總費用
     const totalCost=order.items.reduce((s,it)=>{
       const c=parseFloat(it.oemCost)||0;
       const cnt=parseFloat(it.bottleCount)||0;
@@ -1010,7 +1025,7 @@ function renderOrders(orders){
   });
 }
 
-// ── 瓶型連動（共用）──
+// ── 瓶型連動 ──
 function applyBottleChange(prefix){
   const bv=document.getElementById(`${prefix}-bottle`).value;
   const capRow=document.getElementById(`${prefix}-cap-row`);
@@ -1044,12 +1059,11 @@ function openRecModal(){
   document.getElementById('rm-order').value='';
   document.getElementById('rm-delivery').value='';
   document.getElementById('rm-client').value='FeelingBar';
-  // PM 預設登入帳號
   const pmSel=document.getElementById('rm-pm');
   if(pmList.includes(user)) pmSel.value=user;
   document.getElementById('rec-warn').textContent='';
   document.getElementById('rec-modal').classList.add('on');
-  addRecItem(); // 預設加一筆
+  addRecItem();
 }
 function closeRecModal(){document.getElementById('rec-modal').classList.remove('on');}
 
@@ -1108,6 +1122,40 @@ function getBackLabel(prefix){
   const cb=document.getElementById(`${prefix}-back`);return cb?cb.checked:false;
 }
 
+// ── 計算食材成本（任何酒款）──
+// 【修正】：從 API 取得指定酒款的食材成本，用於製作記錄儲存
+async function fetchRecipeCostPer1ml(recipeName, volumeRef){
+  // 若目前酒譜頁正好是這款，直接用
+  if(rdata && rdata.sheetName === recipeName){
+    const tc = calcTotalCost(volumeRef || parseFloat(document.getElementById('tvol').value) || 4000);
+    const tv = volumeRef || parseFloat(document.getElementById('tvol').value) || 4000;
+    return tv > 0 ? tc / tv : 0;
+  }
+  // 否則呼叫 API 取得該酒款資料
+  try{
+    const d = await post({action:'getRecipe', username:user, password:pass, sheetName:recipeName});
+    if(!d.success || !d.ingredients) return 0;
+    // 以 4000ml 為基準計算成本
+    const refVol = 4000;
+    let tc = 0;
+    d.ingredients.forEach(g=>{
+      const ratioPct = (typeof g.ratio==='string'?parseFloat(g.ratio):g.ratio)*100;
+      const v = Math.round(ratioPct/100*refVol);
+      if(g.isCompound && g.compoundInfo){
+        const items = g.compoundInfo.subMaterials.map(s=>({...s}));
+        const totalVol = g.compoundInfo.totalVolume || 1;
+        const batches = v / totalVol;
+        tc += items.reduce((s,si)=>s+(si.unitCost||0)*si.amount*batches, 0);
+      } else {
+        tc += v * (g.unitCost||0);
+      }
+    });
+    return refVol > 0 ? tc / refVol : 0;
+  }catch(e){
+    return 0;
+  }
+}
+
 async function saveRec(){
   const order={
     client:document.getElementById('rm-client').value,
@@ -1115,9 +1163,8 @@ async function saveRec(){
     orderNumber:document.getElementById('rm-order').value,
     deliveryDate:document.getElementById('rm-delivery').value,
   };
-  // 收集所有酒款明細
-  const items=[];
   const blocks=document.getElementById('rm-items-wrap').querySelectorAll('.item-block');
+  const itemsRaw=[];
   for(const block of blocks){
     const idx=block.id.replace('ri-','');
     const recipe=document.getElementById(`ri-${idx}-recipe`).value;
@@ -1125,24 +1172,32 @@ async function saveRec(){
     const date=document.getElementById(`ri-${idx}-date`).value;
     const bottleType=document.getElementById(`ri-${idx}-bottle`).value;
     if(!vol){document.getElementById('rec-warn').textContent='請填寫所有酒款的製作體積';return;}
-    const front=getFrontLabel(`ri-${idx}`);
-    const back=getBackLabel(`ri-${idx}`);
-    const cap=getCapVal(`ri-${idx}`);
-    const cnt=bottleCount(vol,bottleType);
-    // 用預設ABV算代工費用
-    const abv=getDefaultAbv(recipe);
-    let costPer1ml=0;
-    // 嘗試從目前酒譜頁取成本
-    if(rdata&&rdata.sheetName===recipe){
-      const tv=parseFloat(document.getElementById('tvol').value)||4000;
-      const tc=calcTotalCost(tv);
-      costPer1ml=tv>0?tc/tv:0;
-    }
-    const oemResult=bottleType?calcOem(costPer1ml,abv,bottleType,front,back):null;
-    const oemCost=oemResult?oemResult.totalInTax:0;
-    items.push({recipeName:recipe,productionDate:date,volume:vol,bottleType,bottleCap:cap,frontLabel:front,backLabel:back,bottleCount:cnt,oemCost,note:document.getElementById(`ri-${idx}-note`).value});
+    itemsRaw.push({idx, recipe, vol, date, bottleType,
+      front:getFrontLabel(`ri-${idx}`),
+      back:getBackLabel(`ri-${idx}`),
+      cap:getCapVal(`ri-${idx}`),
+      note:document.getElementById(`ri-${idx}-note`).value
+    });
   }
-  if(!items.length){document.getElementById('rec-warn').textContent='請至少新增一筆酒款';return;}
+  if(!itemsRaw.length){document.getElementById('rec-warn').textContent='請至少新增一筆酒款';return;}
+
+  showMask('計算代工費用中...');
+  // 【修正】：每款酒各自從 API 取正確食材成本，再計算代工費用
+  const items=[];
+  for(const raw of itemsRaw){
+    const abv = getDefaultAbv(raw.recipe);
+    const costPer1ml = await fetchRecipeCostPer1ml(raw.recipe, raw.vol);
+    const cnt = bottleCount(raw.vol, raw.bottleType);
+    const oemResult = raw.bottleType ? calcOem(costPer1ml, abv, raw.bottleType, raw.front, raw.back) : null;
+    const oemCost = oemResult ? oemResult.totalInTax : 0;
+    items.push({
+      recipeName:raw.recipe, productionDate:raw.date, volume:raw.vol,
+      bottleType:raw.bottleType, bottleCap:raw.cap,
+      frontLabel:raw.front, backLabel:raw.back,
+      bottleCount:cnt, oemCost, note:raw.note
+    });
+  }
+
   showMask('儲存中...');
   try{
     const d=await post({action:'addBatchRecord',username:user,password:pass,order,items});
@@ -1178,17 +1233,14 @@ function openEditItem(order,item){
   const btl=document.getElementById('ei-bottle');
   btl.value=item.bottleType||'';
   onEiBottleChange();
-  // 設定瓶蓋
   if(item.bottleType==='江小白'){
     const s=document.getElementById('ei-cap-sel');if(s)s.value=item.bottleCap||'黑色';
   }
-  // 設定貼紙
   if(item.bottleType==='江小白'||item.bottleType==='伏特加'){
     const f=document.getElementById('ei-front');const b=document.getElementById('ei-back');
     if(f)f.checked=item.frontLabel==='✓';
     if(b)b.checked=item.backLabel==='✓';
   }
-  // 顯示費用預覽
   const cnt=bottleCount(parseFloat(item.volume)||0,item.bottleType);
   const oemTotal=(parseFloat(item.oemCost)||0)*cnt;
   document.getElementById('ei-cost-preview').textContent=`裝瓶數：${cnt} 瓶　代工費用合計：NT$ ${fmt(oemTotal,0)}`;
@@ -1199,14 +1251,21 @@ function openEditItem(order,item){
 async function saveEditItem(){
   const bottleType=document.getElementById('ei-bottle').value;
   const vol=parseFloat(document.getElementById('ei-vol').value)||0;
+  const recipeName=document.getElementById('ei-recipe').value;
   const front=getFrontLabel('ei');
   const back=getBackLabel('ei');
   const cap=getCapVal('ei');
   const cnt=bottleCount(vol,bottleType);
-  const abv=getDefaultAbv(document.getElementById('ei-recipe').value);
-  const oemResult=bottleType?calcOem(0,abv,bottleType,front,back):null;
+  const abv=getDefaultAbv(recipeName);
+
+  showMask('計算代工費用中...');
+  // 【修正】：編輯時也正確計算食材成本
+  const costPer1ml = await fetchRecipeCostPer1ml(recipeName, vol);
+  const oemResult = bottleType ? calcOem(costPer1ml, abv, bottleType, front, back) : null;
+  hideMask();
+
   const fields={
-    recipeName:document.getElementById('ei-recipe').value,
+    recipeName,
     productionDate:document.getElementById('ei-date').value,
     volume:vol, bottleType, bottleCap:cap,
     frontLabel:front, backLabel:back,
@@ -1222,112 +1281,161 @@ async function saveEditItem(){
   }catch(e){hideMask();document.getElementById('ei-warn').textContent='網路錯誤';}
 }
 
-// ── 申請酒譜修改（多筆）──
-let applyIngCount=0;
-function onApplyRecipeChange(){
-  applyIngCount=0;
+// ── 申請酒譜修改 ──
+// 【修正】：選擇酒款後，向 API 取得該酒款所有材料，直接全部列出並顯示預設比例
+async function onApplyRecipeChange(){
+  const recipeName = document.getElementById('am-recipe').value;
+  const wrap = document.getElementById('am-ings-wrap');
+  const loading = document.getElementById('am-loading');
+  wrap.innerHTML = '';
+  document.getElementById('am-ratio-total').textContent = '';
+  document.getElementById('apply-warn').textContent = '';
+
+  if(!recipeName) return;
+
+  // 顯示載入中
+  loading.style.display = 'block';
+
+  let ings = [];
+  // 若 cache 有，直接用
+  if(applyRecipeCache[recipeName]){
+    ings = applyRecipeCache[recipeName];
+  } else if(rdata && rdata.sheetName === recipeName){
+    ings = rdata.ingredients;
+    applyRecipeCache[recipeName] = ings;
+  } else {
+    // 從 API 取
+    try{
+      const d = await post({action:'getRecipe', username:user, password:pass, sheetName:recipeName});
+      if(d.success && d.ingredients){
+        ings = d.ingredients;
+        applyRecipeCache[recipeName] = ings;
+      }
+    }catch(e){}
+  }
+
+  loading.style.display = 'none';
+
+  if(!ings.length){
+    wrap.innerHTML = '<div style="font-size:11px;color:var(--mu);padding:8px">無法載入材料，請重試</div>';
+    return;
+  }
+
+  // 建立材料列表：名稱 | 目前比例 | 新比例輸入欄
+  const table = document.createElement('div');
+  table.className = 'am-ing-list';
+  table.innerHTML = `<div class="am-ing-hd"><span>材料名稱</span><span>目前比例</span><span>修改為%</span></div>`;
+
+  ings.forEach((g, i) => {
+    const ratioPct = ((typeof g.ratio==='string'?parseFloat(g.ratio):g.ratio)*100);
+    const row = document.createElement('div');
+    row.className = 'am-ing-item';
+    row.dataset.ingName = g.name;
+    row.dataset.rowNum = g.rowNum || '';
+    row.dataset.oldRatio = typeof g.ratio==='string'?parseFloat(g.ratio):g.ratio;
+    row.innerHTML = `
+      <div class="am-ing-name">${g.name}</div>
+      <div class="am-ing-old">${fmt(ratioPct,1)}%</div>
+      <input class="am-ing-inp" type="number" placeholder="${fmt(ratioPct,1)}" min="0" max="100" step="0.1"
+        oninput="updateApplyTotal()" onblur="updateApplyTotal()">
+    `;
+    table.appendChild(row);
+  });
+
+  wrap.appendChild(table);
+  updateApplyTotal();
+}
+
+function updateApplyTotal(){
+  const rows = document.querySelectorAll('#am-ings-wrap .am-ing-item');
+  let total = 0;
+  let anyFilled = false;
+  rows.forEach(row=>{
+    const inp = row.querySelector('.am-ing-inp');
+    const v = parseFloat(inp.value);
+    if(!isNaN(v) && v > 0){ total += v; anyFilled = true; }
+  });
+  const el = document.getElementById('am-ratio-total');
+  if(!el) return;
+  if(!anyFilled){ el.textContent=''; return; }
+  const ok = Math.abs(total-100) < 0.5;
+  el.textContent = `修改後比例總和：${fmt(total,1)}%${ok?' ✓':' ⚠️ 需等於 100%'}`;
+  el.style.color = ok ? 'var(--brand)' : 'var(--red)';
+}
+
+function openApplyModal(){
+  // 申請酒譜預設選目前酒譜頁的酒款
+  const currentRecipe = document.getElementById('sel-recipe').value || Object.values(recipeMap).flat()[0];
+  const amSel = document.getElementById('am-recipe');
+  if(amSel) amSel.value = currentRecipe;
+  document.getElementById('am-reason').value='';
+  document.getElementById('apply-warn').textContent='';
+  document.getElementById('am-user').value=user;
   document.getElementById('am-ings-wrap').innerHTML='';
   document.getElementById('am-ratio-total').textContent='';
-  addApplyIng();
-}
-function addApplyIng(){
-  applyIngCount++;
-  const idx=applyIngCount;
-  const recipeName=document.getElementById('am-recipe').value;
-  const ings=rdata&&rdata.sheetName===recipeName?rdata.ingredients:[];
-  const ingOpts=ings.map(g=>`<option value='${JSON.stringify({name:g.name,rowNum:g.rowNum,ratio:g.ratio}).replace(/'/g,"&apos;")}'>${g.name}（${fmt((typeof g.ratio==='string'?parseFloat(g.ratio):g.ratio)*100,1)}%）</option>`).join('');
-  const wrap=document.getElementById('am-ings-wrap');
-  const row=document.createElement('div');row.className='apply-ing-row';row.id=`ai-${idx}`;
-  row.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-    <div style="font-size:11px;font-weight:600;color:var(--bd)">材料 ${idx}</div>
-    ${idx>1?`<button class="apply-ing-del" onclick="removeApplyIng(${idx})">✕ 移除</button>`:''}
-  </div>
-  <div class="form-row"><label>選擇材料</label><select class="form-sel" id="ai-${idx}-ing" onchange="onAiIngChange(${idx})">${ingOpts.length?ingOpts:'<option value="">-- 請先選擇酒款 --</option>'}</select></div>
-  <div class="ratio-preview" id="ai-${idx}-preview" style="${ingOpts.length?'':'display:none'}">
-    <div><div class="ratio-preview-lbl">目前比例</div><div class="ratio-preview-val" id="ai-${idx}-old">-</div></div>
-    <div style="font-size:18px;color:var(--mu)">→</div>
-    <div style="flex:1"><div class="ratio-preview-lbl">修改為（%）</div>
-      <input class="form-inp" type="number" id="ai-${idx}-new" placeholder="例：40" min="0.1" max="100" step="0.1" oninput="updateRatioTotal()">
-    </div>
-  </div>`;
-  wrap.appendChild(row);
-  if(ingOpts.length) onAiIngChange(idx);
-}
-function removeApplyIng(idx){
-  const el=document.getElementById(`ai-${idx}`);if(el)el.remove();
-  updateRatioTotal();
-}
-function onAiIngChange(idx){
-  const sel=document.getElementById(`ai-${idx}-ing`);if(!sel)return;
-  const val=sel.value;if(!val)return;
-  try{
-    const ing=JSON.parse(val.replace(/&apos;/g,"'"));
-    const ratio=typeof ing.ratio==='string'?parseFloat(ing.ratio):ing.ratio;
-    const oldEl=document.getElementById(`ai-${idx}-old`);
-    if(oldEl) oldEl.textContent=(ratio*100).toFixed(1)+'%';
-    const preview=document.getElementById(`ai-${idx}-preview`);
-    if(preview) preview.style.display='flex';
-  }catch(e){}
-  updateRatioTotal();
-}
-function updateRatioTotal(){
-  const rows=document.getElementById('am-ings-wrap').querySelectorAll('.apply-ing-row');
-  let total=0;let allFilled=true;
-  rows.forEach(row=>{
-    const idx=row.id.replace('ai-','');
-    const nw=parseFloat(document.getElementById(`ai-${idx}-new`)?.value)||0;
-    if(!nw) allFilled=false;
-    total+=nw;
-  });
-  const el=document.getElementById('am-ratio-total');
-  if(!el)return;
-  const ok=Math.abs(total-100)<0.5;
-  el.textContent=allFilled?`比例總和：${fmt(total,1)}%${ok?' ✓':' ⚠️ 需等於 100%'}`:'';
-  el.style.color=ok?'var(--brand)':'var(--red)';
-}
-function openApplyModal(){
-  document.getElementById('am-recipe').value=rdata?rdata.sheetName:Object.values(recipeMap).flat()[0];
-  applyIngCount=0;document.getElementById('am-ings-wrap').innerHTML='';
-  document.getElementById('am-reason').value='';document.getElementById('apply-warn').textContent='';
-  document.getElementById('am-user').value=user;
-  onApplyRecipeChange();
   document.getElementById('apply-modal').classList.add('on');
+  onApplyRecipeChange();
 }
+
 async function submitApply(){
-  const recipeName=document.getElementById('am-recipe').value;
-  const reason=document.getElementById('am-reason').value.trim();
-  if(!reason){document.getElementById('apply-warn').textContent='請填寫申請原因';return}
-  const rows=document.getElementById('am-ings-wrap').querySelectorAll('.apply-ing-row');
-  const applies=[];let total=0;
+  const recipeName = document.getElementById('am-recipe').value;
+  const reason = document.getElementById('am-reason').value.trim();
+  if(!reason){document.getElementById('apply-warn').textContent='請填寫申請原因';return;}
+
+  const rows = document.querySelectorAll('#am-ings-wrap .am-ing-item');
+  const applies = [];
+  let total = 0;
+  let hasChange = false;
+
   for(const row of rows){
-    const idx=row.id.replace('ai-','');
-    const ingVal=document.getElementById(`ai-${idx}-ing`)?.value;
-    const newRatio=parseFloat(document.getElementById(`ai-${idx}-new`)?.value);
-    if(!ingVal||!newRatio){document.getElementById('apply-warn').textContent='請填寫所有材料的新比例';return}
-    const ing=JSON.parse(ingVal.replace(/&apos;/g,"'"));
-    total+=newRatio;
-    applies.push({recipeName,sheetName:recipeName,ingName:ing.name,ingRowNum:ing.rowNum,
-      oldRatio:typeof ing.ratio==='string'?parseFloat(ing.ratio):ing.ratio,
-      newRatio:newRatio/100,reason,applicant:user});
+    const inp = row.querySelector('.am-ing-inp');
+    const newRatio = parseFloat(inp.value);
+    if(!isNaN(newRatio) && newRatio > 0){
+      hasChange = true;
+      total += newRatio;
+      applies.push({
+        recipeName,
+        sheetName: recipeName,
+        ingName: row.dataset.ingName,
+        ingRowNum: row.dataset.rowNum,
+        oldRatio: parseFloat(row.dataset.oldRatio),
+        newRatio: newRatio / 100,
+        reason,
+        applicant: user
+      });
+    }
   }
-  if(Math.abs(total-100)>=0.5){document.getElementById('apply-warn').textContent=`比例總和為 ${fmt(total,1)}%，須等於 100% 才可送出`;return}
+
+  if(!hasChange){document.getElementById('apply-warn').textContent='請至少填寫一個材料的新比例';return;}
+  if(Math.abs(total-100)>=0.5){document.getElementById('apply-warn').textContent=`比例總和為 ${fmt(total,1)}%，須等於 100% 才可送出`;return;}
+
   showMask('送出申請中...');
   try{
     const d=await post({action:'submitApply',username:user,password:pass,applies});
     hideMask();
-    if(d.success){document.getElementById('apply-modal').classList.remove('on');applyLoaded=false;await loadApplies();alert('申請已送出！等待管理者審核。');}
-    else alert('送出失敗：'+d.message);
+    if(d.success){
+      document.getElementById('apply-modal').classList.remove('on');
+      applyLoaded=false;
+      await loadApplies();
+      alert('申請已送出！等待管理者審核。');
+    }else alert('送出失敗：'+d.message);
   }catch(e){hideMask();alert('網路錯誤')}
 }
 
 async function loadApplies(){
+  document.getElementById('apply-list').innerHTML='<div class="iload">⏳ 載入中...</div>';
   try{
     const d=await post({action:'getApplies',username:user,password:pass});
-    if(!d.success){document.getElementById('apply-list').innerHTML=`<div class="iload">❌ ${d.message}</div>`;return;}
+    if(!d.success){
+      document.getElementById('apply-list').innerHTML=`<div class="iload">❌ ${d.message}<br><br><button onclick="loadApplies()" style="padding:8px 16px;background:var(--brand);color:white;border:none;border-radius:8px;font-size:13px;cursor:pointer">重試</button></div>`;
+      return;
+    }
     const pc=d.applies.filter(a=>a.status==='待審核').length;
     document.getElementById('ndot').classList.toggle('on',pc>0&&role==='admin');
     renderApplies(d.applies);applyLoaded=true;
-  }catch(e){document.getElementById('apply-list').innerHTML='<div class="iload">❌ 網路錯誤</div>';}
+  }catch(e){
+    document.getElementById('apply-list').innerHTML=`<div class="iload">❌ 網路錯誤<br><br><button onclick="loadApplies()" style="padding:8px 16px;background:var(--brand);color:white;border:none;border-radius:8px;font-size:13px;cursor:pointer">重試</button></div>`;
+  }
 }
 
 function renderApplies(applies){
@@ -1362,10 +1470,7 @@ function openReview(id,recipeName,reason,applicant){
   document.getElementById('rv-recipe').textContent=recipeName;
   document.getElementById('rv-reason').textContent=reason;
   document.getElementById('rv-applicant').value=applicant;
-  // 找出此申請的材料列表
   const wrap=document.getElementById('rv-items-wrap');wrap.innerHTML='';
-  // 從 apply-list 重建
-  const applies=[];
   document.querySelectorAll('.apply-item').forEach(item=>{
     const hd=item.querySelector('.apply-name');
     if(hd&&hd.textContent===recipeName){
@@ -1393,17 +1498,26 @@ async function doReview(action){
   try{
     const d=await post({action:'reviewApply',username:user,password:pass,applyId:curApplyId,action,rejectReason});
     hideMask();
-    if(d.success){document.getElementById('review-modal').classList.remove('on');applyLoaded=false;historyLoaded=false;await Promise.all([loadApplies(),loadHistory()]);alert(d.message);}
-    else alert('審核失敗：'+d.message);
+    if(d.success){
+      document.getElementById('review-modal').classList.remove('on');
+      applyLoaded=false;historyLoaded=false;
+      // 清除 apply recipe cache，讓下次開申請 modal 重新取得最新比例
+      applyRecipeCache={};
+      await Promise.all([loadApplies(),loadHistory()]);
+      alert(d.message);
+    }else alert('審核失敗：'+d.message);
   }catch(e){hideMask();alert('網路錯誤')}
 }
 
 async function loadHistory(){
+  document.getElementById('history-list').innerHTML='<div class="iload">⏳ 載入中...</div>';
   try{
     const d=await post({action:'getHistory',username:user,password:pass});
     if(d.success){renderHistory(d.history);historyLoaded=true;}
-    else document.getElementById('history-list').innerHTML=`<div class="iload">❌ ${d.message}</div>`;
-  }catch(e){document.getElementById('history-list').innerHTML='<div class="iload">❌ 網路錯誤</div>';}
+    else document.getElementById('history-list').innerHTML=`<div class="iload">❌ ${d.message}<br><br><button onclick="loadHistory()" style="padding:8px 16px;background:var(--brand);color:white;border:none;border-radius:8px;font-size:13px;cursor:pointer">重試</button></div>`;
+  }catch(e){
+    document.getElementById('history-list').innerHTML=`<div class="iload">❌ 網路錯誤<br><br><button onclick="loadHistory()" style="padding:8px 16px;background:var(--brand);color:white;border:none;border-radius:8px;font-size:13px;cursor:pointer">重試</button></div>`;
+  }
 }
 function renderHistory(history){
   const el=document.getElementById('history-list');el.innerHTML='';
@@ -1427,6 +1541,7 @@ function doLogout(){
   if(!confirm('確定要登出嗎？'))return;
   user='';pass='';pin='';role='';rdata=null;idata=null;curCat='全部';pmList=[];
   batchLoaded=false;applyLoaded=false;historyLoaded=false;
+  applyRecipeCache={};
   resetEdit();
   showPage('pg-login');document.getElementById('nav').classList.remove('on');
   document.getElementById('usel').value='';document.getElementById('ndot').classList.remove('on');
