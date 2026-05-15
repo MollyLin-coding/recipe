@@ -1063,23 +1063,6 @@ function renderProfitData(items){
     el.appendChild(row);
   });
 }
-    const isNeg=it.profitRate<0;
-    const barWidth=maxRate>0?Math.min(100,Math.abs(it.profitRate)/maxRate*100):0;
-    const row=ce('div');row.className='profit-row';
-    row.innerHTML=`
-      <div class="profit-rank">${idx+1}</div>
-      <div class="profit-info">
-        <div class="profit-name">${it.recipeName}</div>
-        <div class="profit-bar-wrap"><div class="profit-bar-fill${isNeg?' neg':''}" style="width:${barWidth}%"></div></div>
-        <div class="profit-meta">售價 NT$${fmt(it.price,0)}　成本 NT$${fmt(it.cost,0)}　容量 ${fmt(it.volume/1000,0)}L</div>
-      </div>
-      <div class="profit-nums">
-        <div class="profit-rate${isNeg?' neg':''}">${fmt(it.profitRate,1)}%</div>
-        <div class="profit-detail">毛利 NT$${fmt(it.profit,0)}</div>
-      </div>`;
-    el.appendChild(row);
-  });
-}
 
 // ── 製作記錄 ──
 function switchRecTab(i){
@@ -1244,7 +1227,7 @@ async function saveRec(){
   const itemsRaw=[];
   for(const block of blocks){
     const idx=block.id.replace('ri-','');
-    const recipe=$(``ri-${idx}-recipe``).value;
+    const recipe=$(`ri-${idx}-recipe`).value;
     const vol=parseFloat($(`ri-${idx}-vol`).value)||0;
     const date=$(`ri-${idx}-date`).value;
     const bottleType=$(`ri-${idx}-bottle`).value;
