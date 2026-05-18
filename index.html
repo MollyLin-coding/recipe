@@ -648,9 +648,10 @@ async function doLogin(){
       }else{
         showMask('同步酒款清單中...');
         await fetchRecipeMap();
+        hideMask();showAfterLogin();
         showMask('載入酒譜中...');
         await loadRecipe();
-        hideMask();showAfterLogin();
+        hideMask();
         loadInv();
       }
     }else{
@@ -692,7 +693,7 @@ async function doChangePassword(){
     hideMask();
     if(d.success){
       pass=nw;cls('pw-modal');
-      if(isForceChangePw){showMask('載入酒譜中...');await loadRecipe();hideMask();showAfterLogin();loadInv();}
+      if(isForceChangePw){showAfterLogin();showMask('載入酒譜中...');await loadRecipe();hideMask();loadInv();}
       else alert('密碼已更換成功！');
     }else{$('pw-warn').textContent=d.message||'更換失敗';}
   }catch(e){hideMask();$('pw-warn').textContent='網路錯誤'}
