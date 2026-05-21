@@ -237,6 +237,23 @@ input[type=number]{-moz-appearance:textfield}
 .profit-rate.neg{color:var(--red)}
 .profit-detail{font-size:10px;color:var(--mu);margin-top:2px}
 .rbtn{padding:8px 16px;background:var(--brand);color:white;border:none;border-radius:8px;font-size:13px;cursor:pointer}
+/* ── 毛利分析 v6.1 新樣式 ── */
+.profit-recipe-card{background:var(--bg);border:.5px solid var(--bo);border-radius:var(--r);margin-bottom:.7rem;overflow:hidden}
+.profit-recipe-hd{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--bl);border-bottom:.5px solid rgba(29,158,117,.2)}
+.profit-recipe-name{font-size:12px;font-weight:600;color:var(--bd)}
+.profit-recipe-abv{font-size:10px;color:var(--gold);background:rgba(186,117,23,.15);border:.5px solid rgba(186,117,23,.3);border-radius:12px;padding:2px 8px}
+.profit-bottle-tabs{display:flex;border-bottom:.5px solid var(--bo);background:var(--bg2)}
+.profit-bottle-tab{flex:1;padding:6px 4px;font-size:10px;font-weight:500;color:var(--mu);border:none;background:transparent;cursor:pointer;border-bottom:2px solid transparent;-webkit-tap-highlight-color:transparent}
+.profit-bottle-tab.on{color:var(--brand);border-bottom-color:var(--brand);font-weight:600}
+.profit-bottle-body{padding:8px 12px}
+.profit-detail-row{display:flex;justify-content:space-between;padding:3px 0;font-size:11px;border-bottom:.5px solid var(--bo)}
+.profit-detail-row:last-of-type{border-bottom:none}
+.profit-detail-lbl{color:var(--mu)}
+.profit-detail-val{color:var(--tx);font-weight:500}
+.profit-result-row{display:flex;justify-content:space-between;margin-top:7px;padding-top:7px;border-top:1.5px solid var(--bo);font-size:13px;font-weight:700}
+.profit-result-pos{color:var(--brand)}
+.profit-result-neg{color:var(--red)}
+.profit-no-price{font-size:11px;color:var(--mu);text-align:center;padding:8px 0;font-style:italic}
 /* ── 製程備註區塊 ── */
 .note-section{background:var(--bg);border:.5px solid var(--bo);border-radius:var(--r);margin-bottom:.6rem;overflow:hidden}
 .note-toggle-btn{width:100%;display:flex;justify-content:space-between;align-items:center;padding:.6rem .85rem;background:none;border:none;cursor:pointer;-webkit-tap-highlight-color:transparent}
@@ -420,8 +437,8 @@ input[type=number]{-moz-appearance:textfield}
 <!-- 毛利分析 -->
 <div id="pg-profit" class="page">
   <div class="hd">
-    <div class="hdr"><div class="htitle">📊 利潤分析</div><div class="ubadge" onclick="doLogout()"><span id="plu">-</span> 登出</div></div>
-    <div style="font-size:10px;color:rgba(159,225,203,.5);margin-top:3px">即時從酒譜資料庫計算</div>
+    <div class="hdr"><div class="htitle">📊 毛利分析</div><div class="ubadge" onclick="doLogout()"><span id="plu">-</span> 登出</div></div>
+    <div style="font-size:10px;color:rgba(159,225,203,.5);margin-top:3px">即時從酒譜資料庫計算 · 含酒稅</div>
   </div>
   <div class="bscroll">
     <div class="profit-client-bar" id="profit-client-bar"></div>
@@ -464,7 +481,7 @@ input[type=number]{-moz-appearance:textfield}
   <div class="ni on" id="n0" onclick="goTab(0)"><span class="ni-icon">📋</span><span class="ni-lbl">酒譜</span></div>
   <div class="ni" id="n1" onclick="goTab(1)"><span class="ni-icon">📦</span><span class="ni-lbl">原料庫</span></div>
   <div class="ni" id="n2" onclick="goTab(2)"><span class="ni-icon">📝</span><span class="ni-lbl">製作記錄</span><div class="ndot" id="ndot"></div></div>
-  <div class="ni" id="n3" onclick="goTab(3)"><span class="ni-icon">📊</span><span class="ni-lbl">利潤</span></div>
+  <div class="ni" id="n3" onclick="goTab(3)"><span class="ni-icon">📊</span><span class="ni-lbl">毛利</span></div>
   <div class="ni" id="n4" onclick="goTab(4)"><span class="ni-icon">⚙️</span><span class="ni-lbl">設定</span></div>
 </div>
 
@@ -583,7 +600,7 @@ const cls=id=>$(id).classList.remove('on');
 // ⚠️ 部署 v6.0 後請將下方網址換成新的 exec 網址
 const API='https://script.google.com/macros/s/AKfycbz6DeoqgcetJdvqPDJDnEaPiX305ssKBtAs52HAwmwfCniDYxOBNaHUfRCeDrNobIlptQ/exec';
 const PAGES=['pg-login','pg-recipe','pg-inv','pg-rec','pg-profit','pg-set'];
-const CLIENT_LIST=['FeelingBar'];
+const CLIENT_LIST=['FeelingBar','南坡萬公版'];
 
 let pin='',user='',pass='',role='';
 let rdata=null,idata=null,curCat='全部';
@@ -627,7 +644,7 @@ function reverseCalcFoodCost(oemCostInTax,abv,bottleKey,front,back){
 }
 
 let curSheetName='紫芋茉莉奶酒';
-let curApplyId='',curEditOrderId='',curEditRecipe='',curEditDate='';
+let curApplyId='',curEditOrderId='',curEditRecipe='',curEditRowIndex=0;
 let isForceChangePw=false;
 let batchLoaded=false,applyLoaded=false,historyLoaded=false;
 let profitLoaded={},curProfitClient='FeelingBar';
@@ -1062,7 +1079,7 @@ function renderInvList(cats){
 }
 function filterInv(){if(idata)renderInvList(idata)}
 
-// ── 毛利分析 ──
+// ── 毛利分析 v6.1 ──
 function initProfitClientBar(){
   const bar=$('profit-client-bar');bar.innerHTML='';
   CLIENT_LIST.forEach(c=>{
@@ -1074,7 +1091,7 @@ function switchProfitClient(c){
   curProfitClient=c;
   $$('.profit-tab').forEach(t=>t.classList.toggle('on',t.textContent===c));
   if(!profitLoaded[c])loadProfitData(c);
-  else renderProfitData(profitLoaded[c]);
+  else renderProfitData(profitLoaded[c],c);
 }
 async function loadProfitData(client){
   $('profit-list').innerHTML='<div class="iload">⏳ 計算中...</div>';
@@ -1083,51 +1100,69 @@ async function loadProfitData(client){
     const d=await post({action:'getProfitData',username:user,password:pass,client});
     if(!d.success)throw new Error(d.message);
     profitLoaded[client]=d.items;
-    renderProfitData(d.items);
+    renderProfitData(d.items,client);
   }catch(e){
     $('profit-list').innerHTML=`<div class="iload">❌ ${e.message}<br><br><button onclick="loadProfitData('${client}')" class="rbtn">重試</button></div>`;
   }
 }
-function renderProfitData(items){
-  if(!items||!items.length){$('profit-list').innerHTML='<div class="iload">尚無資料</div>';return;}
-  const validItems=items.filter(it=>!it.error);
-  validItems.forEach(it=>{
-    const abv=getDefaultAbv(it.recipeName);
-    const costPer1ml=it.cost/it.volume;
-    const r=calcOem(costPer1ml,abv,'4L塑膠桶',false,false);
-    it.totalOemCost=r?Math.round(r.totalInTax):it.cost;
-    it.realProfit=it.price-it.totalOemCost;
-    it.realProfitRate=it.price>0?it.realProfit/it.price*100:0;
-  });
-  const avgRate=validItems.length?validItems.reduce((s,it)=>s+it.realProfitRate,0)/validItems.length:0;
-  const avgProfit=validItems.length?validItems.reduce((s,it)=>s+it.realProfit,0)/validItems.length:0;
-  const maxRate=Math.max(...validItems.map(it=>it.realProfitRate));
+function renderProfitData(items,client){
+  if(!items||!items.length){$('profit-list').innerHTML='<div class="iload">尚無資料</div>';$('profit-summary').innerHTML='';return;}
+  const validItems=items.filter(it=>!it.error&&it.bottles);
+  // 摘要：用4L桶型的第一個有售價的計算平均
+  const priceItems=validItems.filter(it=>{const b=it.bottles&&it.bottles.find(b=>b.bottleKey==='4L塑膠桶');return b&&b.price>0;});
+  const avgRate=priceItems.length?priceItems.reduce((s,it)=>{const b=it.bottles.find(b=>b.bottleKey==='4L塑膠桶');return s+(b.profitRate||0);},0)/priceItems.length:0;
+  const avgProfit=priceItems.length?priceItems.reduce((s,it)=>{const b=it.bottles.find(b=>b.bottleKey==='4L塑膠桶');return s+(b.profit||0);},0)/priceItems.length:0;
   $('profit-summary').innerHTML=`
-    <div class="profit-sum-card"><div class="profit-sum-lbl">平均利潤率</div><div class="profit-sum-val" style="color:${avgRate>=30?'var(--brand)':'var(--red)'};">${fmt(avgRate,1)}%</div></div>
-    <div class="profit-sum-card"><div class="profit-sum-lbl">平均每批利潤</div><div class="profit-sum-val">NT$ ${fmt(avgProfit,0)}</div></div>`;
+    <div class="profit-sum-card"><div class="profit-sum-lbl">平均毛利率（4L桶）</div><div class="profit-sum-val" style="color:${avgRate>=30?'var(--brand)':'var(--red)'};">${fmt(avgRate,1)}%</div></div>
+    <div class="profit-sum-card"><div class="profit-sum-lbl">平均每批利潤（4L桶）</div><div class="profit-sum-val">NT$ ${fmt(avgProfit,0)}</div></div>`;
   const el=$('profit-list');el.innerHTML='';
-  const sorted=[...items].sort((a,b)=>(b.realProfitRate||0)-(a.realProfitRate||0));
-  sorted.forEach((it,idx)=>{
+  items.forEach((it,idx)=>{
+    const card=ce('div');card.className='profit-recipe-card';
     if(it.error){
-      const row=ce('div');row.className='profit-row';
-      row.innerHTML=`<div class="profit-rank">${idx+1}</div><div class="profit-info"><div class="profit-name">${it.recipeName}</div><div class="profit-meta" style="color:var(--red)">讀取失敗</div></div>`;
-      el.appendChild(row);return;
+      card.innerHTML=`<div class="profit-recipe-hd"><div class="profit-recipe-name">${it.recipeName}</div><span style="font-size:10px;color:var(--red)">讀取失敗</span></div>`;
+      el.appendChild(card);return;
     }
-    const isNeg=it.realProfitRate<0;
-    const barWidth=maxRate>0?Math.min(100,Math.abs(it.realProfitRate)/maxRate*100):0;
-    const row=ce('div');row.className='profit-row';
-    row.innerHTML=`
-      <div class="profit-rank">${idx+1}</div>
-      <div class="profit-info">
-        <div class="profit-name">${it.recipeName}</div>
-        <div class="profit-bar-wrap"><div class="profit-bar-fill${isNeg?' neg':''}" style="width:${barWidth}%"></div></div>
-        <div class="profit-meta">售價 NT$${fmt(it.price,0)}　總成本(含稅) NT$${fmt(it.totalOemCost,0)}　容量 ${fmt(it.volume/1000,0)}L</div>
-      </div>
-      <div class="profit-nums">
-        <div class="profit-rate${isNeg?' neg':''}">${fmt(it.realProfitRate,1)}%</div>
-        <div class="profit-detail">利潤 NT$${fmt(it.realProfit,0)}</div>
-      </div>`;
-    el.appendChild(row);
+    const abvStr=it.abv?`ABV ${fmt(it.abv,1)}%`:'ABV ?';
+    card.innerHTML=`<div class="profit-recipe-hd">
+      <div class="profit-recipe-name">${it.recipeName}</div>
+      <span class="profit-recipe-abv">🍷 ${abvStr}</span>
+    </div>
+    <div class="profit-bottle-tabs" id="ptabs-${idx}"></div>
+    <div class="profit-bottle-body" id="pbody-${idx}"></div>`;
+    el.appendChild(card);
+    // 建立瓶型 tab
+    const tabs=card.querySelector(`#ptabs-${idx}`);
+    const body=card.querySelector(`#pbody-${idx}`);
+    let activeBottle=0;
+    const bottles=it.bottles||[];
+    function renderBottleBody(bi){
+      const b=bottles[bi];
+      if(!b){body.innerHTML='';return;}
+      const isNeg=b.profit!==null&&b.profit<0;
+      const hasPrice=b.price>0;
+      body.innerHTML=`
+        <div class="profit-detail-row"><span class="profit-detail-lbl">食材成本（${fmt(b.bottleMl,0)}ml）</span><span class="profit-detail-val">NT$ ${fmt(b.foodCost,0)}</span></div>
+        <div class="profit-detail-row"><span class="profit-detail-lbl">食材報價（×1.15）</span><span class="profit-detail-val">NT$ ${fmt(Math.round(b.foodCost*1.15),0)}</span></div>
+        <div class="profit-detail-row"><span class="profit-detail-lbl">酒稅</span><span class="profit-detail-val">NT$ ${fmt(b.tax,1)}</span></div>
+        <div class="profit-detail-row"><span class="profit-detail-lbl">代工成本含稅</span><span class="profit-detail-val" style="color:var(--bd);font-weight:600">NT$ ${fmt(b.oemCost,0)}</span></div>
+        ${hasPrice
+          ?`<div class="profit-result-row"><span>含稅售價</span><span>NT$ ${fmt(b.price,0)}</span></div>
+             <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:2px">
+               <span style="color:var(--mu)">毛利 / 毛利率</span>
+               <span class="${isNeg?'profit-result-neg':'profit-result-pos'}">NT$ ${fmt(b.profit,0)}　${fmt(b.profitRate,1)}%</span>
+             </div>`
+          :`<div class="profit-no-price">⚠️ 報價分頁尚未設定此酒款售價</div>`}`;
+    }
+    bottles.forEach((b,bi)=>{
+      const tab=ce('button');tab.className='profit-bottle-tab'+(bi===0?' on':'');
+      tab.textContent=`${b.bottleKey}（${b.bottleMl}ml）`;
+      tab.onclick=()=>{
+        tabs.querySelectorAll('.profit-bottle-tab').forEach(t=>t.classList.remove('on'));
+        tab.classList.add('on');activeBottle=bi;renderBottleBody(bi);
+      };
+      tabs.appendChild(tab);
+    });
+    renderBottleBody(0);
   });
 }
 
@@ -1331,7 +1366,7 @@ function calcTotalCost(tv){
 }
 
 function openEditItem(order,item){
-  curEditOrderId=order.orderId;curEditRecipe=item.recipeName;curEditDate=item.productionDate;
+  curEditOrderId=order.orderId;curEditRecipe=item.recipeName;curEditRowIndex=item.rowIndex||0;
   $('ei-recipe').value=item.recipeName;
   $('ei-date').value=item.productionDate;
   $('ei-vol').value=item.volume;
@@ -1359,7 +1394,7 @@ async function saveEditItem(){
   const fields={recipeName,productionDate:$('ei-date').value,volume:vol,bottleType,bottleCap:cap,frontLabel:front,backLabel:back,bottleCount:cnt,oemCost:oemResult?oemResult.totalInTax:0,note:$('ei-note').value};
   showMask('儲存中...');
   try{
-    const d=await post({action:'updateBatchRecord',username:user,password:pass,orderId:curEditOrderId,recipeName:curEditRecipe,productionDate:curEditDate,fields});
+    const d=await post({action:'updateBatchRecord',username:user,password:pass,orderId:curEditOrderId,recipeName:curEditRecipe,rowIndex:curEditRowIndex,fields});
     hideMask();
     if(d.success){cls('edit-item-modal');batchLoaded=false;await loadBatchRecords();}
     else{$('ei-warn').textContent=d.message;}
