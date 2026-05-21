@@ -481,7 +481,7 @@ input[type=number]{-moz-appearance:textfield}
   <div class="ni on" id="n0" onclick="goTab(0)"><span class="ni-icon">📋</span><span class="ni-lbl">酒譜</span></div>
   <div class="ni" id="n1" onclick="goTab(1)"><span class="ni-icon">📦</span><span class="ni-lbl">原料庫</span></div>
   <div class="ni" id="n2" onclick="goTab(2)"><span class="ni-icon">📝</span><span class="ni-lbl">製作記錄</span><div class="ndot" id="ndot"></div></div>
-  <div class="ni" id="n3" onclick="goTab(3)"><span class="ni-icon">📊</span><span class="ni-lbl">毛利</span></div>
+  <div class="ni" id="n3" onclick="goTab(3)"><span class="ni-icon">📊</span><span class="ni-lbl" style="font-size:8px">毛利分析</span></div>
   <div class="ni" id="n4" onclick="goTab(4)"><span class="ni-icon">⚙️</span><span class="ni-lbl">設定</span></div>
 </div>
 
@@ -1140,10 +1140,13 @@ function renderProfitData(items,client){
       if(!b){body.innerHTML='';return;}
       const isNeg=b.profit!==null&&b.profit<0;
       const hasPrice=b.price>0;
+      // 標籤說明
+      const labelNote=b.bottleKey==='波士頓'?'自行打印 NT$4':'前後標各 NT$2，共 NT$4';
       body.innerHTML=`
         <div class="profit-detail-row"><span class="profit-detail-lbl">食材成本（${fmt(b.bottleMl,0)}ml）</span><span class="profit-detail-val">NT$ ${fmt(b.foodCost,0)}</span></div>
-        <div class="profit-detail-row"><span class="profit-detail-lbl">食材報價（×1.15）</span><span class="profit-detail-val">NT$ ${fmt(Math.round(b.foodCost*1.15),0)}</span></div>
+        <div class="profit-detail-row"><span class="profit-detail-lbl">食材報價（×1.15）</span><span class="profit-detail-val">NT$ ${fmt(b.foodPrice||Math.round(b.foodCost*1.15),0)}</span></div>
         <div class="profit-detail-row"><span class="profit-detail-lbl">酒稅</span><span class="profit-detail-val">NT$ ${fmt(b.tax,1)}</span></div>
+        <div class="profit-detail-row"><span class="profit-detail-lbl">標籤（${labelNote}）</span><span class="profit-detail-val">NT$ 4</span></div>
         <div class="profit-detail-row"><span class="profit-detail-lbl">代工成本含稅</span><span class="profit-detail-val" style="color:var(--bd);font-weight:600">NT$ ${fmt(b.oemCost,0)}</span></div>
         ${hasPrice
           ?`<div class="profit-result-row"><span>含稅售價</span><span>NT$ ${fmt(b.price,0)}</span></div>
@@ -1155,6 +1158,7 @@ function renderProfitData(items,client){
     }
     bottles.forEach((b,bi)=>{
       const tab=ce('button');tab.className='profit-bottle-tab'+(bi===0?' on':'');
+      // tab 文字：江小白(108ml) / 伏特加(500ml) / 波士頓(500ml)
       tab.textContent=`${b.bottleKey}（${b.bottleMl}ml）`;
       tab.onclick=()=>{
         tabs.querySelectorAll('.profit-bottle-tab').forEach(t=>t.classList.remove('on'));
