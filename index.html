@@ -507,7 +507,7 @@ input[type=number]{-moz-appearance:textfield}
     <div class="sbody">
       <div style="font-size:10px;color:var(--mu);font-weight:600;letter-spacing:.4px;margin-bottom:6px;padding-bottom:4px;border-bottom:.5px solid var(--bo)">▌ 訂單資訊</div>
       <div class="form-row-2">
-        <div class="form-row"><label>客戶名稱</label><select class="form-sel" id="rm-client"><option>FeelingBar</option><option>南坡萬公版</option></select></div>
+        <div class="form-row"><label>客戶名稱</label><select class="form-sel" id="rm-client" onchange="onRmClientChange()"><option>FeelingBar</option><option>南坡萬公版</option></select></div>
         <div class="form-row"><label>PM</label><div class="form-inp" id="rm-pm-display" style="color:var(--tx);padding:7px 9px;background:var(--bg2)">-</div></div>
       </div>
       <div class="form-row-2">
@@ -768,8 +768,8 @@ function initRecipeSelectors(){
   const recipes=recipeMap[client]||[];
   const allRecipes=Object.values(recipeMap).flat();
   fillSel('sel-recipe',recipes);
-  fillSel('ei-recipe',allRecipes);
-  fillSel('am-recipe',allRecipes);
+  fillSel('ei-recipe',allRecipes);  // 編輯記錄顯示全部酒款（跨客戶記錄可能需要）
+  fillSel('am-recipe',recipeMap[client]||[]);  // 申請修改只顯示當前客戶酒款
   updateHdTitles();
 }
 
@@ -993,13 +993,14 @@ function recalc(){
   const oem=$('oem-list');oem.innerHTML='';
   if(tc>0&&tv>0){
     const costPer1ml=tc/tv;
-    const defaultAbv=getDefaultAbv(recipeName);
+    // 酒稅ABV：FeelingBar用預設ABV，其他客戶用酒譜實際ABV（rdata.total.alcohol）
     const isFB=client==='FeelingBar';
+    const taxAbv=isFB?getDefaultAbv(recipeName):(rdata&&rdata.total?rdata.total.alcohol:8)||8;
     const mainKeys=isFB?['4L塑膠桶']:Object.keys(BOTTLE_SPECS);
     const extraKeys=isFB?['江小白','伏特加','波士頓']:[];
     const renderBottle=(bottleKey)=>{
       const spec=BOTTLE_SPECS[bottleKey];
-      const r=calcOem(costPer1ml,defaultAbv,bottleKey,true,true);if(!r)return null;
+      const r=calcOem(costPer1ml,taxAbv,bottleKey,true,true);if(!r)return null;
       const capStr=bottleKey==='江小白'?'（黑/白色蓋）':bottleKey==='4L塑膠桶'?'':`（瓶塞+封膜）`;
       const labelStr=spec.labelType==='select'?'前標+後標各NT$1.5':'自行打印 NT$1';
       const unit=bottleKey==='4L塑膠桶'?'桶':'瓶';
@@ -1011,7 +1012,7 @@ function recalc(){
         <div class="crow"><span>食材報價（×1.15）</span><span>NT$ ${fmt(r.foodPrice,0)}</span></div>
         <div class="crow"><span>容器成本</span><span>NT$ ${r.container}</span></div>
         <div class="crow"><span>貼紙（${labelStr}）</span><span>NT$ ${fmt(r.label,1)}</span></div>
-        <div class="crow"><span>酒稅（預設ABV ${defaultAbv}%）</span><span>NT$ ${fmt(r.tax,0)}</span></div>
+        <div class="crow"><span>酒稅（ABV ${taxAbv}%）</span><span>NT$ ${fmt(r.tax,0)}</span></div>
         <div style="display:flex;justify-content:space-between;border-top:1px solid var(--bo);margin-top:4px;padding-top:5px;font-size:11px;font-weight:600;color:var(--bd)">
           <span>每${unit}總成本（未含稅）</span><span>NT$ ${fmt(r.totalExTax,0)}</span>
         </div>
@@ -1210,11 +1211,9 @@ function renderOrders(orders){
       const cnt=bottleCount(parseFloat(item.volume)||0,bottleType)||parseFloat(item.bottleCount)||0;
       const oemPerUnit=parseFloat(item.oemCost)||0;
       const itemTotal=oemPerUnit*cnt;
-      const abv=getDefaultAbv(item.recipeName||'');
-      const front=item.frontLabel==='✓';
-      const back=item.backLabel==='✓';
-      const rawFoodCost=bottleType?reverseCalcFoodCost(oemPerUnit,abv,bottleType,front,back):0;
-      const foodPrice=Math.round(rawFoodCost*1.15*cnt);
+      // 食材報價：直接用儲存的每瓶食材報價（正確），不再反推
+      const foodPricePerUnit=parseFloat(item.foodPricePerUnit)||0;
+      const foodPrice=Math.round(foodPricePerUnit*cnt);
       const labelInfo=[item.frontLabel==='✓'?'前標':null,item.backLabel==='✓'?'後標':null].filter(Boolean).join('+');
       const row=ce('div');row.className='order-item-row';
       row.innerHTML=`<div style="flex:1">
@@ -1274,13 +1273,24 @@ function openRecModal(){
   $('rec-modal').classList.add('on');
   addRecItem();
 }
+function onRmClientChange(){
+  // 客戶切換時重建酒款選單（清除現有 items 重新新增）
+  const rmClient=$('rm-client').value||'FeelingBar';
+  const wrap=$('rm-items-wrap');
+  // 更新所有已存在的酒款 select
+  wrap.querySelectorAll('[id$="-recipe"]').forEach(sel=>{
+    const cur=sel.value;
+    sel.innerHTML=(recipeMap[rmClient]||[]).map(r=>`<option${r===cur?' selected':''}>${r}</option>`).join('');
+  });
+}
 function closeRecModal(){cls('rec-modal');}
 function addRecItem(){
   recItemCount++;const idx=recItemCount;
   const wrap=$('rm-items-wrap');
   const block=ce('div');block.className='item-block';block.id=`ri-${idx}`;
-  const allRecipes=Object.values(recipeMap).flat();
-  const opts=allRecipes.map(r=>`<option>${r}</option>`).join('');
+  const rmClient=$('rm-client').value||'FeelingBar';
+  const clientRecipes=recipeMap[rmClient]||[];
+  const opts=clientRecipes.map(r=>`<option>${r}</option>`).join('');
   block.innerHTML=`<div class="item-block-hd"><div class="item-block-lbl">酒款 ${idx}</div>${idx>1?`<button class="item-del-btn" onclick="removeRecItem(${idx})">移除</button>`:''}</div>
   <div class="form-row-2">
     <div class="form-row"><label>酒款</label><select class="form-sel" id="ri-${idx}-recipe">${opts}</select></div>
@@ -1309,8 +1319,8 @@ function getCapVal(prefix){const bv=$(prefix+'-bottle').value;if(bv==='江小白
 function getFrontLabel(prefix){const bv=$(prefix+'-bottle').value;if(bv!=='江小白'&&bv!=='伏特加')return false;const cb=$(prefix+'-front');return cb?cb.checked:false;}
 function getBackLabel(prefix){const bv=$(prefix+'-bottle').value;if(bv!=='江小白'&&bv!=='伏特加')return false;const cb=$(prefix+'-back');return cb?cb.checked:false;}
 
-async function fetchRecipeCostPer1ml(recipeName,vol){
-  const client=$('sel-client')?.value||'FeelingBar';
+async function fetchRecipeCostPer1ml(recipeName,vol,clientArg){
+  const client=clientArg||curClient||'FeelingBar';
   if(rdata&&rdata.sheetName===recipeName){
     const tc=calcTotalCost(vol||4000);const tv=vol||4000;return tv>0?tc/tv:0;
   }
@@ -1350,11 +1360,14 @@ async function saveRec(){
   showMask('計算代工費用中...');
   const items=[];
   for(const raw of itemsRaw){
-    const abv=getDefaultAbv(raw.recipe);
-    const costPer1ml=await fetchRecipeCostPer1ml(raw.recipe,raw.vol);
+    // 酒稅ABV：FeelingBar用預設，其他用實際ABV（從getRecipe回傳的total.alcohol）
+    const isFBRec=($('rm-client').value||'FeelingBar')==='FeelingBar';
+    const abv=isFBRec?getDefaultAbv(raw.recipe):(raw.actualAbv||getDefaultAbv(raw.recipe));
+    const costPer1ml=await fetchRecipeCostPer1ml(raw.recipe,raw.vol,raw.client);
     const cnt=bottleCount(raw.vol,raw.bottleType);
     const oemResult=raw.bottleType?calcOem(costPer1ml,abv,raw.bottleType,raw.front,raw.back):null;
-    items.push({recipeName:raw.recipe,productionDate:raw.date,volume:raw.vol,bottleType:raw.bottleType,bottleCap:raw.cap,frontLabel:raw.front,backLabel:raw.back,bottleCount:cnt,oemCost:oemResult?oemResult.totalInTax:0,note:raw.note});
+    const foodPricePerUnit=oemResult?Math.round(oemResult.foodPrice):0;
+    items.push({recipeName:raw.recipe,productionDate:raw.date,volume:raw.vol,bottleType:raw.bottleType,bottleCap:raw.cap,frontLabel:raw.front,backLabel:raw.back,bottleCount:cnt,oemCost:oemResult?oemResult.totalInTax:0,note:raw.note,foodPricePerUnit});
   }
   showMask('儲存中...');
   try{
@@ -1396,7 +1409,9 @@ async function saveEditItem(){
   const vol=parseFloat($('ei-vol').value)||0;
   const recipeName=$('ei-recipe').value;
   const front=getFrontLabel('ei');const back=getBackLabel('ei');const cap=getCapVal('ei');
-  const cnt=bottleCount(vol,bottleType);const abv=getDefaultAbv(recipeName);
+  const cnt=bottleCount(vol,bottleType);
+  const isFBEdit=curClient==='FeelingBar';
+  const abv=isFBEdit?getDefaultAbv(recipeName):($('ei-abv-store')?parseFloat($('ei-abv-store').dataset.abv)||getDefaultAbv(recipeName):getDefaultAbv(recipeName));
   showMask('計算代工費用中...');
   const costPer1ml=await fetchRecipeCostPer1ml(recipeName,vol);
   const oemResult=bottleType?calcOem(costPer1ml,abv,bottleType,front,back):null;
@@ -1420,7 +1435,7 @@ async function onApplyRecipeChange(){
   if(!recipeName)return;
   loading.style.display='block';
   let ings=[];
-  const client=$('sel-client')?.value||'FeelingBar';
+  const client=curClient||'FeelingBar';
   if(applyRecipeCache[recipeName]){ings=applyRecipeCache[recipeName];}
   else if(rdata&&rdata.sheetName===recipeName){ings=rdata.ingredients;applyRecipeCache[recipeName]=ings;}
   else{
@@ -1450,8 +1465,10 @@ function updateApplyTotal(){
   el.style.color=ok?'var(--brand)':'var(--red)';
 }
 function openApplyModal(){
-  const currentRecipe=$('sel-recipe').value||Object.values(recipeMap).flat()[0];
-  const amSel=$('am-recipe');if(amSel)amSel.value=currentRecipe;
+  // 申請Modal只顯示當前客戶的酒款
+  fillSel('am-recipe',recipeMap[curClient]||[]);
+  const currentRecipe=$('sel-recipe').value||'';
+  const amSel=$('am-recipe');if(amSel&&currentRecipe)amSel.value=currentRecipe;
   $('am-reason').value='';$('apply-warn').textContent='';
   $('am-user').value=user;$('am-ings-wrap').innerHTML='';$('am-ratio-total').textContent='';
   $('apply-modal').classList.add('on');onApplyRecipeChange();
