@@ -1211,8 +1211,17 @@ function renderOrders(orders){
       const cnt=bottleCount(parseFloat(item.volume)||0,bottleType)||parseFloat(item.bottleCount)||0;
       const oemPerUnit=parseFloat(item.oemCost)||0;
       const itemTotal=oemPerUnit*cnt;
-      // 食材報價：直接用儲存的每瓶食材報價（正確），不再反推
-      const foodPricePerUnit=parseFloat(item.foodPricePerUnit)||0;
+      // 食材報價：優先用儲存的 foodPricePerUnit，舊資料沒有時用反推備援
+      let foodPricePerUnit=parseFloat(item.foodPricePerUnit)||0;
+      if(!foodPricePerUnit&&oemPerUnit>0&&bottleType&&BOTTLE_SPECS[bottleType]){
+        const spec=BOTTLE_SPECS[bottleType];
+        const front=item.frontLabel==='✓',back=item.backLabel==='✓';
+        const labelCost=spec.labelType==='select'?(front?1.5:0)+(back?1.5:0):1;
+        const tax=calcTax(getDefaultAbv(item.recipeName||''),spec.ml);
+        const exTax=oemPerUnit/1.05;
+        const fp=exTax-spec.container-labelCost-tax;
+        foodPricePerUnit=fp>0?Math.round(fp):0;
+      }
       const foodPrice=Math.round(foodPricePerUnit*cnt);
       const labelInfo=[item.frontLabel==='✓'?'前標':null,item.backLabel==='✓'?'後標':null].filter(Boolean).join('+');
       const row=ce('div');row.className='order-item-row';
@@ -1354,7 +1363,8 @@ async function saveRec(){
     const date=$(`ri-${idx}-date`).value;
     const bottleType=$(`ri-${idx}-bottle`).value;
     if(!vol){$('rec-warn').textContent='請填寫所有酒款的製作體積';return;}
-    itemsRaw.push({idx,recipe,vol,date,bottleType,front:getFrontLabel(`ri-${idx}`),back:getBackLabel(`ri-${idx}`),cap:getCapVal(`ri-${idx}`),note:$(`ri-${idx}-note`).value});
+    const recActualAbv=(rdata&&rdata.sheetName===recipe&&rdata.total)?rdata.total.alcohol:null;
+    itemsRaw.push({idx,recipe,vol,date,bottleType,front:getFrontLabel(`ri-${idx}`),back:getBackLabel(`ri-${idx}`),cap:getCapVal(`ri-${idx}`),note:$(`ri-${idx}-note`).value,actualAbv:recActualAbv,client:$('rm-client').value||'FeelingBar'});
   }
   if(!itemsRaw.length){$('rec-warn').textContent='請至少新增一筆酒款';return;}
   showMask('計算代工費用中...');
@@ -1522,7 +1532,7 @@ function renderApplies(applies){
       ${itemsHtml}
       <div class="apply-change"><div class="apply-clbl">申請原因</div>${a.items&&a.items[0]?a.items[0].reason:''}</div>
       ${a.rejectReason?`<div class="apply-change" style="background:#FEE2E2"><div class="apply-clbl">拒絕原因</div>${a.rejectReason}</div>`:''}
-      ${isAdmin&&isPending?`<div class="approve-row"><button class="btn-approve" onclick="openReview('${a.id}','${(a.recipeName||'').replace(/'/g,"\\'")}','${(a.items&&a.items[0]?a.items[0].reason:'').replace(/'/g,"\\'")}','${a.applicant}')">✓ 核准並更新酒譜</button><button class="btn-reject" onclick="openReview('${a.id}','${(a.recipeName||'').replace(/'/g,"\\'")}','${(a.items&&a.items[0]?a.items[0].reason:'').replace(/'/g,"\\'")}','${a.applicant}')">✕ 拒絕</button></div>`:''}`;
+      ${isAdmin&&isPending?`<div class="approve-row"><button class="btn-approve" onclick="openReview('${a.id}','${(a.recipeName||'').replace(/'/g,"\\'")}','${((a.items&&a.items[0]?String(a.items[0].reason):'')||'').replace(/'/g,"\\'")}','${a.applicant}')">✓ 核准並更新酒譜</button><button class="btn-reject" onclick="openReview('${a.id}','${(a.recipeName||'').replace(/'/g,"\\'")}','${((a.items&&a.items[0]?String(a.items[0].reason):'')||'').replace(/'/g,"\\'")}','${a.applicant}')">✕ 拒絕</button></div>`:''}`;
     el.appendChild(item);
   });
 }
