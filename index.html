@@ -391,34 +391,19 @@ async function loadRecipe(){
 function renderRecipeDetail(){
   if(!rdata)return;
   const area=document.getElementById('recipeArea');
-  const ings=rdata.ingredients||[];
-  const abv=rdata.totalAlcohol||0;
-  let totalCost=0;
-  const rows=ings.map(ing=>{
-    const cpm=(ing.unitVol&&ing.price)?ing.price/ing.unitVol:0;
-    const used=ing.hasLoss?ing.volume/0.8:ing.volume;
-    const cost=cpm*used;totalCost+=cost;
-    return `<tr>
-      <td>${ing.hasLoss?'<span class="has-loss-dot"></span>':''}${ing.name}</td>
-      <td class="text-right">${nt(ing.ratio)}%</td>
-      <td class="text-right">${nt(ing.volume)}ml</td>
-      <td class="text-right">${nt(ing.abvContrib||0)}%</td>
-      <td class="text-right">${fmtMoney(cost)}</td>
-    </tr>`;
-  }).join('');
+  // ★ ABV 從 GAS 回傳的 totalAlcohol（或 abv）取得
+  const abv=rdata.abv||rdata.totalAlcohol||0;
+  // ★ 食材成本從 GAS 回傳的 ingredientCost 取得
+  const ingredientCost=rdata.ingredientCost||0;
+  // ★ 食材報價 = 食材成本 × 1.15
+  const ingredientQuote=Math.round(ingredientCost*1.15*100)/100;
 
   area.innerHTML=`
     <div class="recipe-info">
-      <div class="recipe-info-item"><div class="lbl">酒款</div><div class="val" style="font-size:14px">${rdata.recipeName||curSheet}</div></div>
-      <div class="recipe-info-item"><div class="lbl">客戶</div><div class="val" style="font-size:14px">${rdata.clientName||curClient}</div></div>
+      <div class="recipe-info-item"><div class="lbl">酒款名稱</div><div class="val" style="font-size:14px">${rdata.recipeName||curSheet}</div></div>
       <div class="recipe-info-item"><div class="lbl">ABV</div><div class="val">${nt(abv,1)}%</div></div>
-      <div class="recipe-info-item"><div class="lbl">食材成本/批</div><div class="val">${fmtMoney(totalCost)}</div></div>
-    </div>
-    <div class="tbl-wrap">
-      <table>
-        <thead><tr><th>原料</th><th>占比%</th><th>體積ml</th><th>ABV貢獻</th><th>成本</th></tr></thead>
-        <tbody>${rows||'<tr><td colspan="5" class="text-center sub-text">無原料資料</td></tr>'}</tbody>
-      </table>
+      <div class="recipe-info-item"><div class="lbl">食材成本（批）</div><div class="val">${fmtMoney(ingredientCost)}</div></div>
+      <div class="recipe-info-item"><div class="lbl">食材報價（批）</div><div class="val" style="color:var(--c-green)">${fmtMoney(ingredientQuote)}</div></div>
     </div>
     <div style="margin-top:14px;">
       <div style="font-size:12px;color:var(--c-sub);margin-bottom:6px;">製程備註</div>
@@ -717,13 +702,20 @@ function renderProfitData(res){
   const data=res.data||[];
   if(!data.length){area.innerHTML='<div class="sub-text text-center">無資料</div>';return;}
   if(res.client==='FeelingBar'){
+    // ★ 顯示：酒款名稱、售價、食材成本、毛利、毛利率
     area.innerHTML='<div class="profit-grid">'+data.map(item=>`
       <div class="profit-card">
         <div class="p-name">${item.recipeName}</div>
         <div class="p-price">${fmtMoney(item.sellingPrice)}</div>
-        <div class="p-detail">4L桶 · ${item.bottleVol||4000}ml</div>
+        <div class="p-detail">4L桶</div>
+        <div class="p-cost">食材成本 ${fmtMoney(item.totalCost||0)}</div>
+        <div style="margin-top:6px;font-size:13px;font-weight:600;color:var(--c-green);">
+          毛利 ${fmtMoney(item.profit||0)}
+        </div>
+        <div style="font-size:12px;color:var(--c-sub);">毛利率 ${nt(item.profitRate||0,1)}%</div>
       </div>`).join('')+'</div>';
   }else{
+    // ★ 公版：三瓶型各顯示售價、總成本、毛利、毛利率
     area.innerHTML=data.map(item=>`
       <div style="margin-bottom:16px;">
         <div style="font-weight:600;margin-bottom:8px;font-size:15px;">${item.recipeName}</div>
@@ -732,6 +724,11 @@ function renderProfitData(res){
             <div class="p-name">${bt}</div>
             <div class="p-price">${fmtMoney(info.sellingPrice)}</div>
             <div class="p-detail">${info.vol}ml</div>
+            <div class="p-cost">總成本 ${fmtMoney(info.totalCost||0)}</div>
+            <div style="margin-top:6px;font-size:13px;font-weight:600;color:var(--c-green);">
+              毛利 ${fmtMoney(info.profit||0)}
+            </div>
+            <div style="font-size:12px;color:var(--c-sub);">毛利率 ${nt(info.profitRate||0,1)}%</div>
           </div>`).join('')}</div>
       </div>`).join('');
   }
@@ -1195,10 +1192,7 @@ function rdCalc(){
     {lbl:'酒稅（批）',val:fmtMoney(taxBatch)},
     {lbl:'食材成本（批）',val:fmtMoney(totalIngCost)},
     {lbl:'食材報價（批）',val:fmtMoney(ingReportBatch),cls:'highlight'},
-    {lbl:'本批總成本（不含資材）',val:fmtMoney(totalCostBatch),cls:''},
-    {lbl:'裝瓶數',val:bottleCount+'瓶'},
-    {lbl:'食材成本/瓶',val:fmtMoney(ingPerBottle)},
-    {lbl:'每瓶總成本',val:fmtMoney(totalCostPerBottle),cls:'highlight'},
+    {lbl:'本批總成本（不含資材）',val:fmtMoney(totalCostBatch)},
   ].map(({lbl,val,cls})=>`<div class="rd-sum-item"><div class="lbl">${lbl}</div><div class="val${cls?' '+cls:''}">${val}</div></div>`).join('');
 
   window._rdResult={totalAbv,taxBatch,totalIngCost,ingReportBatch,totalCostBatch,
