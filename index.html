@@ -301,15 +301,15 @@ async function doLogin(){
   if(!username){errEl.textContent='請選擇帳號';return;}
   if(!password){errEl.textContent='請輸入密碼';return;}
   const res=await api({action:'login',username,password});
-  if(!res.success){errEl.textContent=res.error||'帳號或密碼錯誤';return;}
-  curUser={username:res.username,role:res.role};
+  if(!res.ok){errEl.textContent=res.error||'帳號或密碼錯誤';return;}
+  curUser={username,role:res.role};
   document.getElementById('topUsername').textContent=curUser.username+'（'+curUser.role+'）';
   document.getElementById('loginWrap').style.display='none';
   document.getElementById('app').style.display='flex';
   document.querySelectorAll('.admin-only').forEach(el=>{
     el.style.display=curUser.role==='admin'?'':'none';});
   const listRes=await api({action:'getRecipeList'});
-  if(listRes.success) recipeMap=listRes.data||{};
+  if(listRes.ok) recipeMap=listRes.list ? listRes.list.reduce((m,i)=>{(m[i.client]=m[i.client]||[]).push(i.recipeName);return m;},{}) : (listRes.data||{})||{};
   switchTab('recipe');
 }
 function doLogout(){
@@ -381,7 +381,7 @@ async function loadRecipe(){
   const key=curClient+'::'+name;
   if(!cache.recipes[key]){
     const res=await api({action:'getRecipe',client:curClient,name});
-    if(!res.success){toast('讀取失敗: '+res.error);return;}
+    if(!res.ok){toast('讀取失敗: '+res.error);return;}
     cache.recipes[key]=res;
   }
   rdata=cache.recipes[key];
@@ -415,7 +415,7 @@ function renderRecipeDetail(){
 async function saveNote(){
   const note=document.getElementById('processNoteInput').value;
   const res=await api({action:'saveProcessNote',client:curClient,name:curSheet,note});
-  if(res.success){toast('備註已儲存');cache.recipes[curClient+'::'+curSheet]=null;}
+  if(res.ok){toast('備註已儲存');cache.recipes[curClient+'::'+curSheet]=null;}
   else toast('儲存失敗: '+res.error);
 }
 
@@ -453,7 +453,7 @@ function showApplyModal(){
     if(!items.length){toast('請至少填一筆新比例');return;}
     const res=await api({action:'submitApply',username:curUser.username,
       client:curClient,recipeName:curSheet,items:JSON.stringify(items)});
-    if(res.success){toast('申請已送出');modal.remove();}
+    if(res.ok){toast('申請已送出');modal.remove();}
     else toast('送出失敗: '+res.error);
   };
 }
@@ -466,8 +466,8 @@ let batchRecords=[];
 async function renderBatchPage(mc){
   mc.innerHTML='<div class="card"><div id="batchArea"><div class="text-center sub-text" style="padding:20px;">載入中…</div></div></div>';
   const res=await api({action:'getBatchRecords'});
-  if(!res.success){document.getElementById('batchArea').innerHTML=`<div class="warn-text">${res.error}</div>`;return;}
-  batchRecords=res.data||[];
+  if(!res.ok){document.getElementById('batchArea').innerHTML=`<div class="warn-text">${res.error}</div>`;return;}
+  batchRecords=res.records||[];
   renderBatchList();
 }
 
@@ -604,7 +604,7 @@ function showBatchModal(editIdx){
     if(editIdx!==undefined){
       res=await api({action:'updateBatchRecord',rowIndex:batchRecords[editIdx].rowIndex,...p});
     }else{res=await api({action:'addBatchRecord',...p});}
-    if(res.success){toast('記錄已儲存');modal.remove();renderBatchPage(document.getElementById('mainContent'));}
+    if(res.ok){toast('記錄已儲存');modal.remove();renderBatchPage(document.getElementById('mainContent'));}
     else toast('儲存失敗: '+res.error);
   };
 }
@@ -622,8 +622,8 @@ function updateRecipeOpts(client){
 async function renderApplyPage(mc){
   mc.innerHTML='<div class="card"><div id="applyArea"><div class="text-center sub-text" style="padding:20px;">載入中…</div></div></div>';
   const res=await api({action:'getApplies'});
-  if(!res.success){document.getElementById('applyArea').innerHTML=`<div class="warn-text">${res.error}</div>`;return;}
-  const applies=res.data||[];
+  if(!res.ok){document.getElementById('applyArea').innerHTML=`<div class="warn-text">${res.error}</div>`;return;}
+  const applies=res.list||[];
   if(!applies.length){
     document.getElementById('applyArea').innerHTML='<div class="text-center sub-text" style="padding:20px;">目前無待審核申請</div>';return;
   }
@@ -656,7 +656,7 @@ async function renderApplyPage(mc){
 async function doReview(applyId,approved){
   if(!confirm(`確認要${approved?'核准並寫入酒譜':'拒絕'}此申請？`))return;
   const res=await api({action:'reviewApply',applyId,approved:String(approved),reviewer:curUser.username});
-  if(res.success){
+  if(res.ok){
     toast(approved?'已核准並寫入酒譜，請手動確認 C、I 欄公式':'已拒絕');
     renderApplyPage(document.getElementById('mainContent'));
   }else toast('操作失敗: '+res.error);
@@ -691,7 +691,7 @@ async function loadProfitData(forceRefresh){
   if(forceRefresh)cache.profit[client]=null;
   if(!cache.profit[client]){
     const res=await api({action:'getProfitData',client});
-    if(!res.success){const el=document.getElementById('profitArea');if(el)el.innerHTML=`<div class="warn-text">${res.error}</div>`;return;}
+    if(!res.ok){const el=document.getElementById('profitArea');if(el)el.innerHTML=`<div class="warn-text">${res.error}</div>`;return;}
     cache.profit[client]=res;
   }
   renderProfitData(cache.profit[client]);
@@ -699,14 +699,13 @@ async function loadProfitData(forceRefresh){
 
 function renderProfitData(res){
   const area=document.getElementById('profitArea');if(!area||!res)return;
-  const data=res.data||[];
+  const data=res.list||[];
   if(!data.length){area.innerHTML='<div class="sub-text text-center">無資料</div>';return;}
   if(res.client==='FeelingBar'){
-    // ★ 顯示：酒款名稱、售價、食材成本、毛利、毛利率
     area.innerHTML='<div class="profit-grid">'+data.map(item=>`
       <div class="profit-card">
-        <div class="p-name">${item.recipeName}</div>
-        <div class="p-price">${fmtMoney(item.sellingPrice)}</div>
+        <div class="p-name">${item.name}</div>
+        <div class="p-price">${fmtMoney(item.price)}</div>
         <div class="p-detail">4L桶</div>
         <div class="p-cost">食材成本 ${fmtMoney(item.totalCost||0)}</div>
         <div style="margin-top:6px;font-size:13px;font-weight:600;color:var(--c-green);">
@@ -715,11 +714,13 @@ function renderProfitData(res){
         <div style="font-size:12px;color:var(--c-sub);">毛利率 ${nt(item.profitRate||0,1)}%</div>
       </div>`).join('')+'</div>';
   }else{
-    // ★ 公版：三瓶型各顯示售價、總成本、毛利、毛利率
-    area.innerHTML=data.map(item=>`
+    // 公版 list 是扁平陣列，先 group by name
+    const byName={};
+    data.forEach(item=>{if(!byName[item.name])byName[item.name]={};byName[item.name][item.bottle]=item;});
+    area.innerHTML=Object.keys(byName).map(name=>`
       <div style="margin-bottom:16px;">
-        <div style="font-weight:600;margin-bottom:8px;font-size:15px;">${item.recipeName}</div>
-        <div class="profit-grid">${Object.entries(item.bottles||{}).map(([bt,info])=>`
+        <div style="font-weight:600;margin-bottom:8px;font-size:15px;">${name}</div>
+        <div class="profit-grid">${Object.entries(byName[name]).map(([bt,info])=>`
           <div class="profit-card">
             <div class="p-name">${bt}</div>
             <div class="p-price">${fmtMoney(info.sellingPrice)}</div>
@@ -763,8 +764,8 @@ async function loadInventory(forceRefresh){
   if(forceRefresh)cache.inventory=null;
   if(!cache.inventory){
     const res=await api({action:'getInventory'});
-    if(!res.success){const el=document.getElementById('invArea');if(el)el.innerHTML=`<div class="warn-text">${res.error}</div>`;return;}
-    cache.inventory=res.data||[];
+    if(!res.ok){const el=document.getElementById('invArea');if(el)el.innerHTML=`<div class="warn-text">${res.error}</div>`;return;}
+    cache.inventory=res.items||[];
   }
   const cats=[...new Set(cache.inventory.map(i=>i.category))];
   const catEl=document.getElementById('invCat');
@@ -805,7 +806,7 @@ let rdIngs=[], rdTotalVol=4000, rdBottleType='4L桶', rdTitle='', rdSaved=[];
 async function renderRdPage(mc){
   if(!cache.inventory){
     const res=await api({action:'getInventory'});
-    if(res.success)cache.inventory=res.data||[];
+    if(res.ok)cache.inventory=res.items||[];
   }
   mc.innerHTML=`
   <div class="card" style="margin-bottom:12px;">
@@ -905,7 +906,7 @@ function rdShowDrop(cat,kw){
       const idx=(cache.inventory||[]).indexOf(item);
       html+=`<div class="search-drop-item" onclick="rdPickItem(${idx})">
         <div>${item.name}</div>
-        <div style="font-size:12px;color:var(--c-sub);">${item.brand} · ${fmtMoney(item.price)}/${item.unitVol||'—'}ml · ABV ${item.abv||0}%</div>
+        <div style="font-size:12px;color:var(--c-sub);">${item.brand} · ${fmtMoney(item.price)}/${item.unit||'—'}ml · ABV ${item.abv||0}%</div>
       </div>`;
     });
   });
@@ -917,7 +918,7 @@ function rdPickItem(idx,isCompoundSub,parentIdx){
   const item=(cache.inventory||[])[idx];if(!item)return;
   const isSolid=item.isSolid&&!SOLID_WATER.some(n=>item.name.includes(n));
   const newIng={type:'single',name:item.name,brand:item.brand,
-    abv:item.abv||0,price:item.price||0,unitVol:item.unitVol||0,
+    abv:item.abv||0,price:item.price||0,unitVol:item.unit||0,
     ratio:0,volume:0,hasLoss:isSolid,isManual:false};
   if(isCompoundSub&&parentIdx!==undefined){
     if(!rdIngs[parentIdx].subs)rdIngs[parentIdx].subs=[];
@@ -1084,7 +1085,7 @@ function subDropSearch(parentI){
     const idx=(cache.inventory||[]).indexOf(item);
     return `<div class="search-drop-item" onclick="rdPickSubItem(${idx},${parentI})">
       <div>${item.name}</div>
-      <div style="font-size:12px;color:var(--c-sub);">${item.brand} · ${fmtMoney(item.price)}/${item.unitVol||'—'}ml · ABV ${item.abv||0}%</div>
+      <div style="font-size:12px;color:var(--c-sub);">${item.brand} · ${fmtMoney(item.price)}/${item.unit||'—'}ml · ABV ${item.abv||0}%</div>
     </div>`;
   }).join('')||'<div class="text-center sub-text" style="padding:12px;">無符合結果</div>';
 }
@@ -1094,7 +1095,7 @@ function rdPickSubItem(idx,parentI){
   const isSolid=item.isSolid&&!SOLID_WATER.some(n=>item.name.includes(n));
   if(!rdIngs[parentI].subs)rdIngs[parentI].subs=[];
   rdIngs[parentI].subs.push({type:'single',name:item.name,brand:item.brand,
-    abv:item.abv||0,price:item.price||0,unitVol:item.unitVol||0,
+    abv:item.abv||0,price:item.price||0,unitVol:item.unit||0,
     ratio:0,volume:0,hasLoss:isSolid,isManual:false});
   document.querySelectorAll('.modal-bg').forEach(m=>m.remove());
   rdRenderList();
@@ -1205,7 +1206,7 @@ async function rdSave(){
   const res=await api({action:'saveRdRecord',username:curUser.username,title,
     totalVolume:rdTotalVol,bottleType:rdBottleType,
     ingredientsJson:JSON.stringify(rdIngs),resultJson:JSON.stringify(window._rdResult||{})});
-  if(res.success)toast('已儲存！ID: '+res.recordId);
+  if(res.ok)toast('試算已儲存！');
   else toast('儲存失敗: '+res.error);
 }
 
@@ -1236,8 +1237,8 @@ function rdExport(){
 
 async function rdShowSaved(){
   const res=await api({action:'getRdRecords'});
-  if(!res.success){toast('讀取失敗');return;}
-  rdSaved=res.data||[];
+  if(!res.ok){toast('讀取失敗');return;}
+  rdSaved=res.records||[];
   const rows=rdSaved.map((r,i)=>`
     <tr>
       <td>
@@ -1272,7 +1273,7 @@ async function rdDeleteRecord(i,btn){
   if(!confirm('確認刪除？'))return;
   const rec=rdSaved[i];
   const res=await api({action:'deleteRdRecord',rowIndex:rec.rowIndex});
-  if(res.success){toast('已刪除');btn.closest('tr').remove();}
+  if(res.ok){toast('已刪除');btn.closest('tr').remove();}
   else toast('刪除失敗: '+res.error);
 }
 
@@ -1282,8 +1283,8 @@ async function rdDeleteRecord(i,btn){
 async function renderHistoryPage(mc){
   mc.innerHTML='<div class="card"><div id="histArea"><div class="text-center sub-text" style="padding:20px;">載入中…</div></div></div>';
   const res=await api({action:'getHistory'});
-  if(!res.success){document.getElementById('histArea').innerHTML=`<div class="warn-text">${res.error}</div>`;return;}
-  const data=res.data||[];
+  if(!res.ok){document.getElementById('histArea').innerHTML=`<div class="warn-text">${res.error}</div>`;return;}
+  const data=res.list||[];
   const cards=data.map(r=>`
     <div class="card" style="margin-bottom:10px;">
       <div class="flex-between">
