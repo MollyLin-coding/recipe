@@ -172,6 +172,61 @@ tbody tr:hover td{background:#faf3e8;}
 .skeleton{height:56px;border-radius:var(--r-sm);background:linear-gradient(90deg,var(--border) 25%,#f5f0e8 50%,var(--border) 75%);background-size:800px;animation:shimmer 1.4s infinite;}
 .divider{height:1px;background:var(--border);margin:8px 0;}
 @media(min-width:768px){body{font-size:14px;}#mainContent{padding:18px;max-width:1000px;margin:0 auto;}#navbar{justify-content:center;}.nav-tab{max-width:100px;}}
+
+/* ── 原料雙行版面 ── */
+.ing-row{padding:8px 0;border-bottom:1px solid var(--border);}
+.ing-row:last-child{border-bottom:none;}
+.ing-r1{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+.ing-name{font-weight:500;font-size:13px;color:var(--ink);}
+.ing-cost{font-size:13px;color:var(--gold-dk);font-weight:500;}
+.ing-r2{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.ing-lbl{font-size:11px;color:var(--ink3);white-space:nowrap;}
+.ing-inp{width:64px;padding:4px 6px;border:1.5px solid var(--border);border-radius:5px;font-size:12px;text-align:right;}
+.ing-inp:focus{border-color:var(--gold);outline:none;}
+.ing-unit{font-size:11px;color:var(--ink3);}
+.ing-sep{font-size:12px;color:var(--ink3);}
+.ing-abv{font-size:11px;color:var(--ink3);margin-left:auto;}
+.total-bar{font-size:12px;color:var(--ink2);padding:6px 0;border-top:1px solid var(--border);}
+.ing-list{margin:8px 0;}
+/* ── 資材費用 ── */
+.mat-list{font-size:13px;}
+.mat-row{display:flex;gap:0;padding:5px 0;border-bottom:1px solid var(--border);}
+.mat-row:last-child{border-bottom:none;}
+.mat-row>span{flex:1;}
+.mat-row.hd{font-size:11px;color:var(--ink3);font-weight:600;}
+.mat-row.tot>span:first-child{font-weight:600;color:var(--gold-dk);}
+/* ── 研發試算 ── */
+.ing-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;}
+.ic-r1{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
+.ic-r2{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.if{display:flex;flex-direction:column;gap:2px;}
+.if label{font-size:10px;color:var(--ink3);}
+.if input{width:70px;padding:4px 6px;border:1.5px solid var(--border);border-radius:5px;font-size:12px;}
+.del-btn{background:none;border:none;color:var(--ink3);cursor:pointer;font-size:14px;padding:2px 4px;flex-shrink:0;}
+.del-btn:hover{color:var(--red);}
+.cpd-box{border:1.5px dashed var(--border);border-radius:8px;padding:8px;margin-bottom:6px;}
+.cpd-head{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+.cpd-loss{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--ink3);padding:3px 6px;border-radius:4px;border:1px solid var(--border);}
+.cpd-loss.on{background:var(--gold-lt);border-color:var(--gold);color:var(--gold-dk);}
+.cpd-name-i{flex:1;border:none;border-bottom:1px solid var(--border);font-size:13px;font-weight:500;outline:none;background:transparent;}
+.sub-row{display:flex;align-items:center;gap:6px;padding:4px 0;font-size:12px;}
+.sdrop,.sub-drop{position:absolute;background:var(--card);border:1px solid var(--border);border-radius:8px;z-index:200;max-height:200px;overflow-y:auto;box-shadow:var(--sh);display:none;min-width:220px;}
+.sdrop.open,.sub-drop.open{display:block;}
+.sbox{position:relative;}
+.sd-item{padding:8px 12px;cursor:pointer;}
+.sd-item:hover{background:var(--gold-lt);}
+.sd-name{font-size:13px;font-weight:500;}
+.sd-sub{font-size:11px;color:var(--ink3);}
+.rs{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);}
+.rs:last-child{border-bottom:none;}
+.rs .lb{font-size:13px;color:var(--ink2);}
+.rs .vl{font-size:13px;font-weight:500;}
+.rs .vl.hi{color:var(--gold-dk);font-weight:600;}
+.rd-rec-item{padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;}
+.rd-rec-item:hover{background:var(--gold-lt);}
+/* ── 包裝配件 ── */
+.ck-row{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;}
+.ck-row input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--gold);}
 </style>
 </head>
 <body>
@@ -214,278 +269,426 @@ tbody tr:hover td{background:#faf3e8;}
 <div id="toast"></div>
 
 <script>
+// v10 修正：
+// 1. pct 已是百分比（GAS 已×100），前端直接用
+// 2. ABV 計算：用原料 abv 欄位（代表該原料本身 ABV），recalcRecipe 重算
+// 3. 占比↔體積雙向即時換算
+// 4. 原料雙行版面（名稱+成本第一行，占比+體積第二行）
+// 5. PM 預設登入帳號
+// 6. 製作記錄：移除代工費/食材報價顯示，改標籤，依瓶型動態配件
+// 7. 研發試算：結果只顯示 ABV/酒稅/食材成本/食材報價/資材成本/總成本
+// 8. 研發試算加入客戶，儲存帶 client
+// 9. 毛利分析：動態客戶清單（从 GAS 讀）
+// 10. 資材費用區塊（原料庫下方，研發試算內）
+// ============================================================
+
+// ── API ──────────────────────────────────────────────────────
 const API='https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5N4uT9RBaqAHiqWBPseCrSvKV3QnC9NK9S2MGnHQvJg/exec';
-const CLIENT_GONBAN='南坡萬';
 
-let curUser=null,curClient='FeelingBar',curSheet='',rdata=null,curTab='recipe';
-let recipeList=[];
-// cache：登入後預載，不輕易清除
-const C={inv:null,profit:{},recipes:{},batch:null};
-let rdState={ings:[],tv:4000,bt:'4L桶',title:''};
-
-const BSPEC={'江小白':{vol:108,cont:15,lab:3,labor:5},'伏特加':{vol:500,cont:46,lab:3,labor:15},'波士頓':{vol:500,cont:15,lab:1,labor:10},'4L桶':{vol:4000,cont:0,lab:1,labor:3}};
-const SOLID_W=['薰衣草茶','茉莉香片茶','一海香精選綠茶','伯爵茶湯','全祥金萱茶湯','全祥毛峯香片茶湯'];
-
-// ── 工具函式 ──
-async function api(p,silent){
-  if(!silent)showLoad(true);
-  try{
-    const r=await fetch(API+'?'+new URLSearchParams(p));
-    if(!r.ok)return{ok:false,error:'HTTP '+r.status};
-    return await r.json();
-  }catch(e){return{ok:false,error:'網路錯誤:'+e.message};}
-  finally{if(!silent)showLoad(false);}
+async function api(params, silent) {
+  const url = API + '?' + Object.entries(params).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
+  try {
+    const res = await fetch(url);
+    return await res.json();
+  } catch(e) {
+    if (!silent) toast('網路錯誤');
+    return { ok: false, error: e.message };
+  }
 }
-function showLoad(b){document.getElementById('loadOverlay').style.display=b?'flex':'none';}
-function toast(msg,dur=2600){const el=document.getElementById('toast');el.textContent=msg;el.style.opacity='1';clearTimeout(el._t);el._t=setTimeout(()=>el.style.opacity='0',dur);}
-function nt(n,d=1){return(parseFloat(n)||0).toFixed(d);}
-function fm(n){return 'NT$'+(Math.round(parseFloat(n)||0)).toLocaleString();}
-function calcTax(abv,vol){return(abv<=20?abv*7/1000:185/1000)*vol;}
-function makeModal(html){const bg=document.createElement('div');bg.className='modal-bg';bg.innerHTML=`<div class="modal-box"><div class="mhandle"></div>${html}</div>`;document.body.appendChild(bg);bg.addEventListener('click',e=>{if(e.target===bg)bg.remove();});return bg;}
 
-// ── 登入 / 登出 / 重整 ──
-async function doLogin(){
-  const username=document.getElementById('loginUser').value.trim();
-  const password=document.getElementById('loginPass').value.trim();
-  const err=document.getElementById('loginErr');err.textContent='';
-  if(!username){err.textContent='請選擇帳號';return;}
-  if(!password){err.textContent='請輸入密碼';return;}
-  showLoad(true);
-  // 並行：login + getInventory（冷啟動只發生一次）
-  const [res,invRes]=await Promise.all([
-    api({action:'login',username,password},true),
-    api({action:'getInventory'},true)
+// ── 狀態 ─────────────────────────────────────────────────────
+let curUser = null, curClient = '', curSheet = '', rdata = null, curTab = 'recipe';
+let recipeList = [], clientList = [];
+const C = { inv: null, profit: {}, recipes: {}, batch: null };
+let rdState = { ings: [], tv: 4000, bt: '4L桶', title: '', client: '' };
+
+// ── 瓶型規格（volFill=實際裝填，volLabel=報價顯示）───────────
+const BSPEC = {
+  '江小白': { vol:108, volFill:108, volLabel:100, cont:15, lab:3, labor:5  },
+  '伏特加': { vol:500, volFill:500, volLabel:500, cont:46, lab:3, labor:15 },
+  '波士頓': { vol:500, volFill:500, volLabel:500, cont:15, lab:1, labor:10 },
+  '4L桶':   { vol:4000,volFill:4000,volLabel:4000,cont:0,  lab:1, labor:3  },
+};
+
+// 瓶型對應配件（onchange 動態顯示）
+const BOTTLE_ACCESSORIES = {
+  '江小白': [
+    { id:'cap',   label:'瓶蓋',                  price:0,   alwaysOn:true  },
+    { id:'front', label:'前標貼（NT$1.5/瓶）',    price:1.5, alwaysOn:false },
+    { id:'back',  label:'後標貼（NT$1.5/瓶）',    price:1.5, alwaysOn:false },
+  ],
+  '伏特加': [
+    { id:'cap',   label:'瓶蓋',                  price:0,   alwaysOn:true  },
+    { id:'front', label:'前標貼（NT$1.5/瓶）',    price:1.5, alwaysOn:false },
+    { id:'back',  label:'後標貼（NT$1.5/瓶）',    price:1.5, alwaysOn:false },
+  ],
+  '波士頓': [
+    { id:'cap',   label:'瓶蓋',                  price:0,   alwaysOn:true  },
+    { id:'label', label:'標籤（NT$1/瓶，自行打印）',price:1, alwaysOn:true  },
+  ],
+  '4L桶': [
+    { id:'cap',   label:'桶蓋',                  price:0,   alwaysOn:true  },
+    { id:'label', label:'標籤（NT$1/瓶，自行打印）',price:1, alwaysOn:true  },
+  ],
+};
+
+function calcTax(abv, vol) {
+  return (abv <= 20 ? abv * 7 / 1000 : 185 / 1000) * vol;
+}
+function fm(v){ return 'NT$' + (Math.round((+v||0)*100)/100).toLocaleString('zh-TW',{minimumFractionDigits:0,maximumFractionDigits:2}); }
+function nt(v, d=0){ return Number(v||0).toFixed(d); }
+
+// ── Toast ────────────────────────────────────────────────────
+function toast(msg, dur=2200) {
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.classList.add('show'), 10);
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, dur);
+}
+
+// ── Modal ────────────────────────────────────────────────────
+function makeModal(inner) {
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg';
+  bg.innerHTML = `<div class="modal-box">${inner}</div>`;
+  bg.addEventListener('click', e => { if(e.target===bg) bg.remove(); });
+  document.body.appendChild(bg);
+  return bg;
+}
+
+// ── 登入 ─────────────────────────────────────────────────────
+async function doLogin() {
+  const username = document.getElementById('loginUser').value;
+  const password = document.getElementById('loginPass').value;
+  if (!username || !password) { document.getElementById('loginErr').textContent = '請選擇帳號並輸入密碼'; return; }
+  document.getElementById('loginBtn').disabled = true;
+  document.getElementById('loginErr').textContent = '';
+  // 並行發 login + getInventory + getClientList
+  const [res, invRes, clRes] = await Promise.all([
+    api({ action: 'login', username, password }),
+    api({ action: 'getInventory' }, true),
+    api({ action: 'getClientList' }, true),
   ]);
-  showLoad(false);
-  if(!res.ok){err.textContent=res.error||'帳號或密碼錯誤';return;}
-  curUser={username,role:res.role};
-  if(invRes.ok)C.inv=invRes.items||[];
-  document.getElementById('topUsername').textContent=username+' ('+res.role+')';
-  document.getElementById('loginWrap').style.display='none';
-  document.getElementById('app').style.display='flex';
-  document.querySelectorAll('.admin-only').forEach(el=>el.style.display=res.role==='admin'?'':'none');
+  document.getElementById('loginBtn').disabled = false;
+  if (!res.ok) { document.getElementById('loginErr').textContent = res.error || '登入失敗'; return; }
+  curUser = { username, role: res.role };
+  if (invRes.ok) C.inv = invRes.items || [];
+  if (clRes.ok) clientList = clRes.list || [];
   // 背景載酒譜清單
-  api({action:'getRecipeList'},true).then(lr=>{if(lr.ok)recipeList=lr.list||[];});
+  api({ action: 'getRecipeList' }, true).then(lr => { if(lr.ok) recipeList = lr.list || []; });
+  // 設定初始客戶
+  curClient = clientList[0]?.name || 'FeelingBar';
+  document.getElementById('loginWrap').style.display = 'none';
+  const app = document.getElementById('app');
+  app.style.display = 'flex';
+  // admin 才顯示審核
+  document.querySelectorAll('.admin-only').forEach(el => el.style.display = res.role === 'admin' ? '' : 'none');
   switchTab('recipe');
 }
-function doLogout(){curUser=null;rdata=null;curSheet='';Object.assign(C,{inv:null,profit:{},recipes:{},batch:null});recipeList=[];rdState={ings:[],tv:4000,bt:'4L桶',title:''};document.getElementById('app').style.display='none';document.getElementById('loginWrap').style.display='flex';document.getElementById('loginPass').value='';document.getElementById('loginErr').textContent='';}
-function doRefresh(){
-  // 清除所有 cache，重新載當前 tab
-  Object.assign(C,{inv:null,profit:{},recipes:{},batch:null});
-  switchTab(curTab);
-  toast('↻ 已重新整理');
+function doLogout() {
+  curUser = null; rdata = null; curSheet = '';
+  Object.assign(C, { inv:null, profit:{}, recipes:{}, batch:null });
+  recipeList = []; rdState = { ings:[], tv:4000, bt:'4L桶', title:'', client:'' };
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginWrap').style.display = 'flex';
+  document.getElementById('loginPass').value = '';
+  document.getElementById('loginErr').textContent = '';
 }
 
-function switchTab(tab){
-  curTab=tab;
-  document.querySelectorAll('.nav-tab').forEach(el=>el.classList.toggle('active',el.dataset.tab===tab));
-  const mc=document.getElementById('mainContent');mc.scrollTop=0;
-  ({recipe:renderRecipePage,profit:renderProfitPage,inventory:renderInventoryPage,rd:renderRdPage,batch:renderBatchPage,apply:renderApplyPage})[tab]?.(mc);
+// ── 重整 ─────────────────────────────────────────────────────
+function doRefresh() {
+  Object.assign(C, { inv:null, profit:{}, recipes:{}, batch:null });
+  Promise.all([
+    api({ action:'getInventory' }, true).then(r => { if(r.ok) C.inv = r.items||[]; }),
+    api({ action:'getClientList' }, true).then(r => { if(r.ok) clientList = r.list||[]; }),
+  ]);
+  api({ action:'getRecipeList' }, true).then(lr => { if(lr.ok) { recipeList = lr.list||[]; switchTab(curTab); } });
+  toast('已重新整理');
+}
+
+// ── 導覽 ─────────────────────────────────────────────────────
+function switchTab(tab) {
+  curTab = tab;
+  document.querySelectorAll('.nav-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
+  const mc = document.getElementById('mainContent'); mc.scrollTop = 0;
+  ({ recipe:renderRecipePage, profit:renderProfitPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderBatchPage, apply:renderApplyPage })[tab]?.(mc);
 }
 
 // ════════════════════════════════════════════════
-// ① 酒譜頁
+// ① 酒譜頁（v10：雙行版面、占比↔體積即時換算）
 // ════════════════════════════════════════════════
-function renderRecipePage(mc){
-  const clients=[...new Set(recipeList.map(i=>i.client))];
-  if(!clients.includes(curClient))curClient=clients[0]||'FeelingBar';
-  const cOpts=clients.map(c=>`<option${c===curClient?' selected':''}>${c}</option>`).join('');
-  mc.innerHTML=`
+function renderRecipePage(mc) {
+  const clients = [...new Set(recipeList.map(i => i.client))];
+  if (!clients.length) { mc.innerHTML = '<div class="card"><div style="text-align:center;color:var(--ink3);padding:20px;">載入中…請稍候</div></div>'; return; }
+  if (!clients.includes(curClient)) curClient = clients[0];
+  const cOpts = clients.map(c => `<option${c===curClient?' selected':''}>${c}</option>`).join('');
+  mc.innerHTML = `
   <div class="card">
     <div class="form-row">
-      <div class="fg" style="flex:0 0 150px"><label>客戶</label><select id="selClient" onchange="onClientChange()">${cOpts||'<option>載入中…</option>'}</select></div>
+      <div class="fg" style="flex:0 0 150px"><label>客戶</label><select id="selClient" onchange="onClientChange()">${cOpts}</select></div>
       <div class="fg"><label>酒款</label><select id="selRecipe" onchange="loadRecipe()"></select></div>
     </div>
     <div id="recipeArea"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">請選擇酒款</div></div>
   </div>`;
-  if(recipeList.length)onClientChange();
-  else api({action:'getRecipeList'},true).then(lr=>{if(lr.ok){recipeList=lr.list||[];onClientChange();}});
+  onClientChange();
 }
-function onClientChange(){
-  curClient=document.getElementById('selClient')?.value||'FeelingBar';
-  const sel=document.getElementById('selRecipe');if(!sel)return;
-  const list=recipeList.filter(i=>i.client===curClient);
-  sel.innerHTML=list.map(i=>`<option value="${i.sheet}" data-name="${i.recipeName}">${i.recipeName}</option>`).join('');
-  if(list.length)loadRecipe();
-  else document.getElementById('recipeArea').innerHTML='<div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">無酒款</div>';
+function onClientChange() {
+  curClient = document.getElementById('selClient')?.value || curClient;
+  const sel = document.getElementById('selRecipe'); if (!sel) return;
+  const list = recipeList.filter(i => i.client === curClient);
+  sel.innerHTML = list.map(i => `<option value="${i.sheet}" data-name="${i.recipeName}">${i.recipeName}</option>`).join('');
+  if (list.length) loadRecipe();
+  else document.getElementById('recipeArea').innerHTML = '<div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">無酒款</div>';
 }
-async function loadRecipe(){
-  const sel=document.getElementById('selRecipe');if(!sel?.value)return;
-  curSheet=sel.value;
-  const rn=sel.options[sel.selectedIndex]?.dataset.name||curSheet;
-  const key=curClient+'::'+curSheet;
-  const area=document.getElementById('recipeArea');if(!area)return;
-  area.innerHTML=`<div class="recipe-meta">${[1,2,3,4,5,6].map(()=>'<div class="skeleton"></div>').join('')}</div>`;
-  if(!C.recipes[key]){
-    const res=await api({action:'getRecipe',client:curClient,sheet:curSheet});
-    if(!res.ok){area.innerHTML=`<div class="warn" style="padding:12px;">${res.error}</div>`;return;}
-    C.recipes[key]=res;
+async function loadRecipe() {
+  const sel = document.getElementById('selRecipe'); if (!sel?.value) return;
+  curSheet = sel.value;
+  const rn = sel.options[sel.selectedIndex]?.dataset.name || curSheet;
+  const key = curClient + '::' + curSheet;
+  const area = document.getElementById('recipeArea'); if (!area) return;
+  area.innerHTML = '<div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">載入中…</div>';
+  if (!C.recipes[key]) {
+    const res = await api({ action:'getRecipe', client:curClient, sheet:curSheet });
+    if (!res.ok) { area.innerHTML = `<div class="warn" style="padding:12px;">${res.error}</div>`; return; }
+    C.recipes[key] = res;
   }
-  rdata=C.recipes[key];rdata._dn=rn;
+  rdata = C.recipes[key]; rdata._dn = rn;
   renderRecipeDetail(area);
 }
-function renderRecipeDetail(area){
-  if(!rdata)return;
-  const abv=rdata.abv||0,cost=rdata.ingredientCost||0,tax=rdata.tax||0;
-  const quote=Math.round(cost*1.15*100)/100,tv=rdata.totalVol||0;
-  // 原料表（純垂直，不橫向滑動）
-  const rows=(rdata.ingredients||[]).map(ing=>`
-    <tr>
-      <td style="font-weight:500;font-size:13px;">${ing.name}</td>
-      <td class="tr" style="font-size:12px;" data-pct="${ing.pct}"><input type="number" value="${nt(ing.pct,1)}" id="rp_${CSS.escape(ing.name)}" min="0" max="100" step="0.1" oninput="recalcRecipe()" style="width:60px;padding:4px 6px;border:1.5px solid var(--border);border-radius:5px;font-size:12px;text-align:right;">%</td>
-      <td class="tr" id="rv_${CSS.escape(ing.name)}" style="font-size:12px;">${nt(ing.vol,0)} ml</td>
-      <td class="tr" style="font-size:12px;">${nt(ing.abv,1)}%</td>
-      <td class="tr" id="rc_${CSS.escape(ing.name)}" style="font-size:12px;color:var(--gold-dk);">${fm(ing.cost)}</td>
-    </tr>`).join('');
-  area.innerHTML=`
+function renderRecipeDetail(area) {
+  if (!rdata) return;
+  const abv = rdata.abv || 0, cost = rdata.ingredientCost || 0, tax = rdata.tax || 0;
+  const quote = Math.round(cost * 1.15 * 100) / 100, tv = rdata.totalVol || 0;
+
+  // ── 雙行版面原料列 ──────────────────────────────
+  // 第一行：原料名稱 + 成本
+  // 第二行：占比輸入 ↔ 體積輸入（互算）
+  const rows = (rdata.ingredients || []).map((ing, idx) => `
+    <div class="ing-row" id="ingrow_${idx}">
+      <div class="ing-r1">
+        <div class="ing-name">${ing.name}</div>
+        <div class="ing-cost" id="rc_${idx}">${fm(ing.cost)}</div>
+      </div>
+      <div class="ing-r2">
+        <label class="ing-lbl">占比</label>
+        <input type="number" class="ing-inp" id="rp_${idx}" value="${nt(ing.pct,1)}"
+          min="0" max="100" step="0.1"
+          oninput="recalcFromPct(${idx})" data-origpct="${ing.pct}">
+        <span class="ing-unit">%</span>
+        <span class="ing-sep">↔</span>
+        <label class="ing-lbl">體積</label>
+        <input type="number" class="ing-inp" id="rv_${idx}" value="${nt(ing.vol,0)}"
+          min="0" step="1"
+          oninput="recalcFromVol(${idx})">
+        <span class="ing-unit">ml</span>
+        <span class="ing-abv">ABV ${nt(ing.abv,1)}%</span>
+      </div>
+    </div>`).join('');
+
+  area.innerHTML = `
     <div class="recipe-meta">
-      <div class="rm"><div class="lb">預估酒精濃度</div><div class="vl">${nt(abv,1)}%</div></div>
+      <div class="rm"><div class="lb">預估酒精濃度</div><div class="vl" id="rmAbv">${nt(abv,1)}%</div></div>
       <div class="rm"><div class="lb">總體積</div><div class="vl">${tv} ml</div></div>
-      <div class="rm"><div class="lb">食材成本（批）</div><div class="vl">${fm(cost)}</div></div>
-      <div class="rm"><div class="lb">食材報價（批）</div><div class="vl acc">${fm(quote)}</div></div>
-      <div class="rm"><div class="lb">酒稅（批）</div><div class="vl">${fm(tax)}</div></div>
-      <div class="rm"><div class="lb">本批總成本</div><div class="vl sm">${fm(cost+tax)}</div></div>
+      <div class="rm"><div class="lb">食材成本（批）</div><div class="vl" id="rmCost">${fm(cost)}</div></div>
+      <div class="rm"><div class="lb">食材報價（批）</div><div class="vl acc" id="rmQuote">${fm(quote)}</div></div>
+      <div class="rm"><div class="lb">酒稅（批）</div><div class="vl" id="rmTax">${fm(tax)}</div></div>
+      <div class="rm"><div class="lb">本批總成本</div><div class="vl sm" id="rmTotal">${fm(cost+tax)}</div></div>
     </div>
-
-    <div class="tbl-wrap" style="margin-bottom:10px;">
-      <table>
-        <thead><tr><th>原料名稱</th><th class="tr">占比</th><th class="tr">體積</th><th class="tr">ABV</th><th class="tr">成本</th></tr></thead>
-        <tbody>${rows||'<tr><td colspan="5" style="text-align:center;color:var(--ink3);padding:12px;">無原料資料</td></tr>'}</tbody>
-        ${tv?`<tfoot><tr style="background:var(--gold-lt);"><td colspan="2" style="font-weight:600;font-size:12px;">總計</td><td class="tr" style="font-weight:600;font-size:12px;">${tv} ml</td><td></td><td class="tr" id="totalCostCell" style="font-weight:600;font-size:12px;color:var(--gold-dk);">${fm(cost)}</td></tr></tfoot>`:''}
-      </table>
-    </div>
-
+    <div class="ing-list" style="margin-bottom:10px;">${rows}</div>
+    <div class="total-bar">總計：<span id="totalPct"></span> · 成本 <span id="totalCostBar">${fm(cost)}</span></div>
     <div class="fe" style="gap:6px;margin-bottom:10px;">
       <button class="btn btn-ghost btn-sm" onclick="recalcRecipe(true)">↺ 還原比例</button>
       <button class="btn btn-ghost btn-sm" onclick="toRd()">→ 帶入研發試算</button>
       <button class="btn btn-ghost btn-sm" onclick="showApplyModal()">✏️ 申請更改</button>
     </div>
     <div class="sub" style="margin-bottom:5px;">製程備註</div>
-    <textarea id="pnInput" class="inp" style="height:70px;resize:vertical;font-size:13px;">${rdata.processNote||''}</textarea>
-    <div class="fe mt8">
-      <button class="btn btn-primary btn-sm" onclick="saveNote()">儲存備註</button>
-    </div>`;
-  // 儲存原始占比供還原用
-  (rdata.ingredients||[]).forEach(ing=>ing._origPct=ing.pct);
+    <textarea id="pnInput" class="inp" style="height:70px;resize:vertical;font-size:13px;">${rdata.processNote || ''}</textarea>
+    <div class="fe mt8"><button class="btn btn-primary btn-sm" onclick="saveNote()">儲存備註</button></div>`;
+
+  (rdata.ingredients || []).forEach((ing, idx) => ing._origPct = ing.pct);
+  updateTotalPct();
 }
 
-function recalcRecipe(restore){
-  if(!rdata?.ingredients?.length)return;
-  const tv=rdata.totalVol||0;
-  let totalCost=0,totalAbv=0;
-  rdata.ingredients.forEach(ing=>{
-    const pct=restore?ing._origPct:(parseFloat(document.getElementById('rp_'+CSS.escape(ing.name))?.value)||0);
-    if(restore&&document.getElementById('rp_'+CSS.escape(ing.name))) document.getElementById('rp_'+CSS.escape(ing.name)).value=nt(pct,1);
-    const vol=tv?tv*pct/100:ing.vol;
-    const cost=ing.cost&&ing.vol?ing.cost/ing.vol*vol:0; // 按原始單位成本重算
-    const vc=document.getElementById('rv_'+CSS.escape(ing.name));if(vc)vc.textContent=nt(vol,0)+' ml';
-    const cc=document.getElementById('rc_'+CSS.escape(ing.name));if(cc)cc.textContent=fm(cost);
-    totalCost+=cost;totalAbv+=ing.abv*(pct/100);
-  });
-  const abv=Math.round(totalAbv*10)/10;
-  const tax=calcTax(abv,tv);
-  const quote=totalCost*1.15;
-  const tc=document.getElementById('totalCostCell');if(tc)tc.textContent=fm(totalCost);
-  // 更新 meta 卡
-  ['預估酒精濃度','食材成本（批）','食材報價（批）','酒稅（批）','本批總成本'].forEach((lbl,i)=>{
-    const vals=[nt(abv,1)+'%',fm(totalCost),fm(quote),fm(tax),fm(totalCost+tax)];
-    document.querySelectorAll('.rm')[i*0]||null; // 用 lb 找
-  });
-  // 直接更新對應的 rm 卡
-  const rms=document.querySelectorAll('.rm');
-  if(rms[0])rms[0].querySelector('.vl').textContent=nt(abv,1)+'%';
-  if(rms[2])rms[2].querySelector('.vl').textContent=fm(totalCost);
-  if(rms[3])rms[3].querySelector('.vl').textContent=fm(quote);
-  if(rms[4])rms[4].querySelector('.vl').textContent=fm(tax);
-  if(rms[5])rms[5].querySelector('.vl').textContent=fm(totalCost+tax);
+// 改占比 → 重算體積
+function recalcFromPct(idx) {
+  const ing = rdata?.ingredients?.[idx]; if (!ing) return;
+  const pct = parseFloat(document.getElementById('rp_'+idx)?.value) || 0;
+  const tv = rdata.totalVol || 0;
+  const vol = tv * pct / 100;
+  const ve = document.getElementById('rv_'+idx); if (ve) ve.value = nt(vol, 0);
+  recalcIngCost(idx, pct, vol);
+  recalcSummary();
 }
-function toRd(){
-  if(!rdata?.ingredients?.length){toast('無原料資料');return;}
-  rdState={ings:[],tv:rdata.totalVol||4000,bt:'4L桶',title:rdata.recipeName||rdata._dn||''};
-  rdata.ingredients.forEach(ing=>{
-    const pct=parseFloat(document.getElementById('rp_'+CSS.escape(ing.name))?.value)||ing.pct;
-    const vol=rdState.tv*pct/100;
-    rdState.ings.push({type:'single',name:ing.name,brand:'',abv:ing.abv||0,price:0,unitVol:0,ratio:pct,volume:vol,hasLoss:false,isManual:false,_cost:ing.cost,_vol:ing.vol});
+// 改體積 → 重算占比
+function recalcFromVol(idx) {
+  const ing = rdata?.ingredients?.[idx]; if (!ing) return;
+  const tv = rdata.totalVol || 0; if (!tv) return;
+  const vol = parseFloat(document.getElementById('rv_'+idx)?.value) || 0;
+  const pct = vol / tv * 100;
+  const pe = document.getElementById('rp_'+idx); if (pe) pe.value = nt(pct, 1);
+  recalcIngCost(idx, pct, vol);
+  recalcSummary();
+}
+// 重算單一原料成本
+function recalcIngCost(idx, pct, vol) {
+  const ing = rdata?.ingredients?.[idx]; if (!ing) return;
+  // 依原始單位成本重算
+  const unitCost = (ing._origCost !== undefined ? ing._origCost : ing.cost) / (ing._origVol || ing.vol || 1);
+  const cost = unitCost * vol;
+  ing._curCost = cost;
+  const cc = document.getElementById('rc_'+idx); if (cc) cc.textContent = fm(cost);
+}
+// 重算所有匯總
+function recalcSummary() {
+  if (!rdata?.ingredients) return;
+  let totalCost = 0, totalAbv = 0, totalPct = 0;
+  rdata.ingredients.forEach((ing, idx) => {
+    const pct = parseFloat(document.getElementById('rp_'+idx)?.value) || 0;
+    const vol = parseFloat(document.getElementById('rv_'+idx)?.value) || 0;
+    const cost = ing._curCost !== undefined ? ing._curCost : ing.cost;
+    totalCost += cost;
+    totalAbv += (ing.abv || 0) * (pct / 100);
+    totalPct += pct;
+  });
+  const abv = Math.round(totalAbv * 10) / 10;
+  const tax = calcTax(abv, rdata.totalVol || 0);
+  const quote = totalCost * 1.15;
+  const e = id => document.getElementById(id);
+  if (e('rmAbv'))   e('rmAbv').textContent   = nt(abv,1) + '%';
+  if (e('rmCost'))  e('rmCost').textContent  = fm(totalCost);
+  if (e('rmQuote')) e('rmQuote').textContent = fm(quote);
+  if (e('rmTax'))   e('rmTax').textContent   = fm(tax);
+  if (e('rmTotal')) e('rmTotal').textContent = fm(totalCost + tax);
+  if (e('totalCostBar')) e('totalCostBar').textContent = fm(totalCost);
+  updateTotalPct();
+}
+function updateTotalPct() {
+  const el = document.getElementById('totalPct'); if (!el) return;
+  let total = 0;
+  (rdata?.ingredients || []).forEach((ing, idx) => {
+    total += parseFloat(document.getElementById('rp_'+idx)?.value) || 0;
+  });
+  const diff = (100 - total).toFixed(1);
+  el.innerHTML = Math.abs(parseFloat(diff)) < 0.1
+    ? '<span class="ok">✓ 100%</span>'
+    : `<span class="warn">⚠ ${total.toFixed(1)}%（差${diff}%）</span>`;
+}
+// 還原全部 → 重算
+function recalcRecipe(restore) {
+  if (!rdata?.ingredients?.length) return;
+  const tv = rdata.totalVol || 0;
+  rdata.ingredients.forEach((ing, idx) => {
+    const pct = restore ? ing._origPct : (parseFloat(document.getElementById('rp_'+idx)?.value) || 0);
+    if (restore) {
+      const pe = document.getElementById('rp_'+idx); if (pe) pe.value = nt(pct, 1);
+      const ve = document.getElementById('rv_'+idx); if (ve) ve.value = nt(tv*pct/100, 0);
+    }
+    const vol = tv * pct / 100;
+    const unitCost = ing.cost / (ing.vol || 1);
+    ing._curCost = unitCost * vol;
+    const cc = document.getElementById('rc_'+idx); if (cc) cc.textContent = fm(ing._curCost);
+  });
+  recalcSummary();
+}
+function toRd() {
+  if (!rdata?.ingredients?.length) { toast('無原料資料'); return; }
+  rdState = { ings:[], tv:rdata.totalVol||4000, bt:'4L桶', title:rdata.recipeName||rdata._dn||'', client:curClient };
+  rdata.ingredients.forEach((ing, idx) => {
+    const pct = parseFloat(document.getElementById('rp_'+idx)?.value) || ing.pct;
+    rdState.ings.push({ type:'single', name:ing.name, brand:'', abv:ing.abv||0, price:0, unitVol:0, ratio:pct, volume:rdata.totalVol*pct/100, hasLoss:false, isManual:false, _cost:ing.cost, _vol:ing.vol });
   });
   switchTab('rd');
   toast('已帶入研發試算');
 }
-async function saveNote(){
-  const note=document.getElementById('pnInput')?.value||'';
-  const res=await api({action:'saveProcessNote',client:curClient,sheet:curSheet,note});
-  if(res.ok){toast('備註已儲存');C.recipes[curClient+'::'+curSheet]=null;}
-  else toast('儲存失敗:'+res.error);
+async function saveNote() {
+  const note = document.getElementById('pnInput')?.value || '';
+  const res = await api({ action:'saveProcessNote', client:curClient, sheet:curSheet, note });
+  if (res.ok) { toast('備註已儲存'); C.recipes[curClient+'::'+curSheet] = null; }
+  else toast('儲存失敗:' + res.error);
 }
-function showApplyModal(){
-  if(!rdata?.ingredients?.length){toast('請先載入酒譜');return;}
-  const rows=rdata.ingredients.map((ing,i)=>`<tr>
+function showApplyModal() {
+  if (!rdata?.ingredients?.length) { toast('請先載入酒譜'); return; }
+  const rows = rdata.ingredients.map((ing, i) => `<tr>
     <td style="font-size:13px;">${ing.name}</td>
     <td class="tr" style="font-size:13px;">${nt(ing.pct,1)}%</td>
     <td><input type="number" id="nr_${i}" placeholder="新%" style="width:62px;padding:5px;border:1.5px solid var(--border);border-radius:5px;font-size:12px;"></td>
     <td><input type="text" id="rs_${i}" placeholder="原因" style="width:100%;padding:5px;border:1.5px solid var(--border);border-radius:5px;font-size:12px;"></td>
   </tr>`).join('');
-  const modal=makeModal(`<div class="modal-title">✏️ 更改申請 — ${rdata.recipeName||rdata._dn}</div>
+  const modal = makeModal(`<div class="modal-title">✏️ 更改申請 — ${rdata.recipeName||rdata._dn}</div>
     <div class="tbl-wrap" style="margin-bottom:12px;"><table><thead><tr><th>原料</th><th>現在%</th><th>新%</th><th>原因</th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="fe"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="apSub">送出</button></div>`);
-  modal.querySelector('#apSub').onclick=async()=>{
-    const items=rdata.ingredients.map((ing,i)=>{const nr=document.getElementById('nr_'+i)?.value;return nr?{name:ing.name,oldVal:ing.pct,newVal:parseFloat(nr),reason:document.getElementById('rs_'+i)?.value||''}:null;}).filter(Boolean);
-    if(!items.length){toast('請至少填一筆');return;}
-    const res=await api({action:'submitApply',creator:curUser.username,client:curClient,sheet:curSheet,recipe:rdata.recipeName||rdata._dn,items:JSON.stringify(items)});
-    if(res.ok){toast('申請已送出');modal.remove();}else toast('送出失敗:'+res.error);
+  modal.querySelector('#apSub').onclick = async () => {
+    const items = rdata.ingredients.map((ing,i) => {
+      const nr = document.getElementById('nr_'+i)?.value;
+      return nr ? { name:ing.name, oldVal:ing.pct, newVal:parseFloat(nr), reason:document.getElementById('rs_'+i)?.value||'' } : null;
+    }).filter(Boolean);
+    if (!items.length) { toast('請至少填一筆'); return; }
+    const res = await api({ action:'submitApply', creator:curUser.username, client:curClient, sheet:curSheet, recipe:rdata.recipeName||rdata._dn, items:JSON.stringify(items) });
+    if (res.ok) { toast('申請已送出'); modal.remove(); } else toast('送出失敗:' + res.error);
   };
 }
 
 // ════════════════════════════════════════════════
-// ② 毛利分析
+// ② 毛利分析（v10：動態客戶清單）
 // ════════════════════════════════════════════════
-async function renderProfitPage(mc){
-  mc.innerHTML=`<div class="card">
+async function renderProfitPage(mc) {
+  const clients = clientList.length ? clientList.map(c=>c.name) : ['FeelingBar','南坡萬公版'];
+  const cOpts = clients.map(c => `<option>${c}</option>`).join('');
+  mc.innerHTML = `<div class="card">
     <div class="sec-hd"><div class="card-title" style="margin:0">毛利分析</div><button class="btn btn-ghost btn-sm" onclick="loadProfit(true)">↻ 刷新</button></div>
     <div class="form-row" style="margin-bottom:12px;">
-      <div class="fg" style="flex:0 0 155px"><label>客戶</label><select id="profitClient" onchange="loadProfit()"><option>FeelingBar</option><option>${CLIENT_GONBAN}</option></select></div>
+      <div class="fg" style="flex:0 0 155px"><label>客戶</label><select id="profitClient" onchange="loadProfit()">${cOpts}</select></div>
     </div>
     <div id="profitArea"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">載入中…</div></div>
   </div>`;
   await loadProfit();
 }
-async function loadProfit(force){
-  const el=document.getElementById('profitClient');const client=el?el.value:'FeelingBar';
-  if(force)C.profit[client]=null;
-  if(!C.profit[client]){
-    const res=await api({action:'getProfitData',client});
-    if(!res.ok){const a=document.getElementById('profitArea');if(a)a.innerHTML=`<div class="warn" style="padding:12px;">${res.error}</div>`;return;}
-    C.profit[client]=res;
+async function loadProfit(force) {
+  const el = document.getElementById('profitClient');
+  const client = el ? el.value : (clientList[0]?.name||'FeelingBar');
+  if (force) C.profit[client] = null;
+  if (!C.profit[client]) {
+    const res = await api({ action:'getProfitData', client });
+    if (!res.ok) { const a=document.getElementById('profitArea'); if(a) a.innerHTML=`<div class="warn" style="padding:12px;">${res.error}</div>`; return; }
+    C.profit[client] = res;
   }
   renderProfitData(C.profit[client]);
 }
-function renderProfitData(res){
-  const area=document.getElementById('profitArea');if(!area||!res)return;
-  const data=res.list||[];
-  if(!data.length){area.innerHTML='<div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">無資料</div>';return;}
-  if(res.client==='FeelingBar'){
-    // 按毛利率排序
-    const sorted=[...data].sort((a,b)=>b.profitRate-a.profitRate);
-    area.innerHTML='<div class="profit-grid">'+sorted.map(d=>`<div class="pc">
+function renderProfitData(res) {
+  const area = document.getElementById('profitArea'); if (!area||!res) return;
+  const data = res.list || [];
+  if (!data.length) { area.innerHTML='<div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">無資料</div>'; return; }
+
+  // 判斷是 FB（4L桶）還是多瓶型
+  const hasFB = data.every(d => d.bottle === '4L桶');
+  if (hasFB) {
+    const sorted = [...data].sort((a,b) => b.profitRate - a.profitRate);
+    area.innerHTML = '<div class="profit-grid">' + sorted.map(d => `<div class="pc">
       <div class="pn">${d.name}</div>
       <div style="font-size:11px;color:var(--ink3);margin-bottom:2px;">售價</div>
-      <div class="pp">${fm(d.price)}</div>
-      <div class="pm-row"><span>食材成本</span><span>${fm(d.totalCost)}</span></div>
-      <div class="pm-row"><span>總成本(含稅)</span><span>${fm(d.totalCostTax||d.totalCost)}</span></div>
+      <div class="pp">${fm(d.sellingPrice)}</div>
+      <div class="pm-row"><span>食材成本</span><span>${fm(d.ingredientCost)}</span></div>
+      <div class="pm-row"><span>總成本(含稅)</span><span>${fm(d.totalCostTax)}</span></div>
       <div class="pm-row"><span>毛利</span><span class="pv">${fm(d.profit)}</span></div>
       <div class="pm-row"><span>毛利率</span><span style="font-weight:600;">${nt(d.profitRate,1)}%</span></div>
-    </div>`).join('')+'</div>';
-  }else{
-    const byName={};data.forEach(d=>{if(!byName[d.name])byName[d.name]={};byName[d.name][d.bottle]=d;});
-    area.innerHTML=Object.keys(byName).map(name=>{
-      const bottles=byName[name];
-      const maxRate=Math.max(...Object.values(bottles).map(b=>b.profitRate||0));
-      return`<div class="gonban-item">
+    </div>`).join('') + '</div>';
+  } else {
+    // 多瓶型：group by name
+    const byName = {}; data.forEach(d => { if(!byName[d.name]) byName[d.name]={}; byName[d.name][d.bottle]=d; });
+    const allBottles = [...new Set(data.map(d=>d.bottle))];
+    area.innerHTML = Object.keys(byName).map(name => {
+      const bottles = byName[name];
+      const maxRate = Math.max(...Object.values(bottles).map(b => b.profitRate||0));
+      return `<div class="gonban-item">
         <div class="gonban-name">${name}</div>
-        <div class="bottle-row">${['江小白','伏特加','波士頓'].map(bt=>{
-          const d=bottles[bt];if(!d)return`<div class="bc"><div class="bt">${bt}</div><div class="bv sub">—</div></div>`;
-          const best=d.profitRate===maxRate&&maxRate>0;
-          return`<div class="bc${best?' best':''}">
-            <div class="bt">${bt}${best?' ⭐':''}</div>
+        <div class="bottle-row">${allBottles.map(bt => {
+          const d = bottles[bt];
+          if (!d) return `<div class="bc"><div class="bt">${bt}</div><div class="bv sub">—</div></div>`;
+          const best = d.profitRate === maxRate && maxRate > 0;
+          const fallback = d.priceSource === 'fallback';
+          return `<div class="bc${best?' best':''}">
+            <div class="bt">${bt}${best?' ⭐':''}${fallback?' <span class="badge bg-yellow" title="套用伏特加報價">待更新</span>':''}</div>
             <div style="font-size:10px;color:var(--ink3);margin-bottom:1px;">售價</div>
             <div class="bv">${fm(d.sellingPrice)}</div>
             <div class="br">毛利率 ${nt(d.profitRate,1)}%</div>
@@ -499,61 +702,94 @@ function renderProfitData(res){
 }
 
 // ════════════════════════════════════════════════
-// ③ 原料庫
+// ③ 原料庫 + 資材費用
 // ════════════════════════════════════════════════
-async function renderInventoryPage(mc){
-  mc.innerHTML=`<div class="card">
+async function renderInventoryPage(mc) {
+  mc.innerHTML = `<div class="card">
     <div class="sec-hd"><div class="card-title" style="margin:0">原料庫</div><button class="btn btn-ghost btn-sm" onclick="loadInv(true)">↻ 刷新</button></div>
     <div class="form-row" style="margin-bottom:8px;">
       <div class="fg" style="flex:0 0 145px"><label>大分類</label><select id="invCat" onchange="filterInv()"><option value="">全部</option></select></div>
       <div class="fg"><label>搜尋品名</label><input class="inp" id="invKw" placeholder="關鍵字…" oninput="filterInv()" style="margin:0;padding:9px 12px;font-size:13px;"></div>
     </div>
     <div id="invArea"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">載入中…</div></div>
+  </div>
+
+  <div class="card" style="margin-top:10px;">
+    <div class="card-title">資材費用</div>
+    <div class="form-row" style="margin-bottom:10px;">
+      <div class="fg" style="flex:0 0 120px"><label>瓶型</label>
+        <select id="matBottle" onchange="renderMaterialCost()">${Object.keys(BSPEC).map(b=>`<option>${b}</option>`).join('')}</select>
+      </div>
+    </div>
+    <div id="matArea"></div>
   </div>`;
   await loadInv();
+  renderMaterialCost();
 }
-async function loadInv(force){
-  if(force)C.inv=null;
-  if(!C.inv){
-    const res=await api({action:'getInventory'});
-    if(!res.ok){const a=document.getElementById('invArea');if(a)a.innerHTML=`<div class="warn" style="padding:12px;">${res.error}</div>`;return;}
-    C.inv=res.items||[];
+async function loadInv(force) {
+  if (force) C.inv = null;
+  if (!C.inv) {
+    const res = await api({ action:'getInventory' });
+    if (!res.ok) { const a=document.getElementById('invArea'); if(a) a.innerHTML=`<div class="warn" style="padding:12px;">${res.error}</div>`; return; }
+    C.inv = res.items || [];
   }
-  const cats=[...new Set(C.inv.map(i=>i.category))];
-  const ce=document.getElementById('invCat');
-  if(ce)ce.innerHTML='<option value="">全部</option>'+cats.map(c=>`<option>${c}</option>`).join('');
+  const cats = [...new Set(C.inv.map(i => i.category))];
+  const ce = document.getElementById('invCat');
+  if (ce) ce.innerHTML = '<option value="">全部</option>' + cats.map(c=>`<option>${c}</option>`).join('');
   filterInv();
 }
-function filterInv(){
-  const cat=document.getElementById('invCat')?.value||'';
-  const kw=(document.getElementById('invKw')?.value||'').trim().toLowerCase();
-  const list=(C.inv||[]).filter(i=>(!cat||i.category===cat)&&(!kw||i.name.toLowerCase().includes(kw)||(i.brand||'').toLowerCase().includes(kw)||i.name.includes(kw)));
-  const el=document.getElementById('invArea');if(!el)return;
-  if(!list.length){el.innerHTML='<div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">無符合結果</div>';return;}
-  el.innerHTML=`<div class="tbl-wrap"><table>
+function filterInv() {
+  const cat = document.getElementById('invCat')?.value || '';
+  const kw = (document.getElementById('invKw')?.value || '').trim().toLowerCase();
+  const list = (C.inv||[]).filter(i => (!cat||i.category===cat) && (!kw||i.name.toLowerCase().includes(kw)||(i.brand||'').toLowerCase().includes(kw)));
+  const el = document.getElementById('invArea'); if (!el) return;
+  if (!list.length) { el.innerHTML='<div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">無符合結果</div>'; return; }
+  el.innerHTML = `<div class="tbl-wrap"><table>
     <thead><tr><th>品名 / 品牌</th><th class="tr">單價 / 容量 / ABV</th></tr></thead>
     <tbody>${list.map(i=>`<tr>
       <td><div style="font-weight:500;font-size:13px;">${i.name}</div><div class="sub">${i.brand||'—'} · ${i.category}${i.isSolid?' <span class="badge bg-yellow">固</span>':''}</div></td>
       <td class="tr"><div style="font-size:13px;font-weight:500;">${fm(i.price)}</div><div class="sub">${i.unit||'—'}ml · ABV ${i.abv||0}%</div></td>
     </tr>`).join('')}</tbody></table></div>`;
 }
+function renderMaterialCost() {
+  const bt = document.getElementById('matBottle')?.value || '江小白';
+  const accs = BOTTLE_ACCESSORIES[bt] || [];
+  const spec = BSPEC[bt];
+  const el = document.getElementById('matArea'); if (!el) return;
+  el.innerHTML = `
+    <div class="mat-list">
+      <div class="mat-row hd"><span>配件</span><span>單價/瓶</span><span>必選</span></div>
+      <div class="mat-row"><span>瓶身（容器）</span><span>${fm(spec.cont)}</span><span>✓</span></div>
+      ${accs.map(a=>`<div class="mat-row">
+        <span>${a.label}</span>
+        <span>${a.price>0?fm(a.price):'—'}</span>
+        <span>${a.alwaysOn?'✓':'—'}</span>
+      </div>`).join('')}
+      <div class="mat-row"><span>代工費</span><span>${fm(spec.labor)}</span><span>✓</span></div>
+    </div>
+    <div class="sub" style="margin-top:6px;font-size:11px;">最小資材/瓶 = ${fm(spec.cont + spec.lab + spec.labor)}（不含選配標籤）</div>`;
+}
 
 // ════════════════════════════════════════════════
-// ④ 研發試算（完整重構）
+// ④ 研發試算（v10：精簡結果、加客戶、資材費）
 // ════════════════════════════════════════════════
-async function renderRdPage(mc){
-  if(!C.inv){const res=await api({action:'getInventory'});if(res.ok)C.inv=res.items||[];}
-  const {ings,tv,bt,title}=rdState;
-  const botOpts=Object.keys(BSPEC).map(b=>`<option${b===bt?' selected':''}>${b}</option>`).join('');
-  const cats=[...new Set((C.inv||[]).map(i=>i.category))];
-  const catOpts=cats.map(c=>`<option>${c}</option>`).join('');
-  mc.innerHTML=`
+async function renderRdPage(mc) {
+  if (!C.inv) { const res=await api({action:'getInventory'}); if(res.ok) C.inv=res.items||[]; }
+  const { ings, tv, bt, title, client } = rdState;
+  const botOpts = Object.keys(BSPEC).map(b=>`<option${b===bt?' selected':''}>${b}</option>`).join('');
+  const cats = [...new Set((C.inv||[]).map(i=>i.category))];
+  const catOpts = cats.map(c=>`<option>${c}</option>`).join('');
+  const cliOpts = (clientList.length?clientList.map(c=>c.name):['FeelingBar','南坡萬公版']).map(c=>`<option${c===client?' selected':''}>${c}</option>`).join('');
+  mc.innerHTML = `
   <div class="card" style="margin-bottom:10px;">
     <div class="card-title">研發試算</div>
     <div class="form-row">
       <div class="fg"><label>試算名稱</label><input class="inp" id="rd_title" value="${title}" placeholder="名稱（儲存用）" style="margin:0;font-size:13px;" oninput="rdState.title=this.value"></div>
-      <div class="fg" style="flex:0 0 100px"><label>總體積 ml</label><input class="inp" type="number" id="rd_tv" value="${tv}" oninput="rdState.tv=parseFloat(this.value)||4000;rdCalc()" style="margin:0;font-size:13px;"></div>
-      <div class="fg" style="flex:0 0 95px"><label>瓶型</label><select id="rd_bt" onchange="rdState.bt=this.value;rdCalc()">${botOpts}</select></div>
+      <div class="fg" style="flex:0 0 130px"><label>客戶</label><select id="rd_client" onchange="rdState.client=this.value">${cliOpts}</select></div>
+    </div>
+    <div class="form-row">
+      <div class="fg" style="flex:0 0 110px"><label>製作總體積 ml</label><input class="inp" type="number" id="rd_tv" value="${tv}" oninput="rdState.tv=parseFloat(this.value)||4000;rdCalc()" style="margin:0;font-size:13px;"></div>
+      <div class="fg" style="flex:0 0 105px"><label>瓶型</label><select id="rd_bt" onchange="rdState.bt=this.value;rdUpdateMat();rdCalc()">${botOpts}</select></div>
     </div>
   </div>
 
@@ -571,288 +807,257 @@ async function renderRdPage(mc){
       </div>
     </div>
     <div class="fe" style="gap:6px;">
-      <button class="btn btn-ghost btn-sm" onclick="rdAddManual()">＋ 手動輸入</button>
-      <button class="btn btn-ghost btn-sm" onclick="rdAddCpd()">＋ 複合原料</button>
+      <button class="btn btn-ghost btn-sm" onclick="rdAddManual()">+ 手動輸入</button>
+      <button class="btn btn-ghost btn-sm" onclick="rdAddCompound()">+ 複合原料</button>
     </div>
   </div>
 
+  <div class="card" style="margin-bottom:10px;" id="rd_ingCard">
+    <div class="card-title">原料列表</div>
+    <div id="rd_ings"></div>
+    <div id="rd_pctw" style="font-size:12px;margin-top:6px;"></div>
+  </div>
+
   <div class="card" style="margin-bottom:10px;">
-    <div class="fb" style="margin-bottom:8px;">
-      <div style="font-weight:500;font-size:13px;">原料列表</div>
-      <div id="rd_pctw" style="font-size:12px;"></div>
-    </div>
-    <div id="rd_list"></div>
+    <div class="card-title">資材費用</div>
+    <div id="rd_mat_list"></div>
   </div>
 
   <div class="card" style="margin-bottom:10px;">
     <div class="card-title">試算結果</div>
-    <div class="rd-sum" id="rd_sum"></div>
+    <div id="rd_sum"></div>
   </div>
 
-  <div class="fe" style="gap:8px;margin-bottom:20px;">
-    <button class="btn btn-ghost btn-sm" onclick="rdShowSaved()">📋 已儲存</button>
-    <button class="btn btn-ghost btn-sm" onclick="rdExport()">⬇ CSV</button>
-    <button class="btn btn-primary btn-sm" onclick="rdSave()">💾 儲存</button>
+  <div class="fe" style="gap:6px;margin-bottom:80px;">
+    <button class="btn btn-ghost btn-sm" onclick="rdSave()">💾 儲存</button>
+    <button class="btn btn-ghost btn-sm" onclick="rdLoadList()">📋 載入</button>
+    <button class="btn btn-ghost btn-sm" onclick="rdExportCSV()">⬇ CSV</button>
   </div>`;
-  rdRender();rdCalc();
-}
 
-function rdCatChange(){
-  // 選完大分類後直接展開清單（不需再打關鍵字）
-  document.getElementById('rd_kw').value='';
+  rdRender(); rdUpdateMat(); rdCalc();
+}
+function rdUpdateMat() {
+  const bt = rdState.bt || '4L桶';
+  const accs = BOTTLE_ACCESSORIES[bt] || [];
+  const spec = BSPEC[bt];
+  const el = document.getElementById('rd_mat_list'); if (!el) return;
+  // 計算資材成本（per batch，依裝瓶數）
+  const btls = Math.floor((rdState.tv||4000) / spec.volFill);
+  const baseMat = (spec.cont + spec.lab) * btls;
+  const laborMat = spec.labor * btls;
+  el.innerHTML = `
+    <div class="mat-list">
+      <div class="mat-row hd"><span>配件</span><span>單價/瓶</span><span>批次合計</span></div>
+      <div class="mat-row"><span>瓶身</span><span>${fm(spec.cont)}</span><span>${fm(spec.cont*btls)}</span></div>
+      ${accs.map(a=>`<div class="mat-row"><span>${a.label}</span><span>${a.price>0?fm(a.price):'—'}</span><span>${a.price>0?fm(a.price*btls):'—'}</span></div>`).join('')}
+      <div class="mat-row"><span>代工費</span><span>${fm(spec.labor)}</span><span>${fm(laborMat)}</span></div>
+      <div class="mat-row tot"><span>資材小計（×1.05）</span><span></span><span>${fm((baseMat+laborMat)*1.05)}</span></div>
+    </div>
+    <div class="sub" style="margin-top:4px;font-size:11px;">裝瓶數：${btls}瓶</div>`;
+  rdCalc();
+}
+function rdCatChange() {
+  document.getElementById('rd_kw').value = '';
   rdDrop();
 }
-
-function rdDrop(){
-  const cat=document.getElementById('rd_cat')?.value||'';
-  const kw=(document.getElementById('rd_kw')?.value||'').trim();
-  const drop=document.getElementById('rd_drop');if(!drop)return;
-  const inv=C.inv||[];
-  let list=inv.filter(i=>!cat||i.category===cat);
-  if(kw){const kl=kw.toLowerCase();list=list.filter(i=>i.name.toLowerCase().includes(kl)||(i.brand||'').toLowerCase().includes(kl)||i.name.includes(kw));}
-  if(!list.length){drop.classList.remove('open');return;}
-  list=list.slice(0,60);
-  const grouped={};list.forEach(i=>{if(!grouped[i.category])grouped[i.category]=[];grouped[i.category].push(i);});
-  drop.innerHTML=Object.entries(grouped).map(([c,items])=>
-    `<div class="sd-cat">${c}</div>`+items.map(item=>{
-      const idx=inv.indexOf(item);
-      return`<div class="sd-item" onclick="rdPick(${idx})">
-        <div class="sd-name">${item.name}</div>
-        <div class="sd-sub">${item.brand||'—'} · ${fm(item.price)}/${item.unit||'—'}ml · ABV ${item.abv||0}%</div>
-      </div>`;
-    }).join('')
-  ).join('');
+function rdDrop() {
+  const cat = document.getElementById('rd_cat')?.value || '';
+  const kw = (document.getElementById('rd_kw')?.value || '').trim().toLowerCase();
+  const drop = document.getElementById('rd_drop'); if (!drop) return;
+  const inv = C.inv || [];
+  const list = inv.filter(i => (!cat||i.category===cat) && (!kw||i.name.toLowerCase().includes(kw)||(i.brand||'').toLowerCase().includes(kw)));
+  if (!list.length) { drop.classList.remove('open'); return; }
   drop.classList.add('open');
+  drop.innerHTML = list.slice(0,30).map(item =>
+    `<div class="sd-item" onclick="rdPick(${JSON.stringify(item).replace(/"/g,'&quot;')})">
+      <div class="sd-name">${item.name}</div>
+      <div class="sd-sub">${item.brand||'—'} · ${fm(item.price)}/${item.unit||'—'}ml · ABV ${item.abv||0}%</div>
+    </div>`).join('');
 }
-
-function rdPick(idx){
-  const item=(C.inv||[])[idx];if(!item)return;
-  const solid=item.isSolid&&!SOLID_W.some(n=>item.name.includes(n));
-  rdState.ings.push({type:'single',name:item.name,brand:item.brand||'',abv:item.abv||0,price:item.price||0,unitVol:item.unit||0,ratio:0,volume:0,hasLoss:solid,isManual:false});
-  const kw=document.getElementById('rd_kw');const dr=document.getElementById('rd_drop');
-  if(kw)kw.value='';if(dr)dr.classList.remove('open');
-  rdRender();
+function rdPick(item) {
+  const solid = item.isSolid;
+  rdState.ings.push({ type:'single', name:item.name, brand:item.brand||'', abv:item.abv||0, price:item.price||0, unitVol:item.unit||0, ratio:0, volume:0, hasLoss:solid, isManual:false });
+  document.getElementById('rd_kw').value = '';
+  document.getElementById('rd_drop')?.classList.remove('open');
+  rdRender(); rdCalc();
 }
-function rdAddManual(){rdState.ings.push({type:'single',name:'',brand:'',abv:0,price:0,unitVol:0,ratio:0,volume:0,hasLoss:false,isManual:true});rdRender();}
-function rdAddCpd(){rdState.ings.push({type:'compound',name:'複合原料',ratio:0,volume:0,hasLoss:false,subs:[]});rdRender();}
-
-function rdRender(){
-  const el=document.getElementById('rd_list');if(!el)return;
-  if(!rdState.ings.length){el.innerHTML='<div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">尚未加入原料</div>';rdCalc();return;}
-  el.innerHTML=rdState.ings.map((ing,i)=>rdRow(ing,i)).join('');
-  // 立即計算所有金額
-  rdCalc();
+function rdAddManual() {
+  rdState.ings.push({ type:'single', name:'', brand:'', abv:0, price:0, unitVol:0, ratio:0, volume:0, hasLoss:false, isManual:true });
+  rdRender(); rdCalc();
 }
-
-function rdRow(ing,i,isSub,pi){
-  isSub=!!isSub;pi=pi??-1;
-  const ref=isSub?`rdState.ings[${pi}].subs[${i}]`:`rdState.ings[${i}]`;
-  const cid=`rc_${i}${isSub?'_'+pi:''}`;
-  if(ing.type==='compound'){
-    const subs=(ing.subs||[]).map((s,si)=>rdRow(s,si,true,i)).join('');
-    const lossOn=ing.hasLoss;
-    return`<div class="cpd-group">
-      <div class="cpd-hd">
-        <span class="cpd-ni">🧪</span>
-        <input class="cpd-name-i" value="${ing.name}" onchange="rdState.ings[${i}].name=this.value;rdCalc()">
-        <label class="cpd-loss${lossOn?' on':''}" title="勾選：子原料成本總計 ÷0.8">
-          <input type="checkbox" ${lossOn?'checked':''} style="width:14px;height:14px;cursor:pointer;" onchange="rdState.ings[${i}].hasLoss=this.checked;this.closest('.cpd-loss').classList.toggle('on',this.checked);rdCalc()">計耗損÷0.8
-        </label>
-        <button onclick="rdState.ings.splice(${i},1);rdRender()" style="background:none;border:none;cursor:pointer;color:var(--ink3);font-size:17px;padding:0;margin-left:4px;">✕</button>
-      </div>
-      <div class="form-row" style="margin-bottom:6px;">
-        <div class="fg" style="flex:0 0 90px"><label>占比%</label><input type="number" value="${ing.ratio||''}" id="rr_${i}" class="inp" oninput="rdSetR(${i},this.value)" placeholder="%" style="margin:0;font-size:13px;padding:8px;"></div>
-        <div class="fg" style="flex:0 0 90px"><label>用量ml</label><input type="number" value="${ing.volume||''}" id="rv_${i}" class="inp" oninput="rdSetV(${i},this.value)" placeholder="ml" style="margin:0;font-size:13px;padding:8px;"></div>
-        <div class="fg" style="flex:0 0 auto;justify-content:flex-end;"><label>總成本${lossOn?'(÷0.8)':''}</label><div id="${cid}" style="font-size:14px;font-weight:600;color:var(--gold-dk);padding-top:4px;">—</div></div>
-      </div>
-      <div style="border-top:1px dashed #c9aa78;padding-top:8px;margin-top:4px;">
-        <div style="font-size:11px;color:var(--ink3);margin-bottom:6px;">子原料（各自填入用量）</div>
-        ${subs}
-      </div>
-      <div style="display:flex;gap:6px;margin-top:8px;">
-        <button class="btn btn-ghost btn-sm" style="font-size:12px;" onclick="rdSubSearch(${i})">＋ 原料庫</button>
-        <button class="btn btn-ghost btn-sm" style="font-size:12px;" onclick="rdState.ings[${i}].subs.push({type:'single',name:'',brand:'',abv:0,price:0,unitVol:0,ratio:0,volume:0,hasLoss:false,isManual:true});rdRender()">＋ 手動</button>
-      </div>
-    </div>`;
-  }
-  // 單一原料
-  const hasPriceInfo=ing.price>0&&ing.unitVol>0;
-  return`<div class="ing-row">
-    <div class="ing-hd">
-      <div style="flex:1;min-width:0;">
-        <div class="ing-name">${ing.isManual?`<input class="ing-name-i" value="${ing.name}" onchange="${ref}.name=this.value;rdCalc()" placeholder="原料名稱">`:ing.name}</div>
-        ${ing.brand?`<div class="ing-brand">${ing.brand}</div>`:''}
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-        ${!isSub?`<label style="cursor:pointer;display:flex;align-items:center;gap:3px;font-size:11px;color:var(--ink3);">
-          <input type="checkbox" ${ing.hasLoss?'checked':''} style="width:14px;height:14px;" onchange="${ref}.hasLoss=this.checked;rdCalc()">耗損</label>`:''}
-        <div id="${cid}" class="ing-cost">—</div>
-        <button onclick="${isSub?`rdState.ings[${pi}].subs.splice(${i},1)`:`rdState.ings.splice(${i},1)`};rdRender()" style="background:none;border:none;cursor:pointer;color:var(--ink3);font-size:16px;padding:0;">✕</button>
-      </div>
-    </div>
-    <div class="ing-fields">
-      <div class="if"><label>ABV%</label><input type="number" value="${ing.abv}" oninput="${ref}.abv=parseFloat(this.value)||0;rdCalc()"></div>
-      ${ing.isManual?`
-      <div class="if"><label>單價NT$</label><input type="number" value="${ing.price}" oninput="${ref}.price=parseFloat(this.value)||0;rdCalc()"></div>
-      <div class="if"><label>容量ml</label><input type="number" value="${ing.unitVol}" oninput="${ref}.unitVol=parseFloat(this.value)||0;rdCalc()"></div>`:''}
-      ${!isSub?`
-      <div class="if"><label>占比%</label><input type="number" value="${ing.ratio||''}" id="rr_${i}" oninput="rdSetR(${i},this.value)" placeholder="%"></div>
-      <div class="if"><label>用量ml</label><input type="number" value="${ing.volume||''}" id="rv_${i}" oninput="rdSetV(${i},this.value)" placeholder="ml"></div>`:
-      `<div class="if"><label>用量ml</label><input type="number" value="${ing.volume||''}" id="rsv_${i}_${pi}" oninput="${ref}.volume=parseFloat(this.value)||0;rdCalc()" placeholder="ml"></div>`}
-    </div>
-    ${!hasPriceInfo&&!ing.isManual?`<div style="font-size:11px;color:var(--ink3);margin-top:4px;">⚠️ 此原料無進貨單價資料，無法計算金額</div>`:''}
-  </div>`;
+function rdAddCompound() {
+  rdState.ings.push({ type:'compound', name:'複合原料', subs:[], hasLoss:false });
+  rdRender(); rdCalc();
 }
-
-function rdSubSearch(pi){
-  const cats=[...new Set((C.inv||[]).map(i=>i.category))];
-  const cOpts=cats.map(c=>`<option>${c}</option>`).join('');
-  const modal=makeModal(`<div class="modal-title">＋ 子原料 → ${rdState.ings[pi]?.name||'複合原料'}</div>
-    <div class="form-row" style="margin-bottom:6px;">
-      <div class="fg" style="flex:0 0 135px"><label>大分類</label><select id="sc_cat" onchange="subSearch(${pi})" style="padding:8px 28px 8px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;appearance:none;background:#fff;width:100%;"><option value="">全部</option>${cOpts}</select></div>
-      <div class="fg"><label>搜尋</label><input class="inp" id="sc_kw" placeholder="品名…" oninput="subSearch(${pi})" style="margin:0;font-size:13px;padding:8px 10px;"></div>
-    </div>
-    <div id="sc_list" style="max-height:260px;overflow-y:auto;"></div>
-    <div class="fe mt10"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">關閉</button></div>`);
-  subSearch(pi);
-}
-function subSearch(pi){
-  const cat=document.getElementById('sc_cat')?.value||'';
-  const kw=(document.getElementById('sc_kw')?.value||'').trim();
-  const inv=C.inv||[];
-  let list=inv.filter(i=>!cat||i.category===cat);
-  if(kw){const kl=kw.toLowerCase();list=list.filter(i=>i.name.toLowerCase().includes(kl)||(i.brand||'').toLowerCase().includes(kl)||i.name.includes(kw));}
-  const el=document.getElementById('sc_list');if(!el)return;
-  el.innerHTML=list.slice(0,50).map(item=>{
-    const idx=inv.indexOf(item);
-    return`<div class="sd-item" onclick="rdPickSub(${idx},${pi})"><div class="sd-name">${item.name}</div><div class="sd-sub">${item.brand||'—'} · ${fm(item.price)}/${item.unit||'—'}ml · ABV ${item.abv||0}%</div></div>`;
-  }).join('')||'<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">無結果</div>';
-}
-function rdPickSub(idx,pi){
-  const item=(C.inv||[])[idx];if(!item)return;
-  if(!rdState.ings[pi].subs)rdState.ings[pi].subs=[];
-  rdState.ings[pi].subs.push({type:'single',name:item.name,brand:item.brand||'',abv:item.abv||0,price:item.price||0,unitVol:item.unit||0,ratio:0,volume:0,hasLoss:false,isManual:false});
-  document.querySelectorAll('.modal-bg').forEach(m=>m.remove());
-  rdRender();
-}
-
-function rdSetR(i,v){
-  rdState.ings[i].ratio=parseFloat(v)||0;
-  rdState.ings[i].volume=parseFloat((rdState.tv*rdState.ings[i].ratio/100).toFixed(2));
-  const vi=document.getElementById('rv_'+i);if(vi)vi.value=rdState.ings[i].volume||'';
-  rdCalc();
-}
-function rdSetV(i,v){
-  rdState.ings[i].volume=parseFloat(v)||0;
-  rdState.ings[i].ratio=rdState.tv?parseFloat((rdState.ings[i].volume/rdState.tv*100).toFixed(2)):0;
-  const ri=document.getElementById('rr_'+i);if(ri)ri.value=rdState.ings[i].ratio||'';
-  rdCalc();
-}
-
-function rdCalc(){
-  let totalCost=0,totalAbv=0,totalPct=0;
-  function cpm(ing){return(ing.unitVol&&ing.price)?ing.price/ing.unitVol:0;}
-  function sCost(ing,vol){const c=cpm(ing)*vol;return ing.hasLoss?c/0.8:c;}
-  rdState.ings.forEach((ing,i)=>{
-    const vol=ing.volume||0,ratio=ing.ratio||0;
-    totalPct+=ratio;
-    let ingCost=0;
-    if(ing.type==='compound'){
-      let sub=0;
-      (ing.subs||[]).forEach(s=>{sub+=cpm(s)*(s.volume||0);totalAbv+=(s.abv||0)*(ratio/100);});
-      ingCost=ing.hasLoss?sub/0.8:sub;
-    }else{
-      ingCost=sCost(ing,vol);
-      totalAbv+=(ing.abv||0)*(ratio/100);
+function rdDel(i) { rdState.ings.splice(i,1); rdRender(); rdCalc(); }
+function rdRender() {
+  const el = document.getElementById('rd_ings'); if (!el) return;
+  if (!rdState.ings.length) { el.innerHTML='<div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">尚未加入原料</div>'; rdCalc(); return; }
+  el.innerHTML = rdState.ings.map((ing,i) => {
+    const ref = `rdState.ings[${i}]`;
+    if (ing.type === 'compound') {
+      const lossOn = ing.hasLoss;
+      const subsHtml = (ing.subs||[]).map((s,pi) => {
+        const sr = `rdState.ings[${i}].subs[${pi}]`;
+        return `<div class="sub-row">
+          <div class="sd-name" style="font-size:12px;">${s.name}</div>
+          <div class="if"><label>用量ml</label><input type="number" value="${s.volume||''}" id="rsv_${i}_${pi}" oninput="${sr}.volume=parseFloat(this.value)||0;rdCalc()" placeholder="ml" style="width:70px;"></div>
+          <div style="font-size:11px;color:var(--ink3);">${fm(((s.unitVol&&s.price)?s.price/s.unitVol:0)*(s.volume||0))}</div>
+          <button class="del-btn" onclick="${sr}=null;rdState.ings[${i}].subs=rdState.ings[${i}].subs.filter(Boolean);rdRender();rdCalc()">✕</button>
+        </div>`;
+      }).join('');
+      return `<div class="cpd-box">
+        <div class="cpd-head">
+          <div class="cpd-loss${lossOn?' on':''}">
+            <input type="checkbox" ${lossOn?'checked':''} onchange="${ref}.hasLoss=this.checked;this.closest('.cpd-loss').classList.toggle('on',this.checked);rdCalc()">計耗損÷0.8
+          </div>
+          <input class="cpd-name-i" value="${ing.name}" onchange="${ref}.name=this.value;rdCalc()">
+          <button class="del-btn" onclick="rdDel(${i})">✕</button>
+        </div>
+        <div id="rc_${i}" style="font-size:12px;color:var(--gold-dk);margin-bottom:4px;"></div>
+        ${subsHtml}
+        <button class="btn btn-ghost btn-sm" style="margin-top:4px;font-size:11px;" onclick="rdAddSubDrop(${i})">+ 加入子原料</button>
+        <div class="sdrop sub-drop" id="sdrop_${i}"></div>
+      </div>`;
+    } else {
+      return `<div class="ing-card">
+        <div class="ic-r1">
+          <div class="ing-name">${ing.isManual?`<input class="ing-name-i" value="${ing.name}" onchange="${ref}.name=this.value;rdCalc()" placeholder="原料名稱">`:ing.name}</div>
+          <div id="rc_${i}" class="ing-cost"></div>
+          <button class="del-btn" onclick="rdDel(${i})">✕</button>
+        </div>
+        ${ing.isManual?`
+        <div class="ic-r2">
+          <div class="if"><label>ABV%</label><input type="number" value="${ing.abv}" oninput="${ref}.abv=parseFloat(this.value)||0;rdCalc()" style="width:55px;"></div>
+          <div class="if"><label>單價NT$</label><input type="number" value="${ing.price}" oninput="${ref}.price=parseFloat(this.value)||0;rdCalc()" style="width:70px;"></div>
+          <div class="if"><label>容量ml</label><input type="number" value="${ing.unitVol}" oninput="${ref}.unitVol=parseFloat(this.value)||0;rdCalc()" style="width:65px;"></div>
+        </div>`:''}
+        <div class="ic-r2">
+          <div class="if"><label>占比%</label><input type="number" value="${nt(ing.ratio)}" oninput="${ref}.ratio=parseFloat(this.value)||0;${ref}.volume=rdState.tv*(parseFloat(this.value)||0)/100;document.getElementById('rdv_${i}').value=nt(${ref}.volume,0);rdCalc()" style="width:65px;"></div>
+          <span style="font-size:11px;color:var(--ink3);">↔</span>
+          <div class="if"><label>用量ml</label><input type="number" value="${nt(ing.volume,0)}" id="rdv_${i}" oninput="${ref}.volume=parseFloat(this.value)||0;${ref}.ratio=rdState.tv>0?(parseFloat(this.value)||0)/rdState.tv*100:0;rdCalc()" style="width:65px;"></div>
+          ${!ing.isManual?`<label style="display:flex;align-items:center;gap:3px;font-size:11px;"><input type="checkbox" ${ing.hasLoss?'checked':''} onchange="${ref}.hasLoss=this.checked;rdCalc()">耗損</label>`:''}
+        </div>
+      </div>`;
     }
-    totalCost+=ingCost;
-    // 立即顯示金額
-    const cel=document.getElementById('rc_'+i);if(cel)cel.textContent=ingCost>0?fm(ingCost):'—';
+  }).join('');
+}
+function rdAddSubDrop(pi) {
+  const drop = document.getElementById('sdrop_'+pi); if (!drop) return;
+  drop.classList.toggle('open');
+  const inv = C.inv || [];
+  drop.innerHTML = inv.slice(0,30).map(item =>
+    `<div class="sd-item" onclick="rdPickSub(${pi},${JSON.stringify(item).replace(/"/g,'&quot;')})">
+      <div class="sd-name">${item.name}</div>
+      <div class="sd-sub">${item.brand||'—'} · ${fm(item.price)}/${item.unit||'—'}ml</div>
+    </div>`).join('');
+}
+function rdPickSub(pi, item) {
+  rdState.ings[pi].subs.push({ type:'single', name:item.name, brand:item.brand||'', abv:item.abv||0, price:item.price||0, unitVol:item.unit||0, volume:0, hasLoss:false, isManual:false });
+  document.getElementById('sdrop_'+pi)?.classList.remove('open');
+  rdRender(); rdCalc();
+}
+function rdCalc() {
+  let totalCost=0, totalAbv=0, totalPct=0;
+  function cpm(ing){ return (ing.unitVol&&ing.price) ? ing.price/ing.unitVol : 0; }
+  function sCost(ing,vol){ const c=cpm(ing)*vol; return ing.hasLoss ? c/0.8 : c; }
+  rdState.ings.forEach((ing,i) => {
+    const vol=ing.volume||0, ratio=ing.ratio||0;
+    totalPct += ratio;
+    let ingCost = 0;
+    if (ing.type === 'compound') {
+      let sub = 0;
+      (ing.subs||[]).forEach(s => { sub += cpm(s)*(s.volume||0); totalAbv += (s.abv||0)*(ratio/100); });
+      ingCost = ing.hasLoss ? sub/0.8 : sub;
+    } else {
+      ingCost = sCost(ing, vol);
+      totalAbv += (ing.abv||0) * (ratio/100);
+    }
+    totalCost += ingCost;
+    const cel = document.getElementById('rc_'+i); if (cel) cel.textContent = ingCost>0 ? fm(ingCost) : '—';
   });
-  const pw=document.getElementById('rd_pctw');
-  if(pw){const diff=(100-totalPct).toFixed(1);pw.innerHTML=Math.abs(parseFloat(diff))<0.1?'<span class="ok">✓ 100%</span>':`<span class="warn">⚠ ${totalPct.toFixed(1)}%（差${diff}%）</span>`;}
-  const abv=Math.round(totalAbv*10)/10;
-  const tax=calcTax(abv,rdState.tv);
-  const quote=totalCost*1.15;
-  const btot=totalCost+tax;
-  const spec=BSPEC[rdState.bt]||BSPEC['4L桶'];
-  const btls=Math.floor(rdState.tv/spec.vol);
-  const costPerB=btls?totalCost/btls:0;
-  const contPerB=spec.cont+spec.lab+spec.labor;
-  const totPerB=costPerB+calcTax(abv,spec.vol)+contPerB;
-  const sum=document.getElementById('rd_sum');
-  if(sum)sum.innerHTML=[
-    {lb:'預估酒精濃度',vl:nt(abv,1)+'%'},
-    {lb:'酒稅（批）',vl:fm(tax)},
-    {lb:'食材成本（批）',vl:fm(totalCost)},
-    {lb:'食材報價（批）',vl:fm(quote),hi:true},
-    {lb:'本批總成本',vl:fm(btot)},
-    {lb:'裝瓶數',vl:btls+'瓶'},
-    {lb:'食材成本/瓶',vl:fm(costPerB)},
-    {lb:'每瓶總成本',vl:fm(totPerB),hi:true},
-  ].map(({lb,vl,hi})=>`<div class="rs"><div class="lb">${lb}</div><div class="vl${hi?' hi':''}">${vl}</div></div>`).join('');
-  window._rdRes={abv,tax,totalCost,quote,batchCost:btot,btls,costPerBottle:costPerB,totalPerBottle:totPerB};
+  const pw = document.getElementById('rd_pctw');
+  if (pw) { const diff=(100-totalPct).toFixed(1); pw.innerHTML=Math.abs(parseFloat(diff))<0.1?'<span class="ok">✓ 100%</span>':`<span class="warn">⚠ ${totalPct.toFixed(1)}%（差${diff}%）</span>`; }
+  const abv = Math.round(totalAbv*10)/10;
+  const tax = calcTax(abv, rdState.tv);
+  const quote = totalCost * 1.15;
+  const spec = BSPEC[rdState.bt] || BSPEC['4L桶'];
+  const btls = Math.floor(rdState.tv / spec.volFill);
+  const matCost = (spec.cont + spec.lab + spec.labor) * btls * 1.05; // 資材含稅
+  const totalAll = totalCost + tax + matCost;
+  const sum = document.getElementById('rd_sum');
+  if (sum) sum.innerHTML = [
+    { lb:'預估酒精濃度', vl:nt(abv,1)+'%' },
+    { lb:'酒稅（批）',   vl:fm(tax) },
+    { lb:'食材成本（批）',vl:fm(totalCost) },
+    { lb:'食材報價（批）',vl:fm(quote), hi:true },
+    { lb:'資材成本（批）',vl:fm(matCost) },
+    { lb:'總成本',       vl:fm(totalAll), hi:true },
+  ].map(({lb,vl,hi}) => `<div class="rs"><div class="lb">${lb}</div><div class="vl${hi?' hi':''}">${vl}</div></div>`).join('');
+  window._rdRes = { abv, tax, totalCost, quote, matCost, totalAll, btls };
+  rdUpdateMat(); // 同步更新資材區塊
+}
+async function rdSave() {
+  if (!rdState.ings.length) { toast('請先加入原料'); return; }
+  const res = await api({ action:'saveRdRecord', creator:curUser.username, client:rdState.client||'', name:rdState.title||'未命名', volume:rdState.tv, bottle:rdState.bt, ingredients:JSON.stringify(rdState.ings), results:JSON.stringify(window._rdRes||{}) });
+  if (res.ok) toast('試算已儲存！'); else toast('儲存失敗:'+res.error);
+}
+async function rdLoadList() {
+  const res = await api({ action:'getRdRecords' });
+  if (!res.ok) { toast('載入失敗'); return; }
+  const records = res.records || [];
+  if (!records.length) { toast('無儲存記錄'); return; }
+  const modal = makeModal(`<div class="modal-title">載入試算記錄</div>
+    <div style="max-height:300px;overflow-y:auto;">${records.map((r,i)=>`<div class="rd-rec-item" onclick="rdLoadOne(${i},this.closest('.modal-bg'))">
+      <div style="font-weight:500;font-size:13px;">${r.name}</div>
+      <div class="sub">${r.client||'—'} · ${r.creator} · ${String(r.createdAt).substring(0,10)}</div>
+    </div>`).join('')}</div>
+    <div class="fe" style="margin-top:10px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button></div>`);
+  modal._records = records;
+}
+function rdLoadOne(i, modalBg) {
+  const r = modalBg?._records?.[i]; if (!r) return;
+  rdState = { ings:r.ingredients||[], tv:r.volume||4000, bt:r.bottle||'4L桶', title:r.name||'', client:r.client||'' };
+  modalBg.remove();
+  switchTab('rd');
+  toast('已載入：'+r.name);
+}
+function rdExportCSV() {
+  const r = window._rdRes || {};
+  const lines = ['原料,品牌,ABV%,單價,容量ml,占比%,用量ml,耗損,成本'];
+  rdState.ings.forEach(ing => {
+    if (ing.type === 'compound') {
+      lines.push([ing.name,'複合','','','','','',(ing.hasLoss?'÷0.8':''),''].join(','));
+      (ing.subs||[]).forEach(s => { const c=((s.unitVol&&s.price)?s.price/s.unitVol:0)*(s.volume||0); lines.push(['  '+s.name,s.brand,s.abv,s.price,s.unitVol,'',nt(s.volume),'',nt(c,2)].join(',')); });
+    } else {
+      lines.push([ing.name,ing.brand,ing.abv,ing.price,ing.unitVol,nt(ing.ratio),nt(ing.volume),ing.hasLoss?'÷0.8':'',''].join(','));
+    }
+  });
+  lines.push('','===試算結果===','ABV,酒稅,食材成本,食材報價,資材成本,總成本');
+  lines.push([nt(r.abv,1)+'%',nt(r.tax,2),nt(r.totalCost,2),nt(r.quote,2),nt(r.matCost,2),nt(r.totalAll,2)].join(','));
+  const blob = new Blob(['\uFEFF'+lines.join('\n')], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (rdState.title||'試算')+'.csv'; a.click();
 }
 
-async function rdSave(){
-  if(!rdState.ings.length){toast('請先加入原料');return;}
-  const res=await api({action:'saveRdRecord',creator:curUser.username,name:rdState.title||'未命名',volume:rdState.tv,bottle:rdState.bt,ingredients:JSON.stringify(rdState.ings),results:JSON.stringify(window._rdRes||{})});
-  if(res.ok)toast('試算已儲存！');else toast('儲存失敗:'+res.error);
-}
-function rdExport(){
-  if(!rdState.ings.length){toast('無原料');return;}
-  const lines=['原料,品牌,ABV%,單價,容量ml,占比%,用量ml,耗損,成本'];
-  function ec(ing,vol){const c=((ing.unitVol&&ing.price)?ing.price/ing.unitVol:0)*vol;return ing.hasLoss?c/0.8:c;}
-  rdState.ings.forEach(ing=>{
-    if(ing.type==='compound'){
-      let sub=0;(ing.subs||[]).forEach(s=>{const c=((s.unitVol&&s.price)?s.price/s.unitVol:0)*(s.volume||0);sub+=c;});
-      const tot=ing.hasLoss?sub/0.8:sub;
-      lines.push(['[複合]'+ing.name,'','','','',nt(ing.ratio),nt(ing.volume),ing.hasLoss?'÷0.8':'',nt(tot,2)].join(','));
-      (ing.subs||[]).forEach(s=>{const c=((s.unitVol&&s.price)?s.price/s.unitVol:0)*(s.volume||0);lines.push(['  '+s.name,s.brand,s.abv,s.price,s.unitVol,'',nt(s.volume),'',nt(c,2)].join(','));});
-    }else{const c=ec(ing,ing.volume||0);lines.push([ing.name,ing.brand,ing.abv,ing.price,ing.unitVol,nt(ing.ratio),nt(ing.volume),ing.hasLoss?'÷0.8':'',nt(c,2)].join(','));}
-  });
-  const r=window._rdRes||{};
-  lines.push('','===試算結果===','ABV,酒稅,食材成本,食材報價,本批總成本,裝瓶數,食材成本/瓶,每瓶總成本');
-  lines.push([nt(r.abv,1)+'%',nt(r.tax,2),nt(r.totalCost,2),nt(r.quote,2),nt(r.batchCost,2),r.btls,nt(r.costPerBottle,2),nt(r.totalPerBottle,2)].join(','));
-  const blob=new Blob(['\uFEFF'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`試算_${rdState.title||'未命名'}_${new Date().toLocaleDateString('zh-TW')}.csv`;a.click();URL.revokeObjectURL(a.href);
-}
-async function rdShowSaved(){
-  const res=await api({action:'getRdRecords'});if(!res.ok){toast('讀取失敗');return;}
-  const recs=res.records||[];window.savedRecs=recs;
-  const rows=recs.map((r,i)=>`<tr>
-    <td><div style="font-weight:500;font-size:13px;">${r.name}</div><div class="sub">${r.creator} · ${String(r.createdAt).substring(0,10)}</div></td>
-    <td class="tr"><div style="font-size:12px;">${r.volume}ml · ${r.bottle}</div>
-    <div style="margin-top:4px;display:flex;gap:5px;justify-content:flex-end;">
-      <button class="btn btn-ghost btn-sm" onclick="rdLoad(${i});this.closest('.modal-bg').remove()">載入</button>
-      <button class="btn btn-danger btn-sm" onclick="rdDel('${r.id}',this)">刪</button>
-    </div></td></tr>`).join('');
-  makeModal(`<div class="modal-title">📋 已儲存試算</div>
-    <div class="tbl-wrap" style="margin-bottom:12px;"><table><thead><tr><th>名稱</th><th class="tr">體積/瓶型</th></tr></thead><tbody>${rows||'<tr><td colspan="2" style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">尚無記錄</td></tr>'}</tbody></table></div>
-    <div class="fe"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">關閉</button></div>`);
-}
-function rdLoad(i){const r=window.savedRecs[i];rdState={ings:r.ingredients||[],tv:r.volume||4000,bt:r.bottle||'4L桶',title:r.name||''};renderRdPage(document.getElementById('mainContent'));}
-async function rdDel(id,btn){if(!confirm('確認刪除？'))return;const res=await api({action:'deleteRdRecord',id});if(res.ok){toast('已刪除');btn.closest('tr').remove();}else toast('失敗:'+res.error);}
-
 // ════════════════════════════════════════════════
-// ⑤ 製作記錄（核取方塊版）
+// ⑤ 製作記錄（v10：移除代工費/食材報價欄、改標籤、動態配件）
 // ════════════════════════════════════════════════
-let batchRecs=[];
-async function renderBatchPage(mc){
-  if(C.batch){batchRecs=C.batch;renderBatchList(mc);return;}
-  mc.innerHTML='<div class="card"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">載入中…</div></div>';
-  const res=await api({action:'getBatchRecords'});
-  if(!res.ok){mc.innerHTML=`<div class="card"><div class="warn" style="padding:12px;">${res.error}</div></div>`;return;}
-  batchRecs=C.batch=res.records||[];
+let batchRecs = [];
+async function renderBatchPage(mc) {
+  if (C.batch) { batchRecs = C.batch; renderBatchList(mc); return; }
+  mc.innerHTML = '<div class="card"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">載入中…</div></div>';
+  const res = await api({ action:'getBatchRecords' });
+  if (!res.ok) { mc.innerHTML=`<div class="card"><div class="warn" style="padding:12px;">${res.error}</div></div>`; return; }
+  batchRecs = C.batch = res.records || [];
   renderBatchList(mc);
 }
-function renderBatchList(mc){
-  mc=mc||document.getElementById('mainContent');
-  const rows=batchRecs.map((r,i)=>`<tr onclick="showBatchModal(${i})">
+function renderBatchList(mc) {
+  mc = mc || document.getElementById('mainContent');
+  const rows = batchRecs.map((r,i) => `<tr onclick="showBatchModal(${i})">
     <td><div style="font-weight:500;font-size:13px;">${r.recipe||'—'}</div><div class="sub">${r.client||''} · ${r.date||''}</div></td>
-    <td class="tr"><div style="font-size:12px;">${r.bottle||'—'} × ${r.bottleCount||0}</div><div class="sub">${fm(r.laborCost)}</div></td>
+    <td class="tr"><div style="font-size:12px;">${r.bottle||'—'} × ${r.bottleCount||0}</div><div class="sub">${r.pm||''}</div></td>
   </tr>`).join('');
-  mc.innerHTML=`<div class="card">
+  mc.innerHTML = `<div class="card">
     <div class="sec-hd">
       <div class="card-title" style="margin:0">製作記錄</div>
       <div style="display:flex;gap:6px;">
@@ -860,37 +1065,25 @@ function renderBatchList(mc){
         <button class="btn btn-primary btn-sm" onclick="showBatchModal()">＋ 新增</button>
       </div>
     </div>
-    <div class="tbl-wrap"><table><thead><tr><th>酒款 / 日期</th><th class="tr">瓶型 / 代工費</th></tr></thead>
+    <div class="tbl-wrap"><table><thead><tr><th>酒款 / 日期</th><th class="tr">瓶型 / PM</th></tr></thead>
     <tbody>${rows||'<tr><td colspan="2" style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">尚無記錄</td></tr>'}</tbody></table></div>
   </div>`;
 }
-function calcBatchCost(bottle,cap,front,back,abv,vol,foodCost){
-  const spec=BSPEC[bottle]||BSPEC['4L桶'];
-  const btls=Math.floor(vol/spec.vol);if(!btls)return 0;
-  const foodPerB=foodCost/btls;
-  const taxPerB=calcTax(abv,spec.vol);
-  // 標籤費：江小白/伏特加：有前標+1.5，有後標+1.5；波士頓/4L桶：固定1
-  let labelCost=0;
-  if(bottle==='4L桶'||bottle==='波士頓'){labelCost=1;}
-  else{if(front)labelCost+=1.5;if(back)labelCost+=1.5;}
-  const costPerB=foodPerB+taxPerB+spec.cont+labelCost+spec.labor;
-  return Math.round(costPerB*1.05*btls*100)/100;// 含稅總代工費
-}
-function showBatchModal(editIdx){
-  const r=editIdx!==undefined?batchRecs[editIdx]:{};
-  const allClients=['FeelingBar',CLIENT_GONBAN];
-  const cOpts=allClients.map(c=>`<option${r.client===c?' selected':''}>${c}</option>`).join('');
-  const botOpts=Object.keys(BSPEC).map(b=>`<option${r.bottle===b?' selected':''}>${b}</option>`).join('');
-  const initClient=r.client||'FeelingBar';
-  const recOpts=recipeList.filter(i=>i.client===initClient).map(i=>`<option${r.recipe===i.recipeName?' selected':''}>${i.recipeName}</option>`).join('');
-  const capChk=r.cap==='✓'||r.cap===true;
-  const frontChk=r.frontLabel==='✓'||r.frontLabel===true;
-  const backChk=r.backLabel==='✓'||r.backLabel===true;
-  const modal=makeModal(`
+function showBatchModal(editIdx) {
+  const r = editIdx !== undefined ? batchRecs[editIdx] : {};
+  const clients = clientList.length ? clientList.map(c=>c.name) : ['FeelingBar','南坡萬公版'];
+  const cOpts = clients.map(c=>`<option${r.client===c?' selected':''}>${c}</option>`).join('');
+  const botOpts = Object.keys(BSPEC).map(b=>`<option${r.bottle===b?' selected':''}>${b}</option>`).join('');
+  const initClient = r.client || clients[0] || 'FeelingBar';
+  const recOpts = recipeList.filter(i=>i.client===initClient).map(i=>`<option${r.recipe===i.recipeName?' selected':''}>${i.recipeName}</option>`).join('');
+  // PM 預設登入帳號
+  const pmDefault = r.pm || curUser?.username || '';
+  const initBt = r.bottle || '江小白';
+  const modal = makeModal(`
     <div class="modal-title">${editIdx!==undefined?'編輯':'新增'}製作記錄</div>
     <div class="form-row">
       <div class="fg"><label>客戶</label><select id="mb_c" onchange="updMbRecipe(this.value)">${cOpts}</select></div>
-      <div class="fg"><label>PM</label><input class="inp" id="mb_pm" value="${r.pm||''}" style="margin:0;font-size:13px;padding:9px 10px;"></div>
+      <div class="fg"><label>PM</label><input class="inp" id="mb_pm" value="${pmDefault}" style="margin:0;font-size:13px;padding:9px 10px;"></div>
     </div>
     <div class="form-row">
       <div class="fg"><label>酒款</label><select id="mb_rec">${recOpts||`<option>${r.recipe||''}</option>`}</select></div>
@@ -901,100 +1094,121 @@ function showBatchModal(editIdx){
       <div class="fg"><label>交貨日</label><input class="inp" type="date" id="mb_dl" value="${r.deliveryDate||''}" style="margin:0;font-size:13px;padding:9px 10px;"></div>
     </div>
     <div class="form-row">
-      <div class="fg"><label>製作體積 ml</label><input class="inp" type="number" id="mb_vol" value="${r.volume||4000}" style="margin:0;font-size:13px;padding:9px 10px;" oninput="calcBatchSuggest()"></div>
+      <div class="fg"><label>製作總體積 ml</label><input class="inp" type="number" id="mb_vol" value="${r.volume||4000}" style="margin:0;font-size:13px;padding:9px 10px;" oninput="calcBatchSuggest()"></div>
       <div class="fg"><label>瓶型</label><select id="mb_bt" onchange="calcBatchSuggest()">${botOpts}</select></div>
     </div>
     <div class="card" style="margin-bottom:10px;padding:10px;">
       <div style="font-size:12px;font-weight:600;color:var(--ink3);margin-bottom:6px;">包裝配件</div>
-      <div class="ck-row"><input type="checkbox" id="mb_cap" ${capChk?'checked':''} onchange="calcBatchSuggest()"><label for="mb_cap">瓶蓋</label></div>
-      <div class="ck-row"><input type="checkbox" id="mb_lf" ${frontChk?'checked':''} onchange="calcBatchSuggest()"><label for="mb_lf">前標貼（NT$1.5/瓶）</label></div>
-      <div class="ck-row"><input type="checkbox" id="mb_lb" ${backChk?'checked':''} onchange="calcBatchSuggest()"><label for="mb_lb">後標貼（NT$1.5/瓶）</label></div>
+      <div id="mb_acc_area"></div>
     </div>
     <div class="form-row">
       <div class="fg"><label>裝瓶數</label><input class="inp" type="number" id="mb_cnt" value="${r.bottleCount||''}" style="margin:0;font-size:13px;padding:9px 10px;"></div>
-      <div class="fg"><label>代工費含稅(NT$) <span id="mb_lc_hint" style="color:var(--gold);font-size:11px;"></span></label>
-        <input class="inp" type="number" id="mb_lc" value="${r.laborCost||''}" style="margin:0;font-size:13px;padding:9px 10px;"></div>
-      <div class="fg"><label>食材報價/批</label><input class="inp" type="number" id="mb_iq" value="${r.ingredientQuote||''}" style="margin:0;font-size:13px;padding:9px 10px;"></div>
     </div>
     <div class="fg" style="margin-bottom:12px;"><label>備註</label><input class="inp" id="mb_note" value="${r.note||''}" style="margin:0;font-size:13px;padding:9px 10px;"></div>
     <div class="fe"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="mb_sub">儲存</button></div>`);
-  modal.querySelector('#mb_sub').onclick=async()=>{
-    const cap=document.getElementById('mb_cap').checked?'✓':'';
-    const front=document.getElementById('mb_lf').checked?'✓':'';
-    const back=document.getElementById('mb_lb').checked?'✓':'';
-    const p={creator:curUser.username,client:document.getElementById('mb_c').value,pm:document.getElementById('mb_pm').value,orderId:document.getElementById('mb_oid').value,recipe:document.getElementById('mb_rec').value,date:document.getElementById('mb_dt').value,deliveryDate:document.getElementById('mb_dl').value,volume:document.getElementById('mb_vol').value,bottle:document.getElementById('mb_bt').value,cap,frontLabel:front,backLabel:back,bottleCount:document.getElementById('mb_cnt').value,laborCost:document.getElementById('mb_lc').value,ingredientQuote:document.getElementById('mb_iq').value,note:document.getElementById('mb_note').value};
-    const res=editIdx!==undefined?await api({action:'updateBatchRecord',id:batchRecs[editIdx].id,...p}):await api({action:'addBatchRecord',...p});
-    if(res.ok){toast('已儲存');modal.remove();C.batch=null;renderBatchPage();}else toast('儲存失敗:'+res.error);
+
+  // 初始化配件
+  renderBatchAccessories(initBt, r);
+  document.getElementById('mb_bt').addEventListener('change', function(){ renderBatchAccessories(this.value, {}); calcBatchSuggest(); });
+
+  modal.querySelector('#mb_sub').onclick = async () => {
+    const bt = document.getElementById('mb_bt').value;
+    const accs = BOTTLE_ACCESSORIES[bt] || [];
+    const accVals = {};
+    accs.forEach(a => { accVals[a.id] = document.getElementById('mbacc_'+a.id)?.checked ? '✓' : ''; });
+    const p = {
+      creator:curUser.username,
+      client:document.getElementById('mb_c').value,
+      pm:document.getElementById('mb_pm').value,
+      orderId:document.getElementById('mb_oid').value,
+      recipe:document.getElementById('mb_rec').value,
+      date:document.getElementById('mb_dt').value,
+      deliveryDate:document.getElementById('mb_dl').value,
+      volume:document.getElementById('mb_vol').value,
+      bottle:bt,
+      cap:accVals.cap||'',
+      frontLabel:accVals.front||'',
+      backLabel:accVals.back||'',
+      bottleCount:document.getElementById('mb_cnt').value,
+      note:document.getElementById('mb_note').value,
+    };
+    const res = editIdx!==undefined
+      ? await api({ action:'updateBatchRecord', id:batchRecs[editIdx].id, ...p })
+      : await api({ action:'addBatchRecord', ...p });
+    if (res.ok) { toast('已儲存'); modal.remove(); C.batch=null; renderBatchPage(); }
+    else toast('儲存失敗:'+res.error);
   };
 }
-function calcBatchSuggest(){
-  // 根據瓶型+前後標自動建議代工費
-  const vol=parseFloat(document.getElementById('mb_vol')?.value)||4000;
-  const bt=document.getElementById('mb_bt')?.value||'4L桶';
-  const front=document.getElementById('mb_lf')?.checked||false;
-  const back=document.getElementById('mb_lb')?.checked||false;
-  const spec=BSPEC[bt]||BSPEC['4L桶'];
-  const btls=Math.floor(vol/spec.vol);
-  let labelCost=0;
-  if(bt==='4L桶'||bt==='波士頓')labelCost=1;
-  else{if(front)labelCost+=1.5;if(back)labelCost+=1.5;}
-  const perB=spec.cont+labelCost+spec.labor;
-  const total=Math.round(perB*btls*1.05);
-  const hint=document.getElementById('mb_lc_hint');
-  if(hint&&total>0)hint.textContent=`建議: ${fm(total)}（${btls}瓶）`;
-  // 自動更新裝瓶數
-  const cntEl=document.getElementById('mb_cnt');if(cntEl&&!cntEl.value)cntEl.value=btls;
+function renderBatchAccessories(bt, existing) {
+  const accs = BOTTLE_ACCESSORIES[bt] || [];
+  const el = document.getElementById('mb_acc_area'); if (!el) return;
+  el.innerHTML = accs.map(a => {
+    const chk = a.alwaysOn || existing[a.id]==='✓' || (a.id==='cap'&&(existing.cap==='✓'||existing.cap===true)) || (a.id==='front'&&(existing.frontLabel==='✓'||existing.frontLabel===true)) || (a.id==='back'&&(existing.backLabel==='✓'||existing.backLabel===true));
+    return `<div class="ck-row"><input type="checkbox" id="mbacc_${a.id}" ${chk?'checked':''} ${a.alwaysOn?'disabled':''} onchange="calcBatchSuggest()"><label for="mbacc_${a.id}">${a.label}</label></div>`;
+  }).join('');
 }
-function updMbRecipe(client){const sel=document.getElementById('mb_rec');if(!sel)return;sel.innerHTML=recipeList.filter(i=>i.client===client).map(i=>`<option>${i.recipeName}</option>`).join('');}
+function calcBatchSuggest() {
+  const bt = document.getElementById('mb_bt')?.value || '4L桶';
+  const vol = parseFloat(document.getElementById('mb_vol')?.value) || 4000;
+  const spec = BSPEC[bt] || BSPEC['4L桶'];
+  const btls = Math.floor(vol / spec.volFill);
+  const cntEl = document.getElementById('mb_cnt');
+  if (cntEl && !cntEl.value) cntEl.value = btls;
+}
+function updMbRecipe(client) {
+  const sel = document.getElementById('mb_rec'); if (!sel) return;
+  sel.innerHTML = recipeList.filter(i=>i.client===client).map(i=>`<option>${i.recipeName}</option>`).join('');
+}
 
 // ════════════════════════════════════════════════
 // ⑥ 審核
 // ════════════════════════════════════════════════
-async function renderApplyPage(mc){
-  mc.innerHTML=`
+async function renderApplyPage(mc) {
+  mc.innerHTML = `
   <div class="card" style="margin-bottom:10px;">
     <div class="sec-hd"><div class="card-title" style="margin:0">待審核申請</div><button class="btn btn-ghost btn-sm" onclick="renderApplyPage(document.getElementById('mainContent'))">↻</button></div>
     <div id="applyArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div>
   </div>
   <div class="card"><div class="card-title">審核歷史</div><div id="histArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div></div>`;
-  loadApplies();loadHistory();
+  loadApplies(); loadHistory();
 }
-async function loadApplies(){
-  const res=await api({action:'getApplies'});const area=document.getElementById('applyArea');if(!area)return;
-  if(!res.ok){area.innerHTML=`<div class="warn" style="padding:10px;">${res.error}</div>`;return;}
-  const list=res.list||[];
-  if(!list.length){area.innerHTML='<div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">目前無待審核</div>';return;}
-  area.innerHTML=list.map(a=>`<div class="card" style="margin-bottom:8px;border-color:var(--yellow);">
+async function loadApplies() {
+  const res = await api({ action:'getApplies' }); const area = document.getElementById('applyArea'); if (!area) return;
+  if (!res.ok) { area.innerHTML=`<div class="warn" style="padding:10px;">${res.error}</div>`; return; }
+  const list = res.list || [];
+  if (!list.length) { area.innerHTML='<div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">目前無待審核</div>'; return; }
+  area.innerHTML = list.map(a => `<div class="card" style="margin-bottom:8px;border-color:var(--yellow);">
     <div class="fb"><div><span style="font-weight:600;font-size:13px;">${a.recipe}</span><span class="badge bg-brown" style="margin-left:5px;">${a.client}</span></div>
     <div class="sub">${a.creator} · ${String(a.createdAt).substring(0,10)}</div></div>
     <div style="margin-top:7px;">${(a.items||[]).map(it=>`<div style="font-size:12px;margin-bottom:3px;"><span style="font-weight:500;">${it.name}</span>：${nt(it.oldVal||0,1)}% → <span style="color:var(--gold-dk);font-weight:600;">${nt(it.newVal||0,1)}%</span>${it.reason?`<span class="sub"> （${it.reason}）</span>`:''}</div>`).join('')}</div>
     ${curUser?.role==='admin'?`<div class="fe mt8" style="gap:6px;"><button class="btn btn-success btn-sm" onclick="doReview('${a.id}',true)">✓ 核准</button><button class="btn btn-danger btn-sm" onclick="doReview('${a.id}',false)">✕ 拒絕</button></div>`:''}
   </div>`).join('');
 }
-async function loadHistory(){
-  const res=await api({action:'getHistory'});const area=document.getElementById('histArea');if(!area)return;
-  if(!res.ok){area.innerHTML=`<div class="warn" style="padding:10px;">${res.error}</div>`;return;}
-  const list=res.list||[];
-  if(!list.length){area.innerHTML='<div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">尚無歷史</div>';return;}
-  area.innerHTML=list.map(r=>`<div style="padding:8px 0;border-bottom:1px solid var(--border);">
+async function loadHistory() {
+  const res = await api({ action:'getHistory' }); const area = document.getElementById('histArea'); if (!area) return;
+  if (!res.ok) { area.innerHTML=`<div class="warn" style="padding:10px;">${res.error}</div>`; return; }
+  const list = res.list || [];
+  if (!list.length) { area.innerHTML='<div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">尚無歷史</div>'; return; }
+  area.innerHTML = list.map(r => `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
     <div class="fb"><div><span style="font-weight:500;font-size:13px;">${r.recipe}</span><span class="badge ${r.status==='核准'?'bg-green':'bg-red'}" style="margin-left:5px;">${r.status}</span><span class="badge bg-brown" style="margin-left:3px;">${r.client}</span></div>
     <div class="sub">${r.reviewer} · ${String(r.createdAt).substring(0,10)}</div></div>
     ${r.note?`<div class="sub" style="margin-top:3px;">${r.note}</div>`:''}
   </div>`).join('');
 }
-async function doReview(id,approved){
-  if(!confirm(`確認${approved?'核准並寫入酒譜':'拒絕'}？`))return;
-  const res=await api({action:'reviewApply',id,approve:String(approved),reviewer:curUser.username});
-  if(res.ok){toast(approved?'已核准':'已拒絕');renderApplyPage(document.getElementById('mainContent'));}else toast('操作失敗:'+res.error);
+async function doReview(id, approved) {
+  if (!confirm(`確認${approved?'核准並寫入酒譜':'拒絕'}？`)) return;
+  const res = await api({ action:'reviewApply', id, approve:String(approved), reviewer:curUser.username });
+  if (res.ok) { toast(approved?'已核准':'已拒絕'); renderApplyPage(document.getElementById('mainContent')); }
+  else toast('操作失敗:'+res.error);
 }
 
 // ── 全域事件 ──
-document.addEventListener('click',e=>{
-  if(!e.target.closest('.sbox')&&!e.target.closest('.sdrop'))
-    document.querySelectorAll('.sdrop').forEach(d=>d.classList.remove('open'));
+document.addEventListener('click', e => {
+  if (!e.target.closest('.sbox') && !e.target.closest('.sdrop'))
+    document.querySelectorAll('.sdrop').forEach(d => d.classList.remove('open'));
 });
-document.getElementById('loginPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
-document.getElementById('loginUser').addEventListener('change',()=>setTimeout(()=>document.getElementById('loginPass').focus(),50));
+document.getElementById('loginPass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+document.getElementById('loginUser').addEventListener('change', () => setTimeout(()=>document.getElementById('loginPass').focus(), 50));
 </script>
 </body>
 </html>
