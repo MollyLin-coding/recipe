@@ -240,7 +240,7 @@ tbody tr:hover td{background:#faf3e8;}
     <div class="login-card">
       <select class="inp" id="loginUser"><option value="">選擇帳號</option><option>Kevin</option><option>Molly</option><option>阿軒</option><option>小捲</option><option>Vic</option></select>
       <input class="inp" id="loginPass" type="password" placeholder="密碼" inputmode="numeric">
-      <button class="btn btn-primary btn-full" onclick="doLogin()">登入</button>
+      <button class="btn btn-primary btn-full" id="loginBtn" onclick="doLogin()">登入</button>
       <div id="loginErr"></div>
     </div>
   </div>
@@ -1212,3 +1212,4 @@ document.getElementById('loginUser').addEventListener('change', () => setTimeout
 </script>
 </body>
 </html>
+
