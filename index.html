@@ -364,19 +364,21 @@ async function doLogin() {
   if (!username || !password) { document.getElementById('loginErr').textContent = '請選擇帳號並輸入密碼'; return; }
   document.getElementById('loginBtn').disabled = true;
   document.getElementById('loginErr').textContent = '';
-  // 並行發 login + getInventory + getClientList
-  const [res, invRes, clRes] = await Promise.all([
+  // 並行發 login + getInventory + getRecipeList
+  const [res, invRes, lr] = await Promise.all([
     api({ action: 'login', username, password }),
     api({ action: 'getInventory' }, true),
-    api({ action: 'getClientList' }, true),
+    api({ action: 'getRecipeList' }, true),
   ]);
   document.getElementById('loginBtn').disabled = false;
   if (!res.ok) { document.getElementById('loginErr').textContent = res.error || '登入失敗'; return; }
   curUser = { username, role: res.role };
   if (invRes.ok) C.inv = invRes.items || [];
-  if (clRes.ok) clientList = clRes.list || [];
-  // 背景載酒譜清單
-  api({ action: 'getRecipeList' }, true).then(lr => { if(lr.ok) recipeList = lr.list || []; });
+  if (lr.ok) {
+    recipeList = lr.list || [];
+    // 從酒譜清單推導客戶清單（不需要獨立 getClientList API）
+    clientList = [...new Set(recipeList.map(i => i.client))].map(n => ({ name: n }));
+  }
   // 設定初始客戶
   curClient = clientList[0]?.name || 'FeelingBar';
   document.getElementById('loginWrap').style.display = 'none';
@@ -399,11 +401,14 @@ function doLogout() {
 // ── 重整 ─────────────────────────────────────────────────────
 function doRefresh() {
   Object.assign(C, { inv:null, profit:{}, recipes:{}, batch:null });
-  Promise.all([
-    api({ action:'getInventory' }, true).then(r => { if(r.ok) C.inv = r.items||[]; }),
-    api({ action:'getClientList' }, true).then(r => { if(r.ok) clientList = r.list||[]; }),
-  ]);
-  api({ action:'getRecipeList' }, true).then(lr => { if(lr.ok) { recipeList = lr.list||[]; switchTab(curTab); } });
+  api({ action:'getInventory' }, true).then(r => { if(r.ok) C.inv = r.items||[]; });
+  api({ action:'getRecipeList' }, true).then(lr => {
+    if(lr.ok) {
+      recipeList = lr.list||[];
+      clientList = [...new Set(recipeList.map(i => i.client))].map(n => ({ name: n }));
+      switchTab(curTab);
+    }
+  });
   toast('已重新整理');
 }
 
