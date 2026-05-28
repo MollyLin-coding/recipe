@@ -380,7 +380,7 @@ async function doLogin() {
     clientList = [...new Set(recipeList.map(i => i.client))].map(n => ({ name: n }));
   }
   // 設定初始客戶
-  curClient = clientList[0]?.name || 'FeelingBar';
+  curClient = clientList[0]?.name || 'Feeling Bar Cafe';
   document.getElementById('loginWrap').style.display = 'none';
   const app = document.getElementById('app');
   app.style.display = 'flex';
@@ -520,11 +520,7 @@ function renderRecipeDetail(area) {
     </div>
     <div class="sub" style="margin-bottom:5px;">製程備註</div>
     <textarea id="pnInput" class="inp" style="height:70px;resize:vertical;font-size:13px;">${rdata.processNote || ''}</textarea>
-    <div class="fe mt8"><button class="btn btn-primary btn-sm" onclick="saveNote()">儲存備註</button></div>
-    <details style="margin-top:10px;font-size:11px;color:var(--ink3);">
-      <summary style="cursor:pointer;user-select:none;">🔍 ABV 診斷（點開確認計算值）</summary>
-      <div id="abv_debug" style="margin-top:6px;background:var(--bg2);border-radius:6px;padding:8px;overflow-x:auto;"></div>
-    </details>`;
+    <div class="fe mt8"><button class="btn btn-primary btn-sm" onclick="saveNote()">儲存備註</button></div>`;
 
   rdata._origTv = rdata.totalVol; // 記錄原始總體積供還原用
   (rdata.ingredients || []).forEach((ing, idx) => {
@@ -538,7 +534,6 @@ function renderRecipeDetail(area) {
 
   });
   updateTotalPct();
-  renderAbvDebug();
 }
 
 // 改占比 → 重算體積
@@ -595,7 +590,6 @@ function recalcSummary() {
   if (e('rmTotal')) e('rmTotal').textContent = fm(totalCost + tax);
   if (e('totalCostBar')) e('totalCostBar').textContent = fm(totalCost);
   updateTotalPct();
-  renderAbvDebug();
 }
 function updateTotalPct() {
   const el = document.getElementById('totalPct'); if (!el) return;
@@ -626,46 +620,6 @@ function recalcFromTv() {
   recalcSummary();
 }
 
-// ── ABV 診斷面板 ─────────────────────────────────────────────
-function renderAbvDebug() {
-  const el = document.getElementById('abv_debug'); if (!el) return;
-  if (!rdata || !rdata.ingredients || !rdata.ingredients.length) return;
-  const gasAbv = rdata.abv || 0;
-  let calcAbv = 0;
-  const rows = rdata.ingredients.map(function(ing, idx) {
-    const domPct = parseFloat(document.getElementById('rp_'+idx) ? document.getElementById('rp_'+idx).value : ing.pct) || 0;
-    const rawAbv = ing.abv || 0;
-    const rawPct = ing.pct || 0;
-    const act = rawAbv * rawPct / 100;  // 原料本身ABV = D欄×原始占比/100
-    const contrib = act * domPct / 100;
-    calcAbv += contrib;
-    return '<tr>'
-      + '<td style="padding:2px 5px;">' + ing.name + '</td>'
-      + '<td style="padding:2px 5px;text-align:right;">' + rawAbv.toFixed(4) + '</td>'
-      + '<td style="padding:2px 5px;text-align:right;">' + rawPct.toFixed(2) + '</td>'
-      + '<td style="padding:2px 5px;text-align:right;">' + domPct.toFixed(2) + '</td>'
-      + '<td style="padding:2px 5px;text-align:right;">' + (typeof act === 'number' ? act.toFixed(2) : '?') + '</td>'
-      + '<td style="padding:2px 5px;text-align:right;font-weight:bold;">' + contrib.toFixed(4) + '</td>'
-      + '</tr>';
-  }).join('');
-  const diff = Math.abs(gasAbv - calcAbv);
-  el.innerHTML = '<table style="font-size:11px;border-collapse:collapse;width:100%;">'
-    + '<thead><tr style="border-bottom:1px solid var(--border);">'
-    + '<th style="text-align:left;padding:2px 5px;">原料</th>'
-    + '<th style="text-align:right;padding:2px 5px;">ing.abv(GAS)</th>'
-    + '<th style="text-align:right;padding:2px 5px;">ing.pct(GAS)</th>'
-    + '<th style="text-align:right;padding:2px 5px;">DOM占比%</th>'
-    + '<th style="text-align:right;padding:2px 5px;">_abvActual</th>'
-    + '<th style="text-align:right;padding:2px 5px;">貢獻</th>'
-    + '</tr></thead>'
-    + '<tbody>' + rows + '</tbody>'
-    + '</table>'
-    + '<div style="margin-top:4px;border-top:1px solid var(--border);padding-top:4px;">'
-    + 'GAS回傳ABV(僅參考) = <b>' + gasAbv.toFixed(2) + '%</b> &nbsp;|&nbsp; '
-    + '前端重算 = <b>' + calcAbv.toFixed(2) + '%</b>'
-    + (diff > 0.5 ? ' <span style="color:#c00;font-weight:bold;">← 不一致！</span>' : ' <span style="color:green;">✓ 一致</span>')
-    + '</div>';
-}
 
 // 還原全部 → 重算
 function recalcRecipe(restore) {
@@ -733,7 +687,7 @@ function showApplyModal() {
 // ② 毛利分析（v10：動態客戶清單）
 // ════════════════════════════════════════════════
 async function renderProfitPage(mc) {
-  const clients = clientList.length ? clientList.map(c=>c.name) : ['FeelingBar','南坡萬公版'];
+  const clients = clientList.length ? clientList.map(c=>c.name) : ['Feeling Bar Cafe','南坡萬公版'];
   const cOpts = clients.map(c => `<option>${c}</option>`).join('');
   mc.innerHTML = `<div class="card">
     <div class="sec-hd"><div class="card-title" style="margin:0">毛利分析</div><button class="btn btn-ghost btn-sm" onclick="loadProfit(true)">↻ 刷新</button></div>
@@ -746,7 +700,7 @@ async function renderProfitPage(mc) {
 }
 async function loadProfit(force) {
   const el = document.getElementById('profitClient');
-  const client = el ? el.value : (clientList[0]?.name||'FeelingBar');
+  const client = el ? el.value : (clientList[0]?.name||'Feeling Bar Cafe');
   if (force) C.profit[client] = null;
   if (!C.profit[client]) {
     const res = await api({ action:'getProfitData', client });
@@ -760,7 +714,7 @@ function renderProfitData(res) {
   const data = res.list || [];
   if (!data.length) { area.innerHTML='<div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">無資料</div>'; return; }
 
-  // 用 client 名稱判斷 FB 系（FeelingBar/FBM）vs 南坡萬多瓶型
+  // 用 client 名稱判斷 FB 系（Feeling Bar Cafe/FBM）vs 南坡萬多瓶型
   // 不依賴 GAS 是否回傳 bottle 欄位
   const hasFB = /feeling|^fb/i.test(res.client || '') || data.every(d => (d.bottle || '4L桶') === '4L桶');
   if (hasFB) {
@@ -880,7 +834,7 @@ async function renderRdPage(mc) {
   const botOpts = Object.keys(BSPEC).map(b=>`<option${b===bt?' selected':''}>${b}</option>`).join('');
   const cats = [...new Set((C.inv||[]).map(i=>i.category))];
   const catOpts = cats.map(c=>`<option>${c}</option>`).join('');
-  const cliOpts = (clientList.length?clientList.map(c=>c.name):['FeelingBar','南坡萬公版']).map(c=>`<option${c===client?' selected':''}>${c}</option>`).join('');
+  const cliOpts = (clientList.length?clientList.map(c=>c.name):['Feeling Bar Cafe','南坡萬公版']).map(c=>`<option${c===client?' selected':''}>${c}</option>`).join('');
   mc.innerHTML = `
   <div class="card" style="margin-bottom:10px;">
     <div class="card-title">研發試算</div>
@@ -1214,10 +1168,10 @@ function renderBatchList(mc) {
 }
 function showBatchModal(editIdx) {
   const r = editIdx !== undefined ? batchRecs[editIdx] : {};
-  const clients = clientList.length ? clientList.map(c=>c.name) : ['FeelingBar','南坡萬公版'];
+  const clients = clientList.length ? clientList.map(c=>c.name) : ['Feeling Bar Cafe','南坡萬公版'];
   const cOpts = clients.map(c=>`<option${r.client===c?' selected':''}>${c}</option>`).join('');
   const botOpts = Object.keys(BSPEC).map(b=>`<option${r.bottle===b?' selected':''}>${b}</option>`).join('');
-  const initClient = r.client || clients[0] || 'FeelingBar';
+  const initClient = r.client || clients[0] || 'Feeling Bar Cafe';
   const recOpts = recipeList.filter(i=>i.client===initClient).map(i=>`<option${r.recipe===i.recipeName?' selected':''}>${i.recipeName}</option>`).join('');
   // PM 預設登入帳號
   const pmDefault = r.pm || curUser?.username || '';
