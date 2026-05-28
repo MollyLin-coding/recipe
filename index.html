@@ -494,7 +494,14 @@ function renderRecipeDetail(area) {
   area.innerHTML = `
     <div class="recipe-meta">
       <div class="rm"><div class="lb">預估酒精濃度</div><div class="vl" id="rmAbv">${nt(abv,1)}%</div></div>
-      <div class="rm"><div class="lb">總體積</div><div class="vl">${tv} ml</div></div>
+      <div class="rm">
+        <div class="lb">總體積</div>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <input type="number" id="rmTv" value="${tv}" min="1" step="100"
+            style="width:80px;padding:3px 6px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--ink1);text-align:right;"
+            oninput="recalcFromTv()"> <span style="font-size:12px;color:var(--ink3);">ml</span>
+        </div>
+      </div>
       <div class="rm"><div class="lb">食材成本（批）</div><div class="vl" id="rmCost">${fm(cost)}</div></div>
       <div class="rm"><div class="lb">食材報價（批）</div><div class="vl acc" id="rmQuote">${fm(quote)}</div></div>
       <div class="rm"><div class="lb">酒稅（批）</div><div class="vl" id="rmTax">${fm(tax)}</div></div>
@@ -511,7 +518,15 @@ function renderRecipeDetail(area) {
     <textarea id="pnInput" class="inp" style="height:70px;resize:vertical;font-size:13px;">${rdata.processNote || ''}</textarea>
     <div class="fe mt8"><button class="btn btn-primary btn-sm" onclick="saveNote()">儲存備註</button></div>`;
 
-  (rdata.ingredients || []).forEach((ing, idx) => ing._origPct = ing.pct);
+  rdata._origTv = rdata.totalVol; // 記錄原始總體積供還原用
+  (rdata.ingredients || []).forEach((ing, idx) => {
+    ing._origPct  = ing.pct;
+    ing._origVol  = ing.vol || 0;   // 原始體積（ml）
+    ing._origCost = ing.cost || 0;  // 原始成本（已是該原料批次成本）
+    // GAS 回傳 ing.abv 是 Sheet D 欄「ABV貢獻計算值」= abv_actual × (pct/100)
+    // 還原為原料本身 ABV，供改占比後正確重算
+    ing._abvActual = (ing.pct > 0) ? (ing.abv || 0) / (ing.pct / 100) : 0;
+  });
   updateTotalPct();
 }
 
@@ -538,8 +553,10 @@ function recalcFromVol(idx) {
 // 重算單一原料成本
 function recalcIngCost(idx, pct, vol) {
   const ing = rdata?.ingredients?.[idx]; if (!ing) return;
-  // 依原始單位成本重算
-  const unitCost = (ing._origCost !== undefined ? ing._origCost : ing.cost) / (ing._origVol || ing.vol || 1);
+  // 原始單位成本 = 原始批次成本 / 原始體積
+  const origVol  = ing._origVol  !== undefined ? ing._origVol  : (ing.vol  || 0);
+  const origCost = ing._origCost !== undefined ? ing._origCost : (ing.cost || 0);
+  const unitCost = origVol > 0 ? origCost / origVol : 0;
   const cost = unitCost * vol;
   ing._curCost = cost;
   const cc = document.getElementById('rc_'+idx); if (cc) cc.textContent = fm(cost);
@@ -553,7 +570,7 @@ function recalcSummary() {
     const vol = parseFloat(document.getElementById('rv_'+idx)?.value) || 0;
     const cost = ing._curCost !== undefined ? ing._curCost : ing.cost;
     totalCost += cost;
-    totalAbv += (ing.abv || 0) * (pct / 100);
+    totalAbv += (ing._abvActual !== undefined ? ing._abvActual : (ing.abv || 0)) * (pct / 100);
     totalPct += pct;
   });
   const abv = Math.round(totalAbv * 10) / 10;
@@ -579,9 +596,31 @@ function updateTotalPct() {
     ? '<span class="ok">✓ 100%</span>'
     : `<span class="warn">⚠ ${total.toFixed(1)}%（差${diff}%）</span>`;
 }
+// 改總體積 → 依現有占比重算所有體積 + 成本
+function recalcFromTv() {
+  const newTv = parseFloat(document.getElementById('rmTv')?.value) || 0;
+  if (!newTv || !rdata?.ingredients) return;
+  rdata.totalVol = newTv;   // 更新 rdata，讓後續所有計算都用新值
+  rdata.ingredients.forEach((ing, idx) => {
+    const pct  = parseFloat(document.getElementById('rp_'+idx)?.value) || 0;
+    const vol  = newTv * pct / 100;
+    const ve   = document.getElementById('rv_'+idx); if (ve) ve.value = nt(vol, 0);
+    const origVol  = ing._origVol  !== undefined ? ing._origVol  : (ing.vol  || 0);
+    const origCost = ing._origCost !== undefined ? ing._origCost : (ing.cost || 0);
+    const unitCost = origVol > 0 ? origCost / origVol : 0;
+    ing._curCost = unitCost * vol;
+    const cc = document.getElementById('rc_'+idx); if (cc) cc.textContent = fm(ing._curCost);
+  });
+  recalcSummary();
+}
 // 還原全部 → 重算
 function recalcRecipe(restore) {
   if (!rdata?.ingredients?.length) return;
+  // 還原時重設 totalVol 回原始值（_origTv）
+  if (restore && rdata._origTv) {
+    rdata.totalVol = rdata._origTv;
+    const tve = document.getElementById('rmTv'); if (tve) tve.value = rdata._origTv;
+  }
   const tv = rdata.totalVol || 0;
   rdata.ingredients.forEach((ing, idx) => {
     const pct = restore ? ing._origPct : (parseFloat(document.getElementById('rp_'+idx)?.value) || 0);
