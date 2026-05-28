@@ -516,7 +516,11 @@ function renderRecipeDetail(area) {
     </div>
     <div class="sub" style="margin-bottom:5px;">製程備註</div>
     <textarea id="pnInput" class="inp" style="height:70px;resize:vertical;font-size:13px;">${rdata.processNote || ''}</textarea>
-    <div class="fe mt8"><button class="btn btn-primary btn-sm" onclick="saveNote()">儲存備註</button></div>`;
+    <div class="fe mt8"><button class="btn btn-primary btn-sm" onclick="saveNote()">儲存備註</button></div>
+    <details style="margin-top:10px;font-size:11px;color:var(--ink3);">
+      <summary style="cursor:pointer;user-select:none;">🔍 ABV 診斷（點開確認計算值）</summary>
+      <div id="abv_debug" style="margin-top:6px;background:var(--bg2);border-radius:6px;padding:8px;overflow-x:auto;"></div>
+    </details>`;
 
   rdata._origTv = rdata.totalVol; // 記錄原始總體積供還原用
   (rdata.ingredients || []).forEach((ing, idx) => {
@@ -528,6 +532,7 @@ function renderRecipeDetail(area) {
     ing._abvActual = (ing.pct > 0) ? (ing.abv || 0) / (ing.pct / 100) : 0;
   });
   updateTotalPct();
+  renderAbvDebug();
 }
 
 // 改占比 → 重算體積
@@ -584,6 +589,7 @@ function recalcSummary() {
   if (e('rmTotal')) e('rmTotal').textContent = fm(totalCost + tax);
   if (e('totalCostBar')) e('totalCostBar').textContent = fm(totalCost);
   updateTotalPct();
+  renderAbvDebug();
 }
 function updateTotalPct() {
   const el = document.getElementById('totalPct'); if (!el) return;
@@ -613,6 +619,48 @@ function recalcFromTv() {
   });
   recalcSummary();
 }
+
+// ── ABV 診斷面板 ─────────────────────────────────────────────
+function renderAbvDebug() {
+  const el = document.getElementById('abv_debug'); if (!el) return;
+  if (!rdata || !rdata.ingredients || !rdata.ingredients.length) return;
+  const gasAbv = rdata.abv || 0;
+  let calcAbv = 0;
+  const rows = rdata.ingredients.map(function(ing, idx) {
+    const domPct = parseFloat(document.getElementById('rp_'+idx) ? document.getElementById('rp_'+idx).value : ing.pct) || 0;
+    const rawAbv = ing.abv || 0;
+    const rawPct = ing.pct || 0;
+    const act    = ing._abvActual !== undefined ? ing._abvActual : rawAbv;
+    const contrib = act * domPct / 100;
+    calcAbv += contrib;
+    return '<tr>'
+      + '<td style="padding:2px 5px;">' + ing.name + '</td>'
+      + '<td style="padding:2px 5px;text-align:right;">' + rawAbv.toFixed(4) + '</td>'
+      + '<td style="padding:2px 5px;text-align:right;">' + rawPct.toFixed(2) + '</td>'
+      + '<td style="padding:2px 5px;text-align:right;">' + domPct.toFixed(2) + '</td>'
+      + '<td style="padding:2px 5px;text-align:right;">' + (typeof act === 'number' ? act.toFixed(2) : '?') + '</td>'
+      + '<td style="padding:2px 5px;text-align:right;font-weight:bold;">' + contrib.toFixed(4) + '</td>'
+      + '</tr>';
+  }).join('');
+  const diff = Math.abs(gasAbv - calcAbv);
+  el.innerHTML = '<table style="font-size:11px;border-collapse:collapse;width:100%;">'
+    + '<thead><tr style="border-bottom:1px solid var(--border);">'
+    + '<th style="text-align:left;padding:2px 5px;">原料</th>'
+    + '<th style="text-align:right;padding:2px 5px;">ing.abv(GAS)</th>'
+    + '<th style="text-align:right;padding:2px 5px;">ing.pct(GAS)</th>'
+    + '<th style="text-align:right;padding:2px 5px;">DOM占比%</th>'
+    + '<th style="text-align:right;padding:2px 5px;">_abvActual</th>'
+    + '<th style="text-align:right;padding:2px 5px;">貢獻</th>'
+    + '</tr></thead>'
+    + '<tbody>' + rows + '</tbody>'
+    + '</table>'
+    + '<div style="margin-top:4px;border-top:1px solid var(--border);padding-top:4px;">'
+    + 'GAS整體ABV = <b>' + gasAbv.toFixed(2) + '%</b> &nbsp;|&nbsp; '
+    + '前端重算 = <b>' + calcAbv.toFixed(2) + '%</b>'
+    + (diff > 0.5 ? ' <span style="color:#c00;font-weight:bold;">← 不一致！</span>' : ' <span style="color:green;">✓ 一致</span>')
+    + '</div>';
+}
+
 // 還原全部 → 重算
 function recalcRecipe(restore) {
   if (!rdata?.ingredients?.length) return;
