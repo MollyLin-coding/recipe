@@ -463,7 +463,11 @@ async function loadRecipe() {
 }
 function renderRecipeDetail(area) {
   if (!rdata) return;
-  const abv = rdata.abv || 0, cost = rdata.ingredientCost || 0, tax = rdata.tax || 0;
+  // 前端自行計算 ABV（GAS回傳的 rdata.abv 有bug），公式：Σ(ing.abv × ing.pct) / 100
+  const abv = Math.round(
+    (rdata.ingredients || []).reduce(function(s,ing){ return s + (ing.abv||0)*(ing.pct||0)/100; }, 0)
+    * 10) / 10;
+  const cost = rdata.ingredientCost || 0, tax = rdata.tax || 0;
   const quote = Math.round(cost * 1.15 * 100) / 100, tv = rdata.totalVol || 0;
 
   // ── 雙行版面原料列 ──────────────────────────────
@@ -527,9 +531,9 @@ function renderRecipeDetail(area) {
     ing._origPct  = ing.pct;
     ing._origVol  = ing.vol || 0;   // 原始體積（ml）
     ing._origCost = ing.cost || 0;  // 原始成本（已是該原料批次成本）
-    // GAS 回傳 ing.abv 是 Sheet D 欄「ABV貢獻計算值」= abv_actual × (pct/100)
-    // 還原為原料本身 ABV，供改占比後正確重算
-    ing._abvActual = (ing.pct > 0) ? (ing.abv || 0) / (ing.pct / 100) : 0;
+    // ing.abv = 原料本身ABV（如40度酒精 → abv=40），直接使用，不需轉換
+
+
   });
   updateTotalPct();
   renderAbvDebug();
@@ -575,7 +579,7 @@ function recalcSummary() {
     const vol = parseFloat(document.getElementById('rv_'+idx)?.value) || 0;
     const cost = ing._curCost !== undefined ? ing._curCost : ing.cost;
     totalCost += cost;
-    totalAbv += (ing._abvActual !== undefined ? ing._abvActual : (ing.abv || 0)) * (pct / 100);
+    totalAbv += (ing.abv || 0) * (pct / 100);  // abv=原料本身ABV
     totalPct += pct;
   });
   const abv = Math.round(totalAbv * 10) / 10;
@@ -630,7 +634,7 @@ function renderAbvDebug() {
     const domPct = parseFloat(document.getElementById('rp_'+idx) ? document.getElementById('rp_'+idx).value : ing.pct) || 0;
     const rawAbv = ing.abv || 0;
     const rawPct = ing.pct || 0;
-    const act    = ing._abvActual !== undefined ? ing._abvActual : rawAbv;
+    const act    = rawAbv;  // ing.abv = 原料本身ABV
     const contrib = act * domPct / 100;
     calcAbv += contrib;
     return '<tr>'
@@ -655,7 +659,7 @@ function renderAbvDebug() {
     + '<tbody>' + rows + '</tbody>'
     + '</table>'
     + '<div style="margin-top:4px;border-top:1px solid var(--border);padding-top:4px;">'
-    + 'GAS整體ABV = <b>' + gasAbv.toFixed(2) + '%</b> &nbsp;|&nbsp; '
+    + 'GAS回傳ABV(僅參考) = <b>' + gasAbv.toFixed(2) + '%</b> &nbsp;|&nbsp; '
     + '前端重算 = <b>' + calcAbv.toFixed(2) + '%</b>'
     + (diff > 0.5 ? ' <span style="color:#c00;font-weight:bold;">← 不一致！</span>' : ' <span style="color:green;">✓ 一致</span>')
     + '</div>';
@@ -690,7 +694,7 @@ function toRd() {
   rdState = { ings:[], tv:rdata.totalVol||4000, bt:'4L桶', title:rdata.recipeName||rdata._dn||'', client:curClient };
   rdata.ingredients.forEach((ing, idx) => {
     const pct = parseFloat(document.getElementById('rp_'+idx)?.value) || ing.pct;
-    rdState.ings.push({ type:'single', name:ing.name, brand:'', abv: ing._abvActual !== undefined ? ing._abvActual : (ing.abv||0), price:0, unitVol:0, ratio:pct, volume:rdata.totalVol*pct/100, hasLoss:false, isManual:false, _cost:ing.cost, _vol:ing.vol });
+    rdState.ings.push({ type:'single', name:ing.name, brand:'', abv:ing.abv||0, price:0, unitVol:0, ratio:pct, volume:rdata.totalVol*pct/100, hasLoss:false, isManual:false, _cost:ing.cost, _vol:ing.vol });
   });
   switchTab('rd');
   toast('已帶入研發試算');
