@@ -509,7 +509,7 @@ function renderRecipeDetail(area) {
       <div class="rm"><div class="lb">食材成本（批）</div><div class="vl" id="rmCost">${fm(cost)}</div></div>
       <div class="rm"><div class="lb">食材報價（批）</div><div class="vl acc" id="rmQuote">${fm(quote)}</div></div>
       <div class="rm"><div class="lb">酒稅（批）</div><div class="vl" id="rmTax">${fm(tax)}</div></div>
-      <div class="rm"><div class="lb">本批總成本</div><div class="vl sm" id="rmTotal">${fm(cost+tax)}</div></div>
+      <div class="rm"><div class="lb">食材總成本(含稅)</div><div class="vl sm" id="rmTotal">${fm((cost*1.15+tax)*1.05)}</div></div>
     </div>
     <div class="ing-list" style="margin-bottom:10px;">${rows}</div>
     <div class="total-bar">總計：<span id="totalPct"></span> · 成本 <span id="totalCostBar">${fm(cost)}</span></div>
@@ -587,7 +587,8 @@ function recalcSummary() {
   if (e('rmCost'))  e('rmCost').textContent  = fm(totalCost);
   if (e('rmQuote')) e('rmQuote').textContent = fm(quote);
   if (e('rmTax'))   e('rmTax').textContent   = fm(tax);
-  if (e('rmTotal')) e('rmTotal').textContent = fm(totalCost + tax);
+  const totalWithTax = Math.round((totalCost * 1.15 + tax) * 1.05 * 100) / 100;
+  if (e('rmTotal')) e('rmTotal').textContent = fm(totalWithTax);
   if (e('totalCostBar')) e('totalCostBar').textContent = fm(totalCost);
   updateTotalPct();
 }
@@ -719,34 +720,41 @@ function renderProfitData(res) {
   const hasFB = /feeling|^fb/i.test(res.client || '') || data.every(d => (d.bottle || '4L桶') === '4L桶');
   if (hasFB) {
     const sorted = [...data].sort((a,b) => b.profitRate - a.profitRate);
-    area.innerHTML = '<div class="profit-grid">' + sorted.map(d => `<div class="pc">
-      <div class="pn">${d.name}</div>
+    area.innerHTML = '<div class="profit-grid">' + sorted.map(d => {
+      const nm = d.recipeName || d.name || '';
+      const pr = d.price !== undefined ? d.price : (d.sellingPrice || 0);
+      const rate = d.profitRate > 1 ? d.profitRate : d.profitRate * 100;
+      return `<div class="pc">
+      <div class="pn">${nm}</div>
       <div style="font-size:11px;color:var(--ink3);margin-bottom:2px;">售價</div>
-      <div class="pp">${fm(d.sellingPrice)}</div>
+      <div class="pp">${fm(pr)}</div>
       <div class="pm-row"><span>食材成本</span><span>${fm(d.ingredientCost)}</span></div>
       <div class="pm-row"><span>總成本(含稅)</span><span>${fm(d.totalCostTax)}</span></div>
       <div class="pm-row"><span>毛利</span><span class="pv">${fm(d.profit)}</span></div>
-      <div class="pm-row"><span>毛利率</span><span style="font-weight:600;">${nt(d.profitRate,1)}%</span></div>
-    </div>`).join('') + '</div>';
+      <div class="pm-row"><span>毛利率</span><span style="font-weight:600;">${nt(rate,1)}%</span></div>
+    </div>`;
+    }).join('') + '</div>';
   } else {
     // 多瓶型：group by name
-    const byName = {}; data.forEach(d => { if(!byName[d.name]) byName[d.name]={}; byName[d.name][d.bottle]=d; });
+    const byName = {}; data.forEach(d => { const nm = d.recipeName||d.name||''; if(!byName[nm]) byName[nm]={}; byName[nm][d.bottle]=d; });
     const allBottles = [...new Set(data.map(d=>d.bottle))];
     area.innerHTML = Object.keys(byName).map(name => {
       const bottles = byName[name];
-      const maxRate = Math.max(...Object.values(bottles).map(b => b.profitRate||0));
+      const maxRate = Math.max(...Object.values(bottles).map(b => (b.profitRate>1?b.profitRate:b.profitRate*100)||0));
       return `<div class="gonban-item">
         <div class="gonban-name">${name}</div>
         <div class="bottle-row">${allBottles.map(bt => {
           const d = bottles[bt];
           if (!d) return `<div class="bc"><div class="bt">${bt}</div><div class="bv sub">—</div></div>`;
-          const best = d.profitRate === maxRate && maxRate > 0;
+          const best = (d.profitRate>1?d.profitRate:d.profitRate*100) === maxRate && maxRate > 0;
           const fallback = d.priceSource === 'fallback';
+          const rate = d.profitRate > 1 ? d.profitRate : d.profitRate * 100;
+          const pr = d.price !== undefined ? d.price : (d.sellingPrice || 0);
           return `<div class="bc${best?' best':''}">
             <div class="bt">${bt}${best?' ⭐':''}${fallback?' <span class="badge bg-yellow" title="套用伏特加報價">待更新</span>':''}</div>
             <div style="font-size:10px;color:var(--ink3);margin-bottom:1px;">售價</div>
-            <div class="bv">${fm(d.sellingPrice)}</div>
-            <div class="br">毛利率 ${nt(d.profitRate,1)}%</div>
+            <div class="bv">${fm(pr)}</div>
+            <div class="br">毛利率 ${nt(rate,1)}%</div>
             <div class="bt2">毛利 ${fm(d.profit)}</div>
             <div class="bt2">總成本(含稅) ${fm(d.totalCostTax)}</div>
           </div>`;
