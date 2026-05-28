@@ -380,7 +380,7 @@ async function doLogin() {
     clientList = [...new Set(recipeList.map(i => i.client))].map(n => ({ name: n }));
   }
   // 設定初始客戶
-  curClient = clientList[0]?.name || 'Feeling Bar Cafe';
+  curClient = clientList[0]?.name || 'Feeling Bar';
   document.getElementById('loginWrap').style.display = 'none';
   const app = document.getElementById('app');
   app.style.display = 'flex';
@@ -687,7 +687,7 @@ function showApplyModal() {
 // ② 毛利分析（v10：動態客戶清單）
 // ════════════════════════════════════════════════
 async function renderProfitPage(mc) {
-  const clients = clientList.length ? clientList.map(c=>c.name) : ['Feeling Bar Cafe','南坡萬公版'];
+  const clients = clientList.length ? clientList.map(c=>c.name) : ['Feeling Bar','南坡萬公版','Feeling Bar Cafe'];
   const cOpts = clients.map(c => `<option>${c}</option>`).join('');
   mc.innerHTML = `<div class="card">
     <div class="sec-hd"><div class="card-title" style="margin:0">毛利分析</div><button class="btn btn-ghost btn-sm" onclick="loadProfit(true)">↻ 刷新</button></div>
@@ -700,7 +700,7 @@ async function renderProfitPage(mc) {
 }
 async function loadProfit(force) {
   const el = document.getElementById('profitClient');
-  const client = el ? el.value : (clientList[0]?.name||'Feeling Bar Cafe');
+  const client = el ? el.value : (clientList[0]?.name||'Feeling Bar');
   if (force) C.profit[client] = null;
   if (!C.profit[client]) {
     const res = await api({ action:'getProfitData', client });
@@ -834,7 +834,7 @@ async function renderRdPage(mc) {
   const botOpts = Object.keys(BSPEC).map(b=>`<option${b===bt?' selected':''}>${b}</option>`).join('');
   const cats = [...new Set((C.inv||[]).map(i=>i.category))];
   const catOpts = cats.map(c=>`<option>${c}</option>`).join('');
-  const cliOpts = (clientList.length?clientList.map(c=>c.name):['Feeling Bar Cafe','南坡萬公版']).map(c=>`<option${c===client?' selected':''}>${c}</option>`).join('');
+  const cliOpts = (clientList.length?clientList.map(c=>c.name):['Feeling Bar','南坡萬公版','Feeling Bar Cafe']).map(c=>`<option${c===client?' selected':''}>${c}</option>`).join('');
   mc.innerHTML = `
   <div class="card" style="margin-bottom:10px;">
     <div class="card-title">研發試算</div>
@@ -1168,10 +1168,10 @@ function renderBatchList(mc) {
 }
 function showBatchModal(editIdx) {
   const r = editIdx !== undefined ? batchRecs[editIdx] : {};
-  const clients = clientList.length ? clientList.map(c=>c.name) : ['Feeling Bar Cafe','南坡萬公版'];
+  const clients = clientList.length ? clientList.map(c=>c.name) : ['Feeling Bar','南坡萬公版','Feeling Bar Cafe'];
   const cOpts = clients.map(c=>`<option${r.client===c?' selected':''}>${c}</option>`).join('');
   const botOpts = Object.keys(BSPEC).map(b=>`<option${r.bottle===b?' selected':''}>${b}</option>`).join('');
-  const initClient = r.client || clients[0] || 'Feeling Bar Cafe';
+  const initClient = r.client || clients[0] || 'Feeling Bar';
   const recOpts = recipeList.filter(i=>i.client===initClient).map(i=>`<option${r.recipe===i.recipeName?' selected':''}>${i.recipeName}</option>`).join('');
   // PM 預設登入帳號
   const pmDefault = r.pm || curUser?.username || '';
