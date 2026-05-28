@@ -192,7 +192,7 @@ tbody tr:hover td{background:#faf3e8;}
 .mat-list{font-size:13px;}
 .mat-row{display:flex;gap:0;padding:5px 0;border-bottom:1px solid var(--border);}
 .mat-row:last-child{border-bottom:none;}
-.mat-row>span{flex:1;}
+.mat-row>span{flex:1;min-width:0;}.mat-row>span:first-child{flex:2;}
 .mat-row.hd{font-size:11px;color:var(--ink3);font-weight:600;}
 .mat-row.tot>span:first-child{font-weight:600;color:var(--gold-dk);}
 /* ── 研發試算 ── */
@@ -300,7 +300,7 @@ async function api(params, silent) {
 let curUser = null, curClient = '', curSheet = '', rdata = null, curTab = 'recipe';
 let recipeList = [], clientList = [];
 const C = { inv: null, profit: {}, recipes: {}, batch: null };
-let rdState = { ings: [], tv: 4000, bt: '4L桶', title: '', client: '' };
+let rdState = { ings: [], tv: 4000, bt: '4L桶', title: '', client: '', matSel: {} };
 
 // ── 瓶型規格（volFill=實際裝填，volLabel=報價顯示）───────────
 const BSPEC = {
@@ -391,7 +391,7 @@ async function doLogin() {
 function doLogout() {
   curUser = null; rdata = null; curSheet = '';
   Object.assign(C, { inv:null, profit:{}, recipes:{}, batch:null });
-  recipeList = []; rdState = { ings:[], tv:4000, bt:'4L桶', title:'', client:'' };
+  recipeList = []; rdState = { ings:[], tv:4000, bt:'4L桶', title:'', client:'', matSel:{} };
   document.getElementById('app').style.display = 'none';
   document.getElementById('loginWrap').style.display = 'flex';
   document.getElementById('loginPass').value = '';
@@ -629,7 +629,9 @@ function recalcRecipe(restore) {
       const ve = document.getElementById('rv_'+idx); if (ve) ve.value = nt(tv*pct/100, 0);
     }
     const vol = tv * pct / 100;
-    const unitCost = ing.cost / (ing.vol || 1);
+    const _oV = ing._origVol  !== undefined ? ing._origVol  : (ing.vol  || 0);
+    const _oC = ing._origCost !== undefined ? ing._origCost : (ing.cost || 0);
+    const unitCost = _oV > 0 ? _oC / _oV : 0;
     ing._curCost = unitCost * vol;
     const cc = document.getElementById('rc_'+idx); if (cc) cc.textContent = fm(ing._curCost);
   });
@@ -640,7 +642,7 @@ function toRd() {
   rdState = { ings:[], tv:rdata.totalVol||4000, bt:'4L桶', title:rdata.recipeName||rdata._dn||'', client:curClient };
   rdata.ingredients.forEach((ing, idx) => {
     const pct = parseFloat(document.getElementById('rp_'+idx)?.value) || ing.pct;
-    rdState.ings.push({ type:'single', name:ing.name, brand:'', abv:ing.abv||0, price:0, unitVol:0, ratio:pct, volume:rdata.totalVol*pct/100, hasLoss:false, isManual:false, _cost:ing.cost, _vol:ing.vol });
+    rdState.ings.push({ type:'single', name:ing.name, brand:'', abv: ing._abvActual !== undefined ? ing._abvActual : (ing.abv||0), price:0, unitVol:0, ratio:pct, volume:rdata.totalVol*pct/100, hasLoss:false, isManual:false, _cost:ing.cost, _vol:ing.vol });
   });
   switchTab('rd');
   toast('已帶入研發試算');
@@ -704,8 +706,9 @@ function renderProfitData(res) {
   const data = res.list || [];
   if (!data.length) { area.innerHTML='<div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">無資料</div>'; return; }
 
-  // 判斷是 FB（4L桶）還是多瓶型
-  const hasFB = data.every(d => d.bottle === '4L桶');
+  // 用 client 名稱判斷 FB 系（FeelingBar/FBM）vs 南坡萬多瓶型
+  // 不依賴 GAS 是否回傳 bottle 欄位
+  const hasFB = /feeling|^fb/i.test(res.client || '') || data.every(d => (d.bottle || '4L桶') === '4L桶');
   if (hasFB) {
     const sorted = [...data].sort((a,b) => b.profitRate - a.profitRate);
     area.innerHTML = '<div class="profit-grid">' + sorted.map(d => `<div class="pc">
@@ -833,7 +836,7 @@ async function renderRdPage(mc) {
     </div>
     <div class="form-row">
       <div class="fg" style="flex:0 0 110px"><label>製作總體積 ml</label><input class="inp" type="number" id="rd_tv" value="${tv}" oninput="rdState.tv=parseFloat(this.value)||4000;rdCalc()" style="margin:0;font-size:13px;"></div>
-      <div class="fg" style="flex:0 0 105px"><label>瓶型</label><select id="rd_bt" onchange="rdState.bt=this.value;rdUpdateMat();rdCalc()">${botOpts}</select></div>
+      <div class="fg" style="flex:0 0 105px"><label>瓶型</label><select id="rd_bt" onchange="rdState.bt=this.value;rdState.matSel={};rdUpdateMat()">${botOpts}</select></div>
     </div>
   </div>
 
@@ -885,17 +888,49 @@ function rdUpdateMat() {
   const accs = BOTTLE_ACCESSORIES[bt] || [];
   const spec = BSPEC[bt];
   const el = document.getElementById('rd_mat_list'); if (!el) return;
-  // 計算資材成本（per batch，依裝瓶數）
-  const btls = Math.floor((rdState.tv||4000) / spec.volFill);
-  const baseMat = (spec.cont + spec.lab) * btls;
-  const laborMat = spec.labor * btls;
+  const btls = Math.floor((rdState.tv || 4000) / spec.volFill);
+  // 初始化 matSel：必選自動 true，選配若未設定預設 false
+  accs.forEach(a => {
+    const k = bt + '_' + a.id;
+    if (a.alwaysOn) rdState.matSel[k] = true;
+    else if (rdState.matSel[k] === undefined) rdState.matSel[k] = false;
+  });
+  const rows = accs.map(a => {
+    const k = bt + '_' + a.id;
+    const chk = rdState.matSel[k];
+    const amt = chk && a.price > 0 ? fm(a.price * btls) : '—';
+    if (a.alwaysOn) {
+      return `<div class="mat-row">
+        <span>${a.label}</span><span>${a.price > 0 ? fm(a.price) : '含'}</span>
+        <span style="color:var(--gold-dk);">✓</span><span>${a.price > 0 ? fm(a.price * btls) : '—'}</span>
+      </div>`;
+    }
+    return `<div class="mat-row">
+      <span>${a.label}</span><span>${fm(a.price)}</span>
+      <span><label style="display:flex;align-items:center;gap:3px;cursor:pointer;">
+        <input type="checkbox" ${chk ? 'checked' : ''}
+          style="width:14px;height:14px;accent-color:var(--gold-dk);cursor:pointer;"
+          onchange="rdState.matSel['${k}']=this.checked;rdUpdateMat()">勾選
+      </label></span>
+      <span id="rma_${a.id}">${amt}</span>
+    </div>`;
+  }).join('');
   el.innerHTML = `
     <div class="mat-list">
-      <div class="mat-row hd"><span>配件</span><span>單價/瓶</span><span>批次合計</span></div>
-      <div class="mat-row"><span>瓶身</span><span>${fm(spec.cont)}</span><span>${fm(spec.cont*btls)}</span></div>
-      ${accs.map(a=>`<div class="mat-row"><span>${a.label}</span><span>${a.price>0?fm(a.price):'—'}</span><span>${a.price>0?fm(a.price*btls):'—'}</span></div>`).join('')}
-      <div class="mat-row"><span>代工費</span><span>${fm(spec.labor)}</span><span>${fm(laborMat)}</span></div>
-      <div class="mat-row tot"><span>資材小計（×1.05）</span><span></span><span>${fm((baseMat+laborMat)*1.05)}</span></div>
+      <div class="mat-row hd"><span>配件</span><span>單價/瓶</span><span>選配</span><span>批次合計</span></div>
+      <div class="mat-row">
+        <span>瓶身</span><span>${fm(spec.cont)}</span>
+        <span style="color:var(--gold-dk);">✓</span><span>${fm(spec.cont * btls)}</span>
+      </div>
+      ${rows}
+      <div class="mat-row">
+        <span>代工費</span><span>${fm(spec.labor)}</span>
+        <span style="color:var(--gold-dk);">✓</span><span>${fm(spec.labor * btls)}</span>
+      </div>
+      <div class="mat-row tot">
+        <span>資材小計（×1.05）</span><span></span><span></span>
+        <span id="rd_mat_tot">—</span>
+      </div>
     </div>
     <div class="sub" style="margin-top:4px;font-size:11px;">裝瓶數：${btls}瓶</div>`;
   rdCalc();
@@ -1027,8 +1062,18 @@ function rdCalc() {
   const quote = totalCost * 1.15;
   const spec = BSPEC[rdState.bt] || BSPEC['4L桶'];
   const btls = Math.floor(rdState.tv / spec.volFill);
-  const matCost = (spec.cont + spec.lab + spec.labor) * btls * 1.05; // 資材含稅
+  // 資材：瓶身 + 必選/勾選配件 + 代工費，×1.05
+  const _rbt = rdState.bt || '4L桶';
+  const _raccs = BOTTLE_ACCESSORIES[_rbt] || [];
+  let _perBottle = spec.cont + spec.labor;
+  _raccs.forEach(a => {
+    const _k = _rbt + '_' + a.id;
+    if ((a.alwaysOn || rdState.matSel[_k]) && a.price > 0) _perBottle += a.price;
+  });
+  const matCost = _perBottle * btls * 1.05;
   const totalAll = totalCost + tax + matCost;
+  const _tot = document.getElementById('rd_mat_tot');
+  if (_tot) _tot.textContent = fm(matCost);
   const sum = document.getElementById('rd_sum');
   if (sum) sum.innerHTML = [
     { lb:'預估酒精濃度', vl:nt(abv,1)+'%' },
