@@ -465,7 +465,7 @@ function renderRecipeDetail(area) {
   if (!rdata) return;
   // 前端自行計算 ABV（GAS回傳的 rdata.abv 有bug），公式：Σ(ing.abv × ing.pct) / 100
   const abv = Math.round(
-    (rdata.ingredients || []).reduce(function(s,ing){ return s + (ing.abv||0)*(ing.pct||0)/100; }, 0)
+    (rdata.ingredients || []).reduce(function(s,ing){ return s + (ing.abv||0)*(ing.pct||0)/100*(ing.pct||0)/100; }, 0)
     * 10) / 10;
   const cost = rdata.ingredientCost || 0, tax = rdata.tax || 0;
   const quote = Math.round(cost * 1.15 * 100) / 100, tv = rdata.totalVol || 0;
@@ -531,7 +531,9 @@ function renderRecipeDetail(area) {
     ing._origPct  = ing.pct;
     ing._origVol  = ing.vol || 0;   // 原始體積（ml）
     ing._origCost = ing.cost || 0;  // 原始成本（已是該原料批次成本）
-    // ing.abv = 原料本身ABV（如40度酒精 → abv=40），直接使用，不需轉換
+    // D欄(ing.abv) = 原料本身ABV ÷ B欄比例，故原料本身ABV = ing.abv × (ing.pct/100)
+    // 例：ing.abv=200, ing.pct=20 → 原料ABV = 200×0.20 = 40%
+    ing._abvActual = (ing.abv || 0) * (ing.pct || 0) / 100;
 
 
   });
@@ -579,7 +581,7 @@ function recalcSummary() {
     const vol = parseFloat(document.getElementById('rv_'+idx)?.value) || 0;
     const cost = ing._curCost !== undefined ? ing._curCost : ing.cost;
     totalCost += cost;
-    totalAbv += (ing.abv || 0) * (pct / 100);  // abv=原料本身ABV
+    totalAbv += (ing._abvActual !== undefined ? ing._abvActual : (ing.abv||0) * (ing.pct||0)/100) * (pct / 100);
     totalPct += pct;
   });
   const abv = Math.round(totalAbv * 10) / 10;
@@ -634,7 +636,7 @@ function renderAbvDebug() {
     const domPct = parseFloat(document.getElementById('rp_'+idx) ? document.getElementById('rp_'+idx).value : ing.pct) || 0;
     const rawAbv = ing.abv || 0;
     const rawPct = ing.pct || 0;
-    const act    = rawAbv;  // ing.abv = 原料本身ABV
+    const act = rawAbv * rawPct / 100;  // 原料本身ABV = D欄×原始占比/100
     const contrib = act * domPct / 100;
     calcAbv += contrib;
     return '<tr>'
