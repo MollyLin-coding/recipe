@@ -289,11 +289,12 @@ function getProfitData(p) {
       const abv = parseFloat(row[1]) || 0;
       const capStr = String(row[2] || '').trim();
       const cap = parseInt(capStr) || 0;
-      const totalCostTax = parseFloat(row[3]) || 0;
-      const price = parseFloat(row[5]) || 0;
+      const price        = parseFloat(row[3]) || 0; // D欄含稅單價 = 售價
+      const totalCostTax = parseFloat(row[4]) || 0; // E欄成本
       if (!cap || !price) continue;
-      // 找對應酒譜分頁計算總成本
-      list.push({ recipeName: nm, bottle: capStr, price, abv, totalCostTax });
+      const profit     = Math.round((price - totalCostTax) * 100) / 100;
+      const profitRate = price > 0 ? Math.round(profit / price * 1000) / 10 : 0;
+      list.push({ recipeName: nm, bottle: capStr, price, abv, totalCostTax, profit, profitRate });
     }
   } else {
     // FB / FBC
