@@ -308,6 +308,8 @@ const BSPEC = {
   '伏特加': { vol:500, volFill:500, volLabel:500, cont:46, lab:3, labor:15 },
   '波士頓': { vol:500, volFill:500, volLabel:500, cont:15, lab:1, labor:10 },
   '4L桶':   { vol:4000,volFill:4000,volLabel:4000,cont:0,  lab:1, labor:3  },
+  '山形瓶': { vol:100, volFill:100, volLabel:100, cont:25, lab:3, labor:5  },
+  '雷神瓶': { vol:500, volFill:500, volLabel:500, cont:60, lab:3, labor:15 },
 };
 
 // 瓶型對應配件（onchange 動態顯示）
@@ -329,6 +331,16 @@ const BOTTLE_ACCESSORIES = {
   '4L桶': [
     { id:'cap',   label:'桶蓋',                  price:0,   alwaysOn:true  },
     { id:'label', label:'標籤（NT$1/瓶，自行打印）',price:1, alwaysOn:true  },
+  ],
+  '山形瓶': [
+    { id:'cap',   label:'瓶蓋',                  price:0,   alwaysOn:true  },
+    { id:'front', label:'前標貼（NT$1.5/瓶）',    price:1.5, alwaysOn:false },
+    { id:'back',  label:'後標貼（NT$1.5/瓶）',    price:1.5, alwaysOn:false },
+  ],
+  '雷神瓶': [
+    { id:'cap',   label:'瓶蓋',                  price:0,   alwaysOn:true  },
+    { id:'front', label:'前標貼（NT$1.5/瓶）',    price:1.5, alwaysOn:false },
+    { id:'back',  label:'後標貼（NT$1.5/瓶）',    price:1.5, alwaysOn:false },
   ],
 };
 
