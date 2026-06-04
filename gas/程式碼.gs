@@ -11,6 +11,7 @@ const SHEETS = {
   'Feeling Bar':     '1WwCsC2SvLqWmGFPrwzM8pYLx3DpF3VM_3srfksWfza4',
   '南坡萬公版':       '1X6euYjrRz72Fms8B3lvWjAhcJ81AlLp9BgnB_7zW1pU',
   'Feeling Bar Cafe':'14vso62AkYRubqKVsgWBMpHS79KkEgbXFkdnPdrodckE',
+  '南坡萬v.2':        '1xqU8y-RnoUIWq-M9J-E8EdCzC0uKqfHC',
 };
 const MAIN_SHEET_ID = '1rXmA0ACRwy4jo3XEkXHZzNjJw8uZzX1jzVle-6k0V40';
 
@@ -29,7 +30,8 @@ function isRecipeSheet(name) {
   return (
     /^(0?FB_)/i.test(name) ||
     /^NO1_/i.test(name) ||
-    /^FBC_/i.test(name)
+    /^FBC_/i.test(name) ||
+    /^NO1\.V2_/i.test(name)
   ) && name.indexOf('毛利') < 0 && name.indexOf('報價') < 0;
 }
 
@@ -38,6 +40,7 @@ function getProfitSheetName(client) {
   if (client === 'Feeling Bar') return 'FB_毛利報價分析';
   if (client === '南坡萬公版') return 'NO1_報價毛利分析';
   if (client === 'Feeling Bar Cafe') return 'FBC_毛利報價分析';
+  if (client === '南坡萬v.2') return 'NO1.V2_報價';
   throw new Error('未知客戶: ' + client);
 }
 
@@ -127,7 +130,7 @@ function getRecipeList() {
         } catch(e) {}
         if (!recipeName) {
           // 從分頁名稱去掉前綴
-          recipeName = name.replace(/^(0?FB_|NO1_|FBC_)/i, '');
+          recipeName = name.replace(/^(0?FB_|NO1_|FBC_|NO1\.V2_)/i, '');
         }
         list.push({ client, sheet: name, recipeName });
       }
@@ -277,7 +280,7 @@ function getProfitData(p) {
 
   // FB/FBC 格式: A=酒款名稱, B=售價, C=容量, D=4L總成本
   // NO1 格式: A=品名, B=ABV, C=容量字串, D=含稅單價（兩列一組）
-  const isNO1 = client === '南坡萬公版';
+  const isNO1 = client === '南坡萬公版' || client === '南坡萬v.2';
 
   if (isNO1) {
     let lastNm = '';
