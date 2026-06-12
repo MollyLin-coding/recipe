@@ -876,7 +876,7 @@ async function renderRdPage(mc) {
       <div class="fg" style="flex:0 0 130px"><label>客戶</label><select id="rd_client" onchange="rdState.client=this.value">${cliOpts}</select></div>
     </div>
     <div class="form-row">
-      <div class="fg" style="flex:0 0 110px"><label>製作總體積 ml</label><input class="inp" type="number" id="rd_tv" value="${tv}" oninput="rdState.tv=parseFloat(this.value)||4000;rdCalc()" style="margin:0;font-size:13px;"></div>
+      <div class="fg" style="flex:0 0 110px"><label>製作總體積 ml</label><input class="inp" type="number" id="rd_tv" value="${tv}" oninput="rdTvChange(this.value)" style="margin:0;font-size:13px;"></div>
       <div class="fg" style="flex:0 0 105px"><label>瓶型</label><select id="rd_bt" onchange="rdState.bt=this.value;rdState.matSel={};rdUpdateMat()">${botOpts}</select></div>
     </div>
   </div>
@@ -976,6 +976,14 @@ function rdUpdateMat() {
     <div class="sub" style="margin-top:4px;font-size:11px;">裝瓶數：${btls}瓶</div>`;
   rdCalc();
 }
+// P1(v9.5):占比為準 — 改總體積時單一原料用量依占比自動縮放(複合子原料維持絕對ml,其占比由rdCalc自動重算)
+function rdTvChange(v) {
+  rdState.tv = parseFloat(v) || 4000;
+  rdState.ings.forEach(ing => {
+    if (ing.type !== 'compound' && (ing.ratio || 0) > 0) ing.volume = rdState.tv * ing.ratio / 100;
+  });
+  rdRender(); rdCalc();
+}
 function rdCatChange() {
   document.getElementById('rd_kw').value = '';
   rdDrop();
@@ -1000,10 +1008,16 @@ function rdPick(item) {
   document.getElementById('rd_kw').value = '';
   document.getElementById('rd_drop')?.classList.remove('open');
   rdRender(); rdCalc();
+  // P3(v9.5):加入後自動捲動並聚焦占比輸入框(手機免捲動找卡片)
+  const _ni = rdState.ings.length - 1;
+  setTimeout(() => { const _inp = document.getElementById('rdr_'+_ni);
+    if (_inp) { _inp.scrollIntoView({behavior:'smooth', block:'center'}); _inp.focus(); } }, 80);
 }
 function rdAddManual() {
   rdState.ings.push({ type:'single', name:'', brand:'', abv:0, price:0, unitVol:0, ratio:0, volume:0, hasLoss:false, isManual:true });
   rdRender(); rdCalc();
+  setTimeout(() => { const _ins = document.querySelectorAll('.ing-name-i'); const _l = _ins[_ins.length-1];
+    if (_l) { _l.scrollIntoView({behavior:'smooth', block:'center'}); _l.focus(); } }, 80);
 }
 function rdAddCompound() {
   rdState.ings.push({ type:'compound', name:'複合原料', subs:[], hasLoss:false });
@@ -1053,7 +1067,7 @@ function rdRender() {
           <div class="if"><label>容量ml</label><input type="number" value="${ing.unitVol}" oninput="${ref}.unitVol=parseFloat(this.value)||0;rdCalc()" style="width:65px;"></div>
         </div>`:''}
         <div class="ic-r2">
-          <div class="if"><label>占比%</label><input type="number" value="${nt(ing.ratio)}" oninput="${ref}.ratio=parseFloat(this.value)||0;${ref}.volume=rdState.tv*(parseFloat(this.value)||0)/100;document.getElementById('rdv_${i}').value=nt(${ref}.volume,0);rdCalc()" style="width:65px;"></div>
+          <div class="if"><label>占比%</label><input type="number" id="rdr_${i}" value="${nt(ing.ratio)}" oninput="${ref}.ratio=parseFloat(this.value)||0;${ref}.volume=rdState.tv*(parseFloat(this.value)||0)/100;document.getElementById('rdv_${i}').value=nt(${ref}.volume,0);rdCalc()" style="width:65px;"></div>
           <span style="font-size:11px;color:var(--ink3);">↔</span>
           <div class="if"><label>用量ml</label><input type="number" value="${nt(ing.volume,0)}" id="rdv_${i}" oninput="${ref}.volume=parseFloat(this.value)||0;${ref}.ratio=rdState.tv>0?(parseFloat(this.value)||0)/rdState.tv*100:0;rdCalc()" style="width:65px;"></div>
           ${!ing.isManual?`<label style="display:flex;align-items:center;gap:3px;font-size:11px;"><input type="checkbox" ${ing.hasLoss?'checked':''} onchange="${ref}.hasLoss=this.checked;rdCalc()">耗損</label>`:''}
@@ -1065,12 +1079,23 @@ function rdRender() {
 function rdAddSubDrop(pi) {
   const drop = document.getElementById('sdrop_'+pi); if (!drop) return;
   drop.classList.toggle('open');
-  const inv = C.inv || [];
-  drop.innerHTML = inv.slice(0,30).map(item =>
+  if (!drop.classList.contains('open')) return;
+  // P2(v9.5):子原料可搜尋全部原料庫(原本只列前30筆且無搜尋,254筆大多選不到)
+  drop.innerHTML = `<div style="padding:6px;position:sticky;top:0;background:var(--card,#fff);z-index:1;">
+      <input class="inp" id="sdkw_${pi}" placeholder="搜尋品名/品牌…" autocomplete="off" style="margin:0;font-size:13px;" oninput="rdSubDropList(${pi})" onclick="event.stopPropagation()">
+    </div><div id="sdlist_${pi}"></div>`;
+  rdSubDropList(pi);
+  setTimeout(() => document.getElementById('sdkw_'+pi)?.focus(), 60);
+}
+function rdSubDropList(pi) {
+  const el = document.getElementById('sdlist_'+pi); if (!el) return;
+  const kw = (document.getElementById('sdkw_'+pi)?.value || '').trim().toLowerCase();
+  const list = (C.inv || []).filter(i => !kw || i.name.toLowerCase().includes(kw) || (i.brand||'').toLowerCase().includes(kw));
+  el.innerHTML = list.slice(0,30).map(item =>
     `<div class="sd-item" onclick="rdPickSub(${pi},${JSON.stringify(item).replace(/"/g,'&quot;')})">
       <div class="sd-name">${item.brand?item.brand+'｜':''}${item.name}</div>
       <div class="sd-sub">${item.category||''} · ${fm0(item.price)}/${item.vol?nt(item.vol,0)+'ml':'—'}</div>
-    </div>`).join('');
+    </div>`).join('') || '<div style="padding:10px;font-size:12px;color:var(--ink3);text-align:center;">無符合原料</div>';
 }
 function rdPickSub(pi, item) {
   rdState.ings[pi].subs.push({ type:'single', name:item.name, brand:item.brand||'', abv:item.abv||0, price:item.price||0, unitVol:item.vol||0, unitCost:invUC(item), volume:0, hasLoss:false, isManual:false });
