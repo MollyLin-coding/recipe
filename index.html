@@ -1129,7 +1129,8 @@ function rdCalc() {
     { lb:'總成本',       vl:fm(totalAll), hi:true },
   ].map(({lb,vl,hi}) => `<div class="rs"><div class="lb">${lb}</div><div class="vl${hi?' hi':''}">${vl}</div></div>`).join('');
   window._rdRes = { abv, tax, totalCost, quote, matCost, totalAll, btls };
-  rdUpdateMat(); // 同步更新資材區塊
+  // 防重入鎖：rdUpdateMat 結尾會回呼 rdCalc，無鎖會無限遞迴爆栈（v9.3 既有bug）
+  if (!window._inMatSync) { window._inMatSync = true; try { rdUpdateMat(); } finally { window._inMatSync = false; } }
 }
 async function rdSave() {
   if (!rdState.ings.length) { toast('請先加入原料'); return; }
