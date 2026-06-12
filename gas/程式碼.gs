@@ -113,6 +113,9 @@ function changePassword(p) {
 
 // ── 酒譜清單 ─────────────────────────────────────────────────
 function getRecipeList() {
+  const cache = CacheService.getScriptCache();
+  const cached = cache.get('recipeList_v1');
+  if (cached) return JSON.parse(cached);
   const list = [];
   for (const client of Object.keys(SHEETS)) {
     try {
@@ -138,7 +141,9 @@ function getRecipeList() {
       // 單一客戶錯誤不影響其他
     }
   }
-  return { ok: true, list };
+  const result = { ok: true, list };
+  cache.put('recipeList_v1', JSON.stringify(result), 300);
+  return result;
 }
 
 // ── 單一酒譜 ─────────────────────────────────────────────────
@@ -234,9 +239,21 @@ function saveProcessNote(p) {
 }
 
 // ── 原料庫 ───────────────────────────────────────────────────
+// ── 固體原料判讀（兩層）─────────────────────────────────────
+// 第1層：K欄明確標記（1/true/是/✓/v/y → 固體；0/否/x/n → 非固體，可覆寫分類預設）
+// 第2層：K欄空白時依大分類預設（2026-06-12 實機資料驗證，與既有54筆固體標記100%一致）
+const SOLID_CATEGORIES = ['新鮮/乾燥花草','配料/蜜餞','香料','木頭','茶葉/茶包'];
+function detectSolid(kCell, category) {
+  if (kCell === true) return true; // checkbox 勾選
+  const k = String(kCell == null ? '' : kCell).trim().toLowerCase();
+  if (k === '1' || k === 'true' || k === '是' || k === '✓' || k === 'v' || k === 'y') return true;
+  if (k === '0' || k === '否' || k === 'x' || k === 'n') return false;
+  return SOLID_CATEGORIES.indexOf(category) >= 0;
+}
+
 function getInventory() {
   const cache = CacheService.getScriptCache();
-  const cached = cache.get('inventory_v1');
+  const cached = cache.get('inventory_v2');
   if (cached) return JSON.parse(cached);
 
   const ss = SpreadsheetApp.openById('1uadQOdbLBmbNFfPKaiqy_QFQ0Lcw79nmojmvis66kKE');
@@ -254,15 +271,17 @@ function getInventory() {
     const name = String(row[2] || '').trim();
     const abv = parseFloat(row[3]) || 0;
     const price = parseFloat(row[4]) || 0;
-    const vol = parseFloat(row[5]) || 0;
-    const unitCost = parseFloat(row[6]) || 0;
+    const vol = parseFloat(row[5]) || 0;             // F欄：容量ml
+    let unitCost = parseFloat(row[6]) || 0;          // G欄：每ml單價
+    if (!unitCost && price > 0 && vol > 0) unitCost = price / vol; // G欄空白時自動補算
     const platform = String(row[7] || '').trim();
-    const isSolid = String(row[10] || '').trim() === '1';
     if (!name) continue;
-    items.push({ category: a !== name ? a : curCat, brand, name, abv, price, vol, unit: unitCost, platform, isSolid });
+    const category = a !== name ? a : curCat;
+    const isSolid = detectSolid(row[10], category);  // K欄 + 分類兩層判讀
+    items.push({ category, brand, name, abv, price, vol, unitCost, unit: unitCost, platform, isSolid });
   }
   const result = { ok: true, items };
-  cache.put('inventory_v1', JSON.stringify(result), 300);
+  cache.put('inventory_v2', JSON.stringify(result), 300);
   return result;
 }
 
@@ -309,8 +328,8 @@ function getProfitData(p) {
       const cap = parseFloat(row[2]) || 0;
       const totalCostTax = parseFloat(row[3]) || 0;
       if (!price) continue;
-      const profit = price - totalCostTax;
-      const profitRate = price > 0 ? profit / price : 0;
+      const profit = Math.round((price - totalCostTax) * 100) / 100;
+      const profitRate = price > 0 ? Math.round(profit / price * 1000) / 10 : 0; // 百分比整數（55.1），與NO1分支統一
       list.push({ recipeName: nm, bottle: '4L桶', price, cap, totalCostTax, profit, profitRate });
     }
   }
