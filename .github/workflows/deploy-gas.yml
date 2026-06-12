@@ -2,26 +2,52 @@ name: Deploy GAS
 
 on:
   push:
+    branches: [main]
     paths:
       - 'gas/**'
-    branches:
-      - main
+      - '.github/workflows/deploy-gas.yml'
+  workflow_dispatch: {}
+
+concurrency:
+  group: gas-deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-      - name: Install clasp
-        run: npm install -g @google/clasp
+          node-version: 20
+
+      - name: Install clasp (pin 2.4.2，與本機 .clasprc.json 格式相容)
+        run: npm install -g @google/clasp@2.4.2
+
       - name: Write clasp credentials
-        run: echo '${{ secrets.CLASP_RC }}' > ~/.clasprc.json
-      - name: Push to GAS
-        working-directory: gas
-        run: clasp push --force
-      - name: Deploy
-        working-directory: gas
-        run: clasp deploy --deploymentId "${{ secrets.DEPLOYMENT_ID }}"
+        env:
+          CLASPRC: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          if [ -z "$CLASPRC" ]; then
+            echo "::error::缺少 Secret CLASPRC_JSON（repo Settings → Secrets → Actions 新增，內容為本機 .clasprc.json 全文）"
+            exit 1
+          fi
+          echo "$CLASPRC" > ~/.clasprc.json
+
+      - name: Prepare build dir
+        run: |
+          if [ ! -f "gas/appsscript.json" ]; then
+            echo "::error::repo 缺少 gas/appsscript.json（manifest），請先補上"
+            exit 1
+          fi
+          mkdir -p build
+          cp "gas/程式碼.gs" "build/程式碼.js"
+          cp gas/appsscript.json build/appsscript.json
+          printf '%s\n' '{"scriptId":"1rZVFLOW4lYPQCRGZZYDqdMLAOEP5fzX_fpe--62lC3gFASBGEe7p1gH5","rootDir":"."}' > build/.clasp.json
+
+      - name: clasp push + deploy（固定 deploymentId，鐵則 Bug 11）
+        working-directory: build
+        run: |
+          clasp push --force
+          clasp deploy --deploymentId "AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5N4uT9RBaqAHiqWBPseCrSvKV3QnC9NK9S2MGnHQvJg" -d "auto ${GITHUB_SHA::8}"
