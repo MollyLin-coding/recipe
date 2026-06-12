@@ -22,23 +22,32 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install clasp (pin 2.4.2，與本機 .clasprc.json 格式相容)
-        run: npm install -g @google/clasp@2.4.2
-
       - name: Write clasp credentials
         env:
           CLASPRC: ${{ secrets.CLASPRC_JSON }}
         run: |
           if [ -z "$CLASPRC" ]; then
-            echo "::error::缺少 Secret CLASPRC_JSON（repo Settings → Secrets → Actions 新增，內容為本機 .clasprc.json 全文）"
+            echo "::error::缺少 Secret CLASPRC_JSON"
             exit 1
           fi
           echo "$CLASPRC" > ~/.clasprc.json
 
+      - name: Install clasp(依憑證格式自動選版本）
+        run: |
+          # v3 格式含 "tokens"，v2 格式含 "token"
+          if python3 -c "import json;d=json.load(open('$HOME/.clasprc.json'));exit(0 if 'tokens' in d else 1)"; then
+            echo "偵測到 clasp v3 憑證格式 → 安裝最新版"
+            npm install -g @google/clasp
+          else
+            echo "偵測到 clasp v2 憑證格式 → 安裝 2.4.2"
+            npm install -g @google/clasp@2.4.2
+          fi
+          clasp --version
+
       - name: Prepare build dir
         run: |
           if [ ! -f "gas/appsscript.json" ]; then
-            echo "::error::repo 缺少 gas/appsscript.json（manifest），請先補上"
+            echo "::error::repo 缺少 gas/appsscript.json"
             exit 1
           fi
           mkdir -p build
@@ -50,4 +59,4 @@ jobs:
         working-directory: build
         run: |
           clasp push --force
-          clasp deploy --deploymentId "AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5N4uT9RBaqAHiqWBPseCrSvKV3QnC9NK9S2MGnHQvJg" -d "auto ${GITHUB_SHA::8}"
+          clasp deploy --deploymentId "AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5N4uT9RBaqAHiqWBPseCrSvKV3QnC9NK9S2MGnHQvJg" --description "auto ${GITHUB_SHA::8}"
