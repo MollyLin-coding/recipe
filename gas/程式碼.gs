@@ -1,47 +1,78 @@
 // ============================================================
-// 南坡萬酒廠 GAS API v9.0
-// v9 新增：
-//   - getInventory: CacheService 快取 5 分鐘（速度提升）
-//   - getProfitData: 含稅 ×1.05，回傳 totalCostTax
-//   - 三家客戶：Feeling Bar / 南坡萬公版 / Feeling Bar Cafe
+// 南坡萬酒廠 GAS API v9.5
+// v9.5 架構重構：客戶設定集中化
+//   - CLIENTS 為客戶設定唯一資料來源（新增客戶只改這一處）
+//   - PROFIT_COLS 毛利欄位映射集中
+//   - SHEETS/isRecipeSheet/getProfitSheetName/去前綴/isNO1 全部派生
+//   - 函式簽名不變，前端無需改動
 // ============================================================
 
-// ── Sheet ID 設定 ────────────────────────────────────────────
-const SHEETS = {
-  'Feeling Bar':     '1WwCsC2SvLqWmGFPrwzM8pYLx3DpF3VM_3srfksWfza4',
-  '南坡萬公版':       '1X6euYjrRz72Fms8B3lvWjAhcJ81AlLp9BgnB_7zW1pU',
-  'Feeling Bar Cafe':'14vso62AkYRubqKVsgWBMpHS79KkEgbXFkdnPdrodckE',
-  '南坡萬v.2':        '1816K_4KJ-YTX3102TMw58po5QVrUFzy3tGhQPFjQLdE',
+// ── 客戶設定唯一資料來源（v9.5 集中化重構）──────────────────
+// ⚠️ 新增客戶只改 CLIENTS 這一個物件，其他全部自動派生
+const CLIENTS = {
+  'Feeling Bar': {
+    id: '1WwCsC2SvLqWmGFPrwzM8pYLx3DpF3VM_3srfksWfza4',
+    prefix: /^(0?FB_)/i,                 // 酒譜分頁前綴（isRecipeSheet 用）
+    strip:  /^0?FB_/i,                   // recipeName 去前綴
+    profitSheet: 'FB_毛利報價分析',
+    profitFmt: '4L',                     // 毛利格式：'4L' | 'two-bottle'
+  },
+  '南坡萬公版': {
+    id: '1X6euYjrRz72Fms8B3lvWjAhcJ81AlLp9BgnB_7zW1pU',
+    prefix: /^NO1_/i, strip: /^NO1_/i,
+    profitSheet: 'NO1_報價毛利分析', profitFmt: 'two-bottle',
+  },
+  'Feeling Bar Cafe': {
+    id: '14vso62AkYRubqKVsgWBMpHS79KkEgbXFkdnPdrodckE',
+    prefix: /^FBC_/i, strip: /^FBC_/i,
+    profitSheet: 'FBC_毛利報價分析', profitFmt: '4L',
+  },
+  '南坡萬v.2': {
+    id: '1816K_4KJ-YTX3102TMw58po5QVrUFzy3tGhQPFjQLdE',
+    prefix: /^NO1\.V2_/i, strip: /^NO1\.V2_/i,
+    profitSheet: 'NO1.V2_報價', profitFmt: 'two-bottle',
+  },
 };
 const MAIN_SHEET_ID = '1rXmA0ACRwy4jo3XEkXHZzNjJw8uZzX1jzVle-6k0V40';
 
-// 取得客戶對應的 Spreadsheet
-function getClientSS(client) {
-  const id = SHEETS[client];
-  if (!id) throw new Error('未知客戶: ' + client);
-  return SpreadsheetApp.openById(id);
+// 毛利欄位映射集中（實機確認值，v9.6 第十六節 / v9.9 第八節）
+// 4L：B欄=售價、D欄=總成本；two-bottle：D欄=含稅單價、E欄=成本、兩列式
+const PROFIT_COLS = {
+  '4L':         { price: 1, cost: 3 },
+  'two-bottle': { price: 3, cost: 4, twoRow: true },
+};
+
+// 取得客戶設定（唯一入口，未知客戶直接擋下）
+function getClientCfg(client) {
+  const cfg = CLIENTS[client];
+  if (!cfg) throw new Error('未知客戶: ' + client);
+  return cfg;
 }
 
-// ── 分頁篩選規則 ─────────────────────────────────────────────
-// FB:  FB_ 或 0FB_ 開頭，排除毛利/報價分頁
-// NO1: NO1_ 開頭，排除毛利/報價分頁
-// FBC: FBC_ 開頭，排除毛利/報價分頁
+// ── 以下全部從 CLIENTS 派生（函式簽名不變，前端不用動）──────
+function getClientSS(client) {
+  return SpreadsheetApp.openById(getClientCfg(client).id);
+}
+
+// 分頁篩選：符合任一客戶前綴，且排除毛利/報價分頁
 function isRecipeSheet(name) {
-  return (
-    /^(0?FB_)/i.test(name) ||
-    /^NO1_/i.test(name) ||
-    /^FBC_/i.test(name) ||
-    /^NO1\.V2_/i.test(name)
-  ) && name.indexOf('毛利') < 0 && name.indexOf('報價') < 0;
+  if (name.indexOf('毛利') >= 0 || name.indexOf('報價') >= 0) return false;
+  return Object.keys(CLIENTS).some(function(c) {
+    return CLIENTS[c].prefix.test(name);
+  });
 }
 
 // 毛利分析分頁名稱
 function getProfitSheetName(client) {
-  if (client === 'Feeling Bar') return 'FB_毛利報價分析';
-  if (client === '南坡萬公版') return 'NO1_報價毛利分析';
-  if (client === 'Feeling Bar Cafe') return 'FBC_毛利報價分析';
-  if (client === '南坡萬v.2') return 'NO1.V2_報價';
-  throw new Error('未知客戶: ' + client);
+  return getClientCfg(client).profitSheet;
+}
+
+// 分頁名稱去前綴 → 酒款名稱
+function stripRecipePrefix(name) {
+  for (const c of Object.keys(CLIENTS)) {
+    if (CLIENTS[c].strip.test(name)) return name.replace(CLIENTS[c].strip, '');
+  }
+  return name;
 }
 
 // ── 入口 ────────────────────────────────────────────────────
@@ -117,7 +148,7 @@ function getRecipeList() {
   const cached = cache.get('recipeList_v1');
   if (cached) return JSON.parse(cached);
   const list = [];
-  for (const client of Object.keys(SHEETS)) {
+  for (const client of Object.keys(CLIENTS)) {
     try {
       const ss = getClientSS(client);
       const sheets = ss.getSheets();
@@ -133,7 +164,7 @@ function getRecipeList() {
         } catch(e) {}
         if (!recipeName) {
           // 從分頁名稱去掉前綴
-          recipeName = name.replace(/^(0?FB_|NO1_|FBC_|NO1\.V2_)/i, '');
+          recipeName = stripRecipePrefix(name);
         }
         list.push({ client, sheet: name, recipeName });
       }
@@ -297,11 +328,11 @@ function getProfitData(p) {
   const rows = ws.getDataRange().getValues();
   const list = [];
 
-  // FB/FBC 格式: A=酒款名稱, B=售價, C=容量, D=4L總成本
-  // NO1 格式: A=品名, B=ABV, C=容量字串, D=含稅單價（兩列一組）
-  const isNO1 = client === '南坡萬公版' || client === '南坡萬v.2';
+  // 格式與欄位映射全部由 CLIENTS/PROFIT_COLS 派生，不再硬編碼客戶名
+  const cfg = getClientCfg(client);
+  const pc = PROFIT_COLS[cfg.profitFmt];
 
-  if (isNO1) {
+  if (pc.twoRow) {
     let lastNm = '';
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
@@ -311,8 +342,8 @@ function getProfitData(p) {
       const abv = parseFloat(row[1]) || 0;
       const capStr = String(row[2] || '').trim();
       const cap = parseInt(capStr) || 0;
-      const price        = parseFloat(row[3]) || 0; // D欄含稅單價 = 售價
-      const totalCostTax = parseFloat(row[4]) || 0; // E欄成本
+      const price        = parseFloat(row[pc.price]) || 0; // 含稅單價 = 售價
+      const totalCostTax = parseFloat(row[pc.cost]) || 0;  // 成本
       if (!cap || !price) continue;
       const profit     = Math.round((price - totalCostTax) * 100) / 100;
       const profitRate = price > 0 ? Math.round(profit / price * 1000) / 10 : 0;
@@ -324,9 +355,9 @@ function getProfitData(p) {
       const row = rows[i];
       const nm = String(row[0] || '').trim();
       if (!nm) continue;
-      const price = parseFloat(row[1]) || 0;
+      const price = parseFloat(row[pc.price]) || 0;
       const cap = parseFloat(row[2]) || 0;
-      const totalCostTax = parseFloat(row[3]) || 0;
+      const totalCostTax = parseFloat(row[pc.cost]) || 0;
       if (!price) continue;
       const profit = Math.round((price - totalCostTax) * 100) / 100;
       const profitRate = price > 0 ? Math.round(profit / price * 1000) / 10 : 0; // 百分比整數（55.1），與NO1分支統一
