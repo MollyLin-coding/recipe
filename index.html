@@ -349,6 +349,18 @@ function calcTax(abv, vol) {
 }
 function fm(v){ return 'NT$' + (Math.round((+v||0)*100)/100).toLocaleString('zh-TW',{minimumFractionDigits:0,maximumFractionDigits:2}); }
 function nt(v, d=0){ return Number(v||0).toFixed(d); }
+function fm0(v){ return 'NT$' + Math.round(+v||0).toLocaleString('zh-TW'); }
+// 每ml成本：優先用原料庫 unitCost（GAS算好），無則 price/vol 補算
+function invUC(item){ const uc=+(item.unitCost!==undefined?item.unitCost:item.unit)||0; if(uc>0) return uc; return (item.price>0&&item.vol>0)?item.price/item.vol:0; }
+// 試算每ml成本：選料原料用 unitCost；手動輸入用 單價/容量
+function rdCpm(ing){ if (+ing.unitCost > 0) return +ing.unitCost; return (ing.unitVol && ing.price) ? ing.price / ing.unitVol : 0; }
+// 寫入按鈕防連點：執行期間 disable + 顯示處理中
+async function lockRun(btn, fn){
+  if (!btn || btn.disabled) return;
+  const t = btn.textContent;
+  btn.disabled = true; btn.textContent = '處理中…';
+  try { await fn(); } finally { try { btn.disabled = false; btn.textContent = t; } catch(e){} }
+}
 
 // ── Toast ────────────────────────────────────────────────────
 function toast(msg, dur=2200) {
@@ -532,7 +544,7 @@ function renderRecipeDetail(area) {
     </div>
     <div class="sub" style="margin-bottom:5px;">製程備註</div>
     <textarea id="pnInput" class="inp" style="height:70px;resize:vertical;font-size:13px;">${rdata.processNote || ''}</textarea>
-    <div class="fe mt8"><button class="btn btn-primary btn-sm" onclick="saveNote()">儲存備註</button></div>`;
+    <div class="fe mt8"><button class="btn btn-primary btn-sm" onclick="lockRun(this, saveNote)">儲存備註</button></div>`;
 
   rdata._origTv = rdata.totalVol; // 記錄原始總體積供還原用
   (rdata.ingredients || []).forEach((ing, idx) => {
@@ -685,7 +697,8 @@ function showApplyModal() {
   const modal = makeModal(`<div class="modal-title">✏️ 更改申請 — ${rdata.recipeName||rdata._dn}</div>
     <div class="tbl-wrap" style="margin-bottom:12px;"><table><thead><tr><th>原料</th><th>現在%</th><th>新%</th><th>原因</th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="fe"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="apSub">送出</button></div>`);
-  modal.querySelector('#apSub').onclick = async () => {
+  const apBtn = modal.querySelector('#apSub');
+  apBtn.onclick = () => lockRun(apBtn, async () => {
     const items = rdata.ingredients.map((ing,i) => {
       const nr = document.getElementById('nr_'+i)?.value;
       return nr ? { name:ing.name, oldVal:ing.pct, newVal:parseFloat(nr), reason:document.getElementById('rs_'+i)?.value||'' } : null;
@@ -693,7 +706,7 @@ function showApplyModal() {
     if (!items.length) { toast('請至少填一筆'); return; }
     const res = await api({ action:'submitApply', creator:curUser.username, client:curClient, sheet:curSheet, recipe:rdata.recipeName||rdata._dn, items:JSON.stringify(items) });
     if (res.ok) { toast('申請已送出'); modal.remove(); } else toast('送出失敗:' + res.error);
-  };
+  });
 }
 
 // ════════════════════════════════════════════════
@@ -735,7 +748,7 @@ function renderProfitData(res) {
     area.innerHTML = '<div class="profit-grid">' + sorted.map(d => {
       const nm = d.recipeName || d.name || '';
       const pr = d.price !== undefined ? d.price : (d.sellingPrice || 0);
-      const rate = d.profitRate > 1 ? d.profitRate : d.profitRate * 100;
+      const rate = d.profitRate || 0;
       return `<div class="pc">
       <div class="pn">${nm}</div>
       <div style="font-size:11px;color:var(--ink3);margin-bottom:2px;">售價</div>
@@ -752,15 +765,15 @@ function renderProfitData(res) {
     const allBottles = [...new Set(data.map(d=>d.bottle))];
     area.innerHTML = Object.keys(byName).map(name => {
       const bottles = byName[name];
-      const maxRate = Math.max(...Object.values(bottles).map(b => (b.profitRate>1?b.profitRate:b.profitRate*100)||0));
+      const maxRate = Math.max(...Object.values(bottles).map(b => b.profitRate||0));
       return `<div class="gonban-item">
         <div class="gonban-name">${name}</div>
         <div class="bottle-row">${allBottles.map(bt => {
           const d = bottles[bt];
           if (!d) return `<div class="bc"><div class="bt">${bt}</div><div class="bv sub">—</div></div>`;
-          const best = (d.profitRate>1?d.profitRate:d.profitRate*100) === maxRate && maxRate > 0;
+          const best = (d.profitRate||0) === maxRate && maxRate > 0;
           const fallback = d.priceSource === 'fallback';
-          const rate = d.profitRate > 1 ? d.profitRate : d.profitRate * 100;
+          const rate = d.profitRate || 0;
           const pr = d.price !== undefined ? d.price : (d.sellingPrice || 0);
           return `<div class="bc${best?' best':''}">
             <div class="bt">${bt}${best?' ⭐':''}${fallback?' <span class="badge bg-yellow" title="套用伏特加報價">待更新</span>':''}</div>
@@ -823,7 +836,7 @@ function filterInv() {
     <thead><tr><th>品名 / 品牌</th><th class="tr">單價 / 容量 / ABV</th></tr></thead>
     <tbody>${list.map(i=>`<tr>
       <td><div style="font-weight:500;font-size:13px;">${i.name}</div><div class="sub">${i.brand||'—'} · ${i.category}${i.isSolid?' <span class="badge bg-yellow">固</span>':''}</div></td>
-      <td class="tr"><div style="font-size:13px;font-weight:500;">${fm(i.price)}</div><div class="sub">${i.unit||'—'}ml · ABV ${i.abv||0}%</div></td>
+      <td class="tr"><div style="font-size:13px;font-weight:500;">${fm0(i.price)}</div><div class="sub">${i.vol?nt(i.vol,0)+'ml':'—'}${invUC(i)>0?' · '+invUC(i).toFixed(2)+'/ml':''} · ABV ${i.abv||0}%</div></td>
     </tr>`).join('')}</tbody></table></div>`;
 }
 function renderMaterialCost() {
@@ -904,7 +917,7 @@ async function renderRdPage(mc) {
   </div>
 
   <div class="fe" style="gap:6px;margin-bottom:80px;">
-    <button class="btn btn-ghost btn-sm" onclick="rdSave()">💾 儲存</button>
+    <button class="btn btn-ghost btn-sm" onclick="lockRun(this, rdSave)">💾 儲存</button>
     <button class="btn btn-ghost btn-sm" onclick="rdLoadList()">📋 載入</button>
     <button class="btn btn-ghost btn-sm" onclick="rdExportCSV()">⬇ CSV</button>
   </div>`;
@@ -977,13 +990,13 @@ function rdDrop() {
   drop.classList.add('open');
   drop.innerHTML = list.slice(0,30).map(item =>
     `<div class="sd-item" onclick="rdPick(${JSON.stringify(item).replace(/"/g,'&quot;')})">
-      <div class="sd-name">${item.name}</div>
-      <div class="sd-sub">${item.brand||'—'} · ${fm(item.price)}/${item.unit||'—'}ml · ABV ${item.abv||0}%</div>
+      <div class="sd-name">${item.brand?item.brand+'｜':''}${item.name}</div>
+      <div class="sd-sub">${item.category||''} · ${fm0(item.price)}/${item.vol?nt(item.vol,0)+'ml':'—'} · ABV ${item.abv||0}%</div>
     </div>`).join('');
 }
 function rdPick(item) {
   const solid = item.isSolid;
-  rdState.ings.push({ type:'single', name:item.name, brand:item.brand||'', abv:item.abv||0, price:item.price||0, unitVol:item.unit||0, ratio:0, volume:0, hasLoss:solid, isManual:false });
+  rdState.ings.push({ type:'single', name:item.name, brand:item.brand||'', abv:item.abv||0, price:item.price||0, unitVol:item.vol||0, unitCost:invUC(item), ratio:0, volume:0, hasLoss:solid, isManual:false });
   document.getElementById('rd_kw').value = '';
   document.getElementById('rd_drop')?.classList.remove('open');
   rdRender(); rdCalc();
@@ -1007,9 +1020,9 @@ function rdRender() {
       const subsHtml = (ing.subs||[]).map((s,pi) => {
         const sr = `rdState.ings[${i}].subs[${pi}]`;
         return `<div class="sub-row">
-          <div class="sd-name" style="font-size:12px;">${s.name}</div>
+          <div class="sd-name" style="font-size:12px;">${s.brand?s.brand+'｜':''}${s.name}</div>
           <div class="if"><label>用量ml</label><input type="number" value="${s.volume||''}" id="rsv_${i}_${pi}" oninput="${sr}.volume=parseFloat(this.value)||0;rdCalc()" placeholder="ml" style="width:70px;"></div>
-          <div style="font-size:11px;color:var(--ink3);">${fm(((s.unitVol&&s.price)?s.price/s.unitVol:0)*(s.volume||0))}</div>
+          <div style="font-size:11px;color:var(--ink3);">${fm(rdCpm(s)*(s.volume||0))}</div>
           <button class="del-btn" onclick="${sr}=null;rdState.ings[${i}].subs=rdState.ings[${i}].subs.filter(Boolean);rdRender();rdCalc()">✕</button>
         </div>`;
       }).join('');
@@ -1021,7 +1034,7 @@ function rdRender() {
           <input class="cpd-name-i" value="${ing.name}" onchange="${ref}.name=this.value;rdCalc()">
           <button class="del-btn" onclick="rdDel(${i})">✕</button>
         </div>
-        <div id="rc_${i}" style="font-size:12px;color:var(--gold-dk);margin-bottom:4px;"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><div id="rc_${i}" style="font-size:12px;color:var(--gold-dk);"></div><div id="rcp_${i}" style="font-size:11px;color:var(--ink3);"></div></div>
         ${subsHtml}
         <button class="btn btn-ghost btn-sm" style="margin-top:4px;font-size:11px;" onclick="rdAddSubDrop(${i})">+ 加入子原料</button>
         <div class="sdrop sub-drop" id="sdrop_${i}"></div>
@@ -1029,7 +1042,7 @@ function rdRender() {
     } else {
       return `<div class="ing-card">
         <div class="ic-r1">
-          <div class="ing-name">${ing.isManual?`<input class="ing-name-i" value="${ing.name}" onchange="${ref}.name=this.value;rdCalc()" placeholder="原料名稱">`:ing.name}</div>
+          <div class="ing-name">${ing.isManual?`<input class="ing-name-i" value="${ing.name}" onchange="${ref}.name=this.value;rdCalc()" placeholder="原料名稱">`:(ing.brand?ing.brand+'｜':'')+ing.name}</div>
           <div id="rc_${i}" class="ing-cost"></div>
           <button class="del-btn" onclick="rdDel(${i})">✕</button>
         </div>
@@ -1055,28 +1068,32 @@ function rdAddSubDrop(pi) {
   const inv = C.inv || [];
   drop.innerHTML = inv.slice(0,30).map(item =>
     `<div class="sd-item" onclick="rdPickSub(${pi},${JSON.stringify(item).replace(/"/g,'&quot;')})">
-      <div class="sd-name">${item.name}</div>
-      <div class="sd-sub">${item.brand||'—'} · ${fm(item.price)}/${item.unit||'—'}ml</div>
+      <div class="sd-name">${item.brand?item.brand+'｜':''}${item.name}</div>
+      <div class="sd-sub">${item.category||''} · ${fm0(item.price)}/${item.vol?nt(item.vol,0)+'ml':'—'}</div>
     </div>`).join('');
 }
 function rdPickSub(pi, item) {
-  rdState.ings[pi].subs.push({ type:'single', name:item.name, brand:item.brand||'', abv:item.abv||0, price:item.price||0, unitVol:item.unit||0, volume:0, hasLoss:false, isManual:false });
+  rdState.ings[pi].subs.push({ type:'single', name:item.name, brand:item.brand||'', abv:item.abv||0, price:item.price||0, unitVol:item.vol||0, unitCost:invUC(item), volume:0, hasLoss:false, isManual:false });
   document.getElementById('sdrop_'+pi)?.classList.remove('open');
   rdRender(); rdCalc();
 }
 function rdCalc() {
   let totalCost=0, totalAbv=0, totalPct=0;
-  function cpm(ing){ return (ing.unitVol&&ing.price) ? ing.price/ing.unitVol : 0; }
+  const cpm = rdCpm;
   function sCost(ing,vol){ const c=cpm(ing)*vol; return ing.hasLoss ? c/0.8 : c; }
   rdState.ings.forEach((ing,i) => {
     const vol=ing.volume||0, ratio=ing.ratio||0;
-    totalPct += ratio;
     let ingCost = 0;
     if (ing.type === 'compound') {
-      let sub = 0;
-      (ing.subs||[]).forEach(s => { sub += cpm(s)*(s.volume||0); totalAbv += (s.abv||0)*(ratio/100); });
+      // 複合原料：子原料用量加總 = 它在整批中的體積，自動納入占比與ABV
+      let sub = 0, subVol = 0;
+      (ing.subs||[]).forEach(s => { sub += cpm(s)*(s.volume||0); subVol += (s.volume||0); totalAbv += (s.abv||0)*((s.volume||0)/(rdState.tv||1)); });
+      const cRatio = rdState.tv>0 ? subVol/rdState.tv*100 : 0;
+      totalPct += cRatio;
+      const rp = document.getElementById('rcp_'+i); if (rp) rp.textContent = subVol>0 ? '占比 '+cRatio.toFixed(1)+'%（'+nt(subVol,0)+'ml）' : '';
       ingCost = ing.hasLoss ? sub/0.8 : sub;
     } else {
+      totalPct += ratio;
       ingCost = sCost(ing, vol);
       totalAbv += (ing.abv||0) * (ratio/100);
     }
@@ -1145,7 +1162,7 @@ function rdExportCSV() {
   rdState.ings.forEach(ing => {
     if (ing.type === 'compound') {
       lines.push([ing.name,'複合','','','','','',(ing.hasLoss?'÷0.8':''),''].join(','));
-      (ing.subs||[]).forEach(s => { const c=((s.unitVol&&s.price)?s.price/s.unitVol:0)*(s.volume||0); lines.push(['  '+s.name,s.brand,s.abv,s.price,s.unitVol,'',nt(s.volume),'',nt(c,2)].join(',')); });
+      (ing.subs||[]).forEach(s => { const c=rdCpm(s)*(s.volume||0); lines.push(['  '+s.name,s.brand,s.abv,s.price,s.unitVol,'',nt(s.volume),'',nt(c,2)].join(',')); });
     } else {
       lines.push([ing.name,ing.brand,ing.abv,ing.price,ing.unitVol,nt(ing.ratio),nt(ing.volume),ing.hasLoss?'÷0.8':'',''].join(','));
     }
@@ -1228,7 +1245,8 @@ function showBatchModal(editIdx) {
   renderBatchAccessories(initBt, r);
   document.getElementById('mb_bt').addEventListener('change', function(){ renderBatchAccessories(this.value, {}); calcBatchSuggest(); });
 
-  modal.querySelector('#mb_sub').onclick = async () => {
+  const mbBtn = modal.querySelector('#mb_sub');
+  mbBtn.onclick = () => lockRun(mbBtn, async () => {
     const bt = document.getElementById('mb_bt').value;
     const accs = BOTTLE_ACCESSORIES[bt] || [];
     const accVals = {};
@@ -1254,7 +1272,7 @@ function showBatchModal(editIdx) {
       : await api({ action:'addBatchRecord', ...p });
     if (res.ok) { toast('已儲存'); modal.remove(); C.batch=null; renderBatchPage(); }
     else toast('儲存失敗:'+res.error);
-  };
+  });
 }
 function renderBatchAccessories(bt, existing) {
   const accs = BOTTLE_ACCESSORIES[bt] || [];
@@ -1298,7 +1316,7 @@ async function loadApplies() {
     <div class="fb"><div><span style="font-weight:600;font-size:13px;">${a.recipe}</span><span class="badge bg-brown" style="margin-left:5px;">${a.client}</span></div>
     <div class="sub">${a.creator} · ${String(a.createdAt).substring(0,10)}</div></div>
     <div style="margin-top:7px;">${(a.items||[]).map(it=>`<div style="font-size:12px;margin-bottom:3px;"><span style="font-weight:500;">${it.name}</span>：${nt(it.oldVal||0,1)}% → <span style="color:var(--gold-dk);font-weight:600;">${nt(it.newVal||0,1)}%</span>${it.reason?`<span class="sub"> （${it.reason}）</span>`:''}</div>`).join('')}</div>
-    ${curUser?.role==='admin'?`<div class="fe mt8" style="gap:6px;"><button class="btn btn-success btn-sm" onclick="doReview('${a.id}',true)">✓ 核准</button><button class="btn btn-danger btn-sm" onclick="doReview('${a.id}',false)">✕ 拒絕</button></div>`:''}
+    ${curUser?.role==='admin'?`<div class="fe mt8" style="gap:6px;"><button class="btn btn-success btn-sm" onclick="lockRun(this,()=>doReview('${a.id}',true))">✓ 核准</button><button class="btn btn-danger btn-sm" onclick="lockRun(this,()=>doReview('${a.id}',false))">✕ 拒絕</button></div>`:''}
   </div>`).join('');
 }
 async function loadHistory() {
