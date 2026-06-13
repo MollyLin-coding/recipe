@@ -168,6 +168,9 @@ tbody tr:hover td{background:#faf3e8;}
 .mt8{margin-top:8px;}.mt10{margin-top:10px;}
 .warn{color:var(--red);font-size:12px;}.ok{color:var(--green);font-size:12px;}
 .warn-row{border-color:var(--red)!important;background:rgba(220,38,38,.06)!important;}
+#apiLoadBar{position:fixed;top:0;left:0;height:3px;width:0;background:var(--gold-dk);z-index:9999;opacity:0;pointer-events:none;}
+#apiLoadBar.on{width:92%;opacity:1;transition:width 8s cubic-bezier(.1,.7,.1,1),opacity .2s;}
+#offlineBanner{position:fixed;bottom:0;left:0;right:0;background:#92400e;color:#fff;font-size:12px;text-align:center;padding:6px 10px;z-index:9998;}
 .sub{color:var(--ink3);font-size:12px;}
 @keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
 .skeleton{height:56px;border-radius:var(--r-sm);background:linear-gradient(90deg,var(--border) 25%,#f5f0e8 50%,var(--border) 75%);background-size:800px;animation:shimmer 1.4s infinite;}
@@ -288,13 +291,30 @@ const API='https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5N4
 
 async function api(params, silent) {
   const url = API + '?' + Object.entries(params).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
+  if (!silent) apiLoadStart();
   try {
     const res = await fetch(url);
     return await res.json();
   } catch(e) {
     if (!silent) toast('網路錯誤');
-    return { ok: false, error: e.message };
+    return { ok: false, error: e.message, _offline: true };
+  } finally {
+    if (!silent) apiLoadEnd();
   }
+}
+// ── 讀取 loading 提示（頂部進度條，多筆併發以計數管理）──
+let _apiLoadN = 0;
+function _loadBar() { let b=document.getElementById('apiLoadBar'); if(!b){ b=document.createElement('div'); b.id='apiLoadBar'; document.body.appendChild(b);} return b; }
+function apiLoadStart() { _apiLoadN++; _loadBar().classList.add('on'); }
+function apiLoadEnd() { _apiLoadN=Math.max(0,_apiLoadN-1); if(_apiLoadN===0){ const b=document.getElementById('apiLoadBar'); if(b){ b.classList.remove('on'); b.style.width='100%'; setTimeout(()=>{ if(_apiLoadN===0) b.style.width='0'; },200);} } }
+// ── 離線/弱網快取（localStorage 存酒譜，斷網可看）──
+function lsSet(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+function lsGet(k){ try{ const s=localStorage.getItem(k); return s?JSON.parse(s):null; }catch(e){ return null; } }
+function setOffline(on){
+  window._offline = on;
+  const el = document.getElementById('offlineBanner');
+  if (on && !el) { const d=document.createElement('div'); d.id='offlineBanner'; d.textContent='⚠ 離線模式：顯示最後一次快取的酒譜，無法編輯或送出'; document.body.appendChild(d); }
+  else if (!on && el) { el.remove(); }
 }
 
 // ── 狀態 ─────────────────────────────────────────────────────
@@ -403,6 +423,14 @@ async function doLogin() {
     recipeList = lr.list || [];
     // 從酒譜清單推導客戶清單（不需要獨立 getClientList API）
     clientList = [...new Set(recipeList.map(i => i.client))].map(n => ({ name: n }));
+    lsSet('np_recipeList', recipeList); setOffline(false);
+  } else if (lr._offline) {
+    const cached = lsGet('np_recipeList');
+    if (cached && cached.length) {
+      recipeList = cached;
+      clientList = [...new Set(recipeList.map(i => i.client))].map(n => ({ name: n }));
+      setOffline(true);
+    }
   }
   // 設定初始客戶
   curClient = clientList[0]?.name || 'Feeling Bar';
@@ -431,7 +459,15 @@ function doRefresh() {
     if(lr.ok) {
       recipeList = lr.list||[];
       clientList = [...new Set(recipeList.map(i => i.client))].map(n => ({ name: n }));
+      lsSet('np_recipeList', recipeList); setOffline(false);
       switchTab(curTab);
+    } else if (lr._offline) {
+      const cached = lsGet('np_recipeList');
+      if (cached && cached.length) {
+        recipeList = cached;
+        clientList = [...new Set(recipeList.map(i => i.client))].map(n => ({ name: n }));
+        setOffline(true); switchTab(curTab);
+      }
     }
   });
   toast('已重新整理');
@@ -480,8 +516,15 @@ async function loadRecipe() {
   area.innerHTML = '<div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">載入中…</div>';
   if (!C.recipes[key]) {
     const res = await api({ action:'getRecipe', client:curClient, sheet:curSheet });
-    if (!res.ok) { area.innerHTML = `<div class="warn" style="padding:12px;">${res.error}</div>`; return; }
-    C.recipes[key] = res;
+    if (!res.ok) {
+      if (res._offline) {
+        const cached = lsGet('np_recipe_' + key);
+        if (cached) { C.recipes[key] = cached; setOffline(true); }
+        else { area.innerHTML = '<div class="warn" style="padding:12px;">離線中，且此酒譜尚無快取，請連線後再開啟一次</div>'; return; }
+      } else { area.innerHTML = `<div class="warn" style="padding:12px;">${res.error}</div>`; return; }
+    } else {
+      C.recipes[key] = res; lsSet('np_recipe_' + key, res); setOffline(false);
+    }
   }
   rdata = C.recipes[key]; rdata._dn = rn;
   renderRecipeDetail(area);
@@ -705,6 +748,10 @@ function showApplyModal() {
       return nr ? { name:ing.name, oldVal:ing.pct, newVal:parseFloat(nr), reason:document.getElementById('rs_'+i)?.value||'' } : null;
     }).filter(Boolean);
     if (!items.length) { toast('請至少填一筆'); return; }
+    // 占比總和檢查（B）：套用後總和 = 有填新值用新值，其餘維持原 pct
+    const chg = {}; items.forEach(it => { chg[it.name] = it.newVal; });
+    const sumPct = rdata.ingredients.reduce((s,ing) => s + (chg[ing.name] !== undefined ? chg[ing.name] : (ing.pct||0)), 0);
+    if (Math.abs(sumPct - 100) >= 0.1 && !confirm(`套用後占比總和為 ${sumPct.toFixed(1)}%（與 100% 不符），體積與 ABV 會失真。確定仍要送出申請？`)) return;
     const res = await api({ action:'submitApply', creator:curUser.username, client:curClient, sheet:curSheet, recipe:rdata.recipeName||rdata._dn, items:JSON.stringify(items) });
     if (res.ok) { toast('申請已送出'); modal.remove(); } else toast('送出失敗:' + res.error);
   });
@@ -1127,6 +1174,7 @@ function rdCalc() {
     const cel = document.getElementById('rc_'+i); if (cel) cel.textContent = ingCost>0 ? fm(ingCost) : '—';
   });
   const pw = document.getElementById('rd_pctw');
+  window._rdPctSum = totalPct;
   if (pw) { const diff=(100-totalPct).toFixed(1); pw.innerHTML=Math.abs(parseFloat(diff))<0.1?'<span class="ok">✓ 100%</span>':`<span class="warn">⚠ ${totalPct.toFixed(1)}%（差${diff}%）</span>`; }
   const abv = Math.round(totalAbv*10)/10;
   const tax = calcTax(abv, rdState.tv);
@@ -1160,6 +1208,8 @@ function rdCalc() {
 }
 async function rdSave() {
   if (!rdState.ings.length) { toast('請先加入原料'); return; }
+  const sp = window._rdPctSum;
+  if (sp !== undefined && Math.abs(sp - 100) >= 0.1 && !confirm(`目前占比總和 ${sp.toFixed(1)}%（與 100% 不符），確定仍要儲存？`)) return;
   const res = await api({ action:'saveRdRecord', creator:curUser.username, client:rdState.client||'', name:rdState.title||'未命名', volume:rdState.tv, bottle:rdState.bt, ingredients:JSON.stringify(rdState.ings), results:JSON.stringify(window._rdRes||{}) });
   if (res.ok) toast('試算已儲存！'); else toast('儲存失敗:'+res.error);
 }
@@ -1204,6 +1254,7 @@ function rdExportCSV() {
 // ⑤ 製作記錄（v10：移除代工費/食材報價欄、改標籤、動態配件）
 // ════════════════════════════════════════════════
 let batchRecs = [];
+let _bf = { client:'', from:'', to:'' };
 async function renderBatchPage(mc) {
   if (C.batch) { batchRecs = C.batch; renderBatchList(mc); return; }
   mc.innerHTML = '<div class="card"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">載入中…</div></div>';
@@ -1214,10 +1265,19 @@ async function renderBatchPage(mc) {
 }
 function renderBatchList(mc) {
   mc = mc || document.getElementById('mainContent');
-  const rows = batchRecs.map((r,i) => `<tr onclick="showBatchModal(${i})">
+  // 篩選（日期區間 + 客戶）：batchRecs 為完整資料,僅顯示層過濾,編輯用原始索引
+  const clients = [...new Set(batchRecs.map(r=>r.client).filter(Boolean))];
+  const cOpts = '<option value="">全部客戶</option>' + clients.map(c=>`<option${_bf.client===c?' selected':''}>${c}</option>`).join('');
+  const filtered = batchRecs.filter(r => {
+    if (_bf.client && r.client !== _bf.client) return false;
+    if (_bf.from && (r.date||'') < _bf.from) return false;
+    if (_bf.to   && (r.date||'') > _bf.to)   return false;
+    return true;
+  });
+  const rows = filtered.map(r => { const oi = batchRecs.indexOf(r); return `<tr onclick="showBatchModal(${oi})">
     <td><div style="font-weight:500;font-size:13px;">${r.recipe||'—'}</div><div class="sub">${r.client||''} · ${r.date||''}</div></td>
     <td class="tr"><div style="font-size:12px;">${r.bottle||'—'} × ${r.bottleCount||0}</div><div class="sub">${r.pm||''}</div></td>
-  </tr>`).join('');
+  </tr>`; }).join('');
   mc.innerHTML = `<div class="card">
     <div class="sec-hd">
       <div class="card-title" style="margin:0">製作記錄</div>
@@ -1226,6 +1286,13 @@ function renderBatchList(mc) {
         <button class="btn btn-primary btn-sm" onclick="showBatchModal()">＋ 新增</button>
       </div>
     </div>
+    <div class="form-row" style="margin-bottom:8px;gap:6px;flex-wrap:wrap;">
+      <div class="fg" style="flex:0 0 130px"><label>客戶</label><select class="inp" style="margin:0;font-size:13px;padding:8px 10px;" onchange="_bf.client=this.value;renderBatchList()">${cOpts}</select></div>
+      <div class="fg" style="flex:0 0 130px"><label>日期起</label><input type="date" class="inp" value="${_bf.from}" style="margin:0;font-size:13px;padding:7px 10px;" onchange="_bf.from=this.value;renderBatchList()"></div>
+      <div class="fg" style="flex:0 0 130px"><label>日期迄</label><input type="date" class="inp" value="${_bf.to}" style="margin:0;font-size:13px;padding:7px 10px;" onchange="_bf.to=this.value;renderBatchList()"></div>
+      ${(_bf.client||_bf.from||_bf.to)?`<div class="fg" style="flex:0 0 auto;display:flex;align-items:flex-end;"><button class="btn btn-ghost btn-sm" onclick="_bf={client:'',from:'',to:''};renderBatchList()">清除</button></div>`:''}
+    </div>
+    <div class="sub" style="margin-bottom:5px;">共 ${filtered.length} 筆${(_bf.client||_bf.from||_bf.to)?`（全部 ${batchRecs.length} 筆）`:''}</div>
     <div class="tbl-wrap"><table><thead><tr><th>酒款 / 日期</th><th class="tr">瓶型 / PM</th></tr></thead>
     <tbody>${rows||'<tr><td colspan="2" style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">尚無記錄</td></tr>'}</tbody></table></div>
   </div>`;
@@ -1342,7 +1409,7 @@ async function loadApplies() {
   area.innerHTML = list.map(a => `<div class="card" style="margin-bottom:8px;border-color:var(--yellow);">
     <div class="fb"><div><span style="font-weight:600;font-size:13px;">${a.recipe}</span><span class="badge bg-brown" style="margin-left:5px;">${a.client}</span></div>
     <div class="sub">${a.creator} · ${String(a.createdAt).substring(0,10)}</div></div>
-    <div style="margin-top:7px;">${(a.items||[]).map(it=>`<div style="font-size:12px;margin-bottom:3px;"><span style="font-weight:500;">${it.name}</span>：${nt(it.oldVal||0,1)}% → <span style="color:var(--gold-dk);font-weight:600;">${nt(it.newVal||0,1)}%</span>${it.reason?`<span class="sub"> （${it.reason}）</span>`:''}</div>`).join('')}</div>
+    <div style="margin-top:7px;">${(a.items||[]).map(it=>{ const ov=it.oldVal||0, nv=it.newVal||0, big=Math.abs(nv-ov)>=10; return `<div style="font-size:12px;margin-bottom:3px;"><span style="font-weight:500;">${it.name}</span>：${nt(ov,1)}% → <span style="color:${big?'var(--red)':'var(--gold-dk)'};font-weight:600;">${nt(nv,1)}%</span>${big?` <span class="badge bg-red">差${nt(nv-ov,1)}%</span>`:''}${it.reason?`<span class="sub"> （${it.reason}）</span>`:''}</div>`; }).join('')}</div>
     ${curUser?.role==='admin'?`<div class="fe mt8" style="gap:6px;"><button class="btn btn-success btn-sm" onclick="lockRun(this,()=>doReview('${a.id}',true))">✓ 核准</button><button class="btn btn-danger btn-sm" onclick="lockRun(this,()=>doReview('${a.id}',false))">✕ 拒絕</button></div>`:''}
   </div>`).join('');
 }
