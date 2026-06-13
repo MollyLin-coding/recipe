@@ -610,8 +610,13 @@ function runSelfTest() {
       ok(r && r.ok, 'getProfitData[' + c + '] ok');
       if (r && r.ok) {
         ok((r.list || []).length > 0, '  └ 毛利清單非空（' + (r.list || []).length + ' 筆）');
-        const bad = (r.list || []).filter(function(x){ return !(x.profitRate >= 0 && x.profitRate <= 100); });
-        ok(bad.length === 0, '  └ profitRate 全在 0–100' + (bad.length ? '（異常 ' + bad.length + ' 筆）' : ''));
+        // profitRate 數學不變式：profit=price-cost≤price → rate≤100%（容許四捨五入到 100.5）
+        // 下限放寬（賣價低於成本的虧損品項是合法資料，rate 可為負，例如 -24.7）
+        const bad = (r.list || []).filter(function(x){ return !(x.profitRate <= 100.5 && x.profitRate >= -1000); });
+        ok(bad.length === 0, '  └ profitRate ≤100%（虧損負值合法）' + (bad.length ? '（異常 ' + bad.length + ' 筆）' : ''));
+        // 小數退化偵測：若整批毛利率絕對值都 <1.5，疑似回成 0.55 小數格式（Bug 20 回歸）
+        const maxAbs = (r.list || []).reduce(function(m, x){ return Math.max(m, Math.abs(x.profitRate || 0)); }, 0);
+        if ((r.list || []).length > 0 && maxAbs < 1.5) warnMsg('  └ 毛利率全 <1.5%，疑似回成小數格式（Bug 20 回歸）');
         if (r.warnCount > 0) warnMsg('  └ 欄位健檢 warn ' + r.warnCount + ' 筆（售價/成本讀不到，疑似 Sheet 欄位跑掉）');
       }
     } catch (e) { ok(false, 'getProfitData[' + c + '] 例外: ' + e.message); }
