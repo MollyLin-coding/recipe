@@ -224,7 +224,13 @@ function getRecipe(p) {
     const name = cellA;
     if (!name || String(row[1]).indexOf('%') >= 0 && !parseFloat(row[1])) continue;
     const rawPct = parseFloat(row[1]) || 0;
-    const pct = rawPct <= 1 ? rawPct * 100 : rawPct; // 若 ≤1 表示原始 0.x 格式，×100
+    // 占比格式約定（Bug 1）：B欄存小數（0.1=10%、1=100%），故 ≤1 一律 ×100 還原成百分比；
+    // >1 視為「已是百分比整數」（相容少數混填情況）。
+    // ⚠️ 邊界：值剛好 =1 在此約定下即 100%，本式回傳 100（正確，非 1%）。
+    //    唯一真正歧義是有人把「1%」誤填成整數 1（違反約定）→ 會被當成 100%。
+    //    此屬資料輸入錯誤，應由酒譜頁「占比總和檢查」攔截；不在此處臆測修正，
+    //    以免反把正確的 100% 砍成 1% 製造新回歸（開發最高原則 #1：不做有風險的局部補丁）。
+    const pct = rawPct <= 1 ? rawPct * 100 : rawPct;
     const vol = parseFloat(row[2]) || 0;
     const ingAbv = parseFloat(row[3]) || 0;
     const cost = parseFloat(row[8]) || 0;
@@ -342,12 +348,15 @@ function getProfitData(p) {
       const abv = parseFloat(row[1]) || 0;
       const capStr = String(row[2] || '').trim();
       const cap = parseInt(capStr) || 0;
+      if (!cap) continue; // 無容量 = 空白/padding 列，跳過
       const price        = parseFloat(row[pc.price]) || 0; // 含稅單價 = 售價
       const totalCostTax = parseFloat(row[pc.cost]) || 0;  // 成本
-      if (!cap || !price) continue;
+      // 欄位健檢：有容量卻讀不到售價/成本 → 不再靜默丟棄，照常回傳並標記 warn
+      // （最常見成因：Sheet 插欄導致 PROFIT_COLS 欄位映射跑掉，過去會整批顯示 0 卻無提示）
+      const warn = !(price > 0) || !(totalCostTax > 0);
       const profit     = Math.round((price - totalCostTax) * 100) / 100;
       const profitRate = price > 0 ? Math.round(profit / price * 1000) / 10 : 0;
-      list.push({ recipeName: nm, bottle: capStr, price, abv, totalCostTax, profit, profitRate });
+      list.push({ recipeName: nm, bottle: capStr, price, abv, totalCostTax, profit, profitRate, warn });
     }
   } else {
     // FB / FBC
@@ -358,14 +367,17 @@ function getProfitData(p) {
       const price = parseFloat(row[pc.price]) || 0;
       const cap = parseFloat(row[2]) || 0;
       const totalCostTax = parseFloat(row[pc.cost]) || 0;
-      if (!price) continue;
+      if (!price && !totalCostTax && !cap) continue; // 整列無數據 = 非酒款列，跳過
+      // 欄位健檢：有酒款名稱卻讀不到售價/成本 → 不再靜默丟棄，照常回傳並標記 warn
+      const warn = !(price > 0) || !(totalCostTax > 0);
       const profit = Math.round((price - totalCostTax) * 100) / 100;
       const profitRate = price > 0 ? Math.round(profit / price * 1000) / 10 : 0; // 百分比整數（55.1），與NO1分支統一
-      list.push({ recipeName: nm, bottle: '4L桶', price, cap, totalCostTax, profit, profitRate });
+      list.push({ recipeName: nm, bottle: '4L桶', price, cap, totalCostTax, profit, profitRate, warn });
     }
   }
 
-  return { ok: true, client, list };
+  const warnCount = list.filter(function(x){ return x.warn; }).length;
+  return { ok: true, client, list, warnCount };
 }
 
 // ── 製作記錄 ─────────────────────────────────────────────────
@@ -546,4 +558,66 @@ function deleteRdRecord(p) {
     }
   }
   return { ok: false, error: '找不到記錄 id' };
+}
+
+// ============================================================
+// 部署前自我測試（GAS 編輯器手動執行 runSelfTest）
+// 對每家客戶跑 getRecipeList / getRecipe / getProfitData，
+// 驗證回傳非空、profitRate 在合理區間(0–100)、毛利欄位 warn 數，
+// 結果以 Logger.log 輸出，最後回傳整體 pass/fail。
+// 用途：每次改 GAS、部署前手動跑一次，五分鐘擋下大半回歸。
+// ============================================================
+function runSelfTest() {
+  const report = [];
+  let pass = true;
+  function ok(cond, msg) { report.push((cond ? '✅ ' : '❌ ') + msg); if (!cond) pass = false; }
+  function warnMsg(msg) { report.push('⚠️ ' + msg); }
+
+  // 1) getRecipeList：一次取全部，確認四家齊全
+  let recipeList = [];
+  try {
+    const r = getRecipeList();
+    ok(r && r.ok, 'getRecipeList ok');
+    recipeList = (r && r.list) || [];
+    ok(recipeList.length > 0, 'getRecipeList 非空（共 ' + recipeList.length + ' 款）');
+    Object.keys(CLIENTS).forEach(function(c) {
+      const n = recipeList.filter(function(x){ return x.client === c; }).length;
+      ok(n > 0, '客戶[' + c + '] 酒譜清單非空（' + n + ' 款）');
+    });
+  } catch (e) { ok(false, 'getRecipeList 例外: ' + e.message); }
+
+  // 2) 各客戶取第一款跑 getRecipe
+  Object.keys(CLIENTS).forEach(function(c) {
+    try {
+      const first = recipeList.filter(function(x){ return x.client === c; })[0];
+      if (!first) { warnMsg('客戶[' + c + '] 無酒譜可測 getRecipe'); return; }
+      const r = getRecipe({ client: c, sheet: first.sheet });
+      ok(r && r.ok, 'getRecipe[' + c + '/' + first.sheet + '] ok');
+      if (r && r.ok) {
+        ok((r.ingredients || []).length > 0, '  └ 原料非空（' + (r.ingredients || []).length + ' 項）');
+        ok(r.abv >= 0 && r.abv <= 100, '  └ ABV 合理（' + r.abv + '%）');
+        ok(r.totalVol > 0, '  └ 總體積 > 0（' + r.totalVol + 'ml）');
+        const sumPct = (r.ingredients || []).reduce(function(s, x){ return s + (x.pct || 0); }, 0);
+        if (Math.abs(sumPct - 100) > 2) warnMsg('  └ 占比總和 ' + Math.round(sumPct * 10) / 10 + '%（偏離 100%，請查酒譜）');
+      }
+    } catch (e) { ok(false, 'getRecipe[' + c + '] 例外: ' + e.message); }
+  });
+
+  // 3) 各客戶跑 getProfitData
+  Object.keys(CLIENTS).forEach(function(c) {
+    try {
+      const r = getProfitData({ client: c });
+      ok(r && r.ok, 'getProfitData[' + c + '] ok');
+      if (r && r.ok) {
+        ok((r.list || []).length > 0, '  └ 毛利清單非空（' + (r.list || []).length + ' 筆）');
+        const bad = (r.list || []).filter(function(x){ return !(x.profitRate >= 0 && x.profitRate <= 100); });
+        ok(bad.length === 0, '  └ profitRate 全在 0–100' + (bad.length ? '（異常 ' + bad.length + ' 筆）' : ''));
+        if (r.warnCount > 0) warnMsg('  └ 欄位健檢 warn ' + r.warnCount + ' 筆（售價/成本讀不到，疑似 Sheet 欄位跑掉）');
+      }
+    } catch (e) { ok(false, 'getProfitData[' + c + '] 例外: ' + e.message); }
+  });
+
+  report.unshift(pass ? '===== SELF TEST: PASS =====' : '===== SELF TEST: FAIL =====');
+  Logger.log(report.join('\n'));
+  return { pass: pass, report: report };
 }
