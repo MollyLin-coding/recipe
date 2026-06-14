@@ -99,6 +99,10 @@ function doGet(e) {
       case 'saveRdRecord':   result = saveRdRecord(p); break;
       case 'getRdRecords':   result = getRdRecords(); break;
       case 'deleteRdRecord': result = deleteRdRecord(p); break;
+      case 'submitRdApply':  result = submitRdApply(p); break;
+      case 'getRdApplies':   result = getRdApplies(); break;
+      case 'reviewRdApply':  result = reviewRdApply(p); break;
+      case 'getRdHistory':   result = getRdHistory(); break;
       default: result = { ok: false, error: '未知 action: ' + action };
     }
   } catch(err) {
@@ -627,6 +631,76 @@ function deleteRdRecord(p) {
   return { ok: false, error: '找不到記錄 id' };
 }
 
+// ── 研發申請 ─────────────────────────────────────────────────
+// 分頁「研發申請記錄」欄位（gid=1839254296，實機確認 13 欄）：
+// A=id(RA+ts) B=createdAt C=creator D=client E=name F=volume G=bottle
+// H=abv I=ingredients(JSON,含子料明細) J=results(JSON) K=status
+// L=reviewer M=reviewedAt N=newSheet(核准後回填分頁名,Batch 3 寫)
+function submitRdApply(p) {
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('研發申請記錄');
+  if (!ws) return { ok: false, error: '找不到研發申請記錄分頁' };
+  const id = 'RA' + Date.now();
+  const now = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+  ws.appendRow([id, now, p.creator, p.client, p.name,
+    parseFloat(p.volume) || 0, p.bottle || '',
+    parseFloat(p.abv) || 0,
+    p.ingredients || '[]', p.results || '{}',
+    '待審核', '', '', '']);
+  return { ok: true, id };
+}
+
+function getRdApplies() {
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('研發申請記錄');
+  if (!ws) return { ok: true, list: [] };
+  const rows = ws.getDataRange().getValues();
+  const list = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[0] || String(r[10]) !== '待審核') continue;
+    list.push({ id:String(r[0]), createdAt:String(r[1]), creator:String(r[2]),
+      client:String(r[3]), name:String(r[4]), volume:r[5], bottle:String(r[6]),
+      abv:r[7], ingredients:String(r[8]), results:String(r[9]) });
+  }
+  return { ok: true, list };
+}
+
+function reviewRdApply(p) {
+  const approve = p.approve === 'true';
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('研發申請記錄');
+  if (!ws) return { ok: false, error: '找不到研發申請記錄分頁' };
+  const rows = ws.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) !== String(p.id)) continue;
+    const status = approve ? '已核准' : '已拒絕';
+    ws.getRange(i + 1, 11).setValue(status);   // K=status
+    ws.getRange(i + 1, 12).setValue(p.reviewer || '');  // L=reviewer
+    ws.getRange(i + 1, 13).setValue(new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })); // M=reviewedAt
+    // ⏳ Batch 3：if (approve) { try { createRecipeSheet(rows[i]); } catch(e) {} }
+    return { ok: true };
+  }
+  return { ok: false, error: '找不到申請 id' };
+}
+
+function getRdHistory() {
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('研發申請記錄');
+  if (!ws) return { ok: true, list: [] };
+  const rows = ws.getDataRange().getValues();
+  const list = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[0] || String(r[10]) === '待審核') continue;
+    list.push({ id:String(r[0]), createdAt:String(r[1]), creator:String(r[2]),
+      client:String(r[3]), name:String(r[4]), volume:r[5], bottle:String(r[6]),
+      abv:r[7], status:String(r[10]), reviewer:String(r[11]), reviewedAt:String(r[12]),
+      newSheet:String(r[13] || '') });
+  }
+  return { ok: true, list };
+}
+
 // ============================================================
 // 部署前自我測試（GAS 編輯器手動執行 runSelfTest）
 // 對每家客戶跑 getRecipeList / getRecipe / getProfitData，
@@ -693,3 +767,4 @@ function runSelfTest() {
   Logger.log(report.join('\n'));
   return { pass: pass, report: report };
 }
+
