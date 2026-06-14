@@ -1356,6 +1356,8 @@ async function rdSubmitApply() {
 // 記錄列表「📤」— 直接用儲存記錄的資料送審
 async function rdApplyFromRecord(r) {
   if (!r) return;
+  // QC-2：關閉 rdLoadList modal，避免雙 modal 堆疊
+  document.querySelector('.modal-bg')?.remove();
   let parsedResults = {};
   try { parsedResults = JSON.parse(r.results||'{}'); } catch(e) {}
   showRdApplyModal({ name: r.name||'', client: r.client||'' }, async (name, client) => {
@@ -1563,7 +1565,7 @@ async function loadRdApplies() {
   area.innerHTML = list.map(a => {
     let ings=[]; try { ings=JSON.parse(a.ingredients||'[]'); } catch(e){}
     let rr={}; try { rr=JSON.parse(a.results||'{}'); } catch(e){}
-    const ingPreview = ings.slice(0,4).map(g=>`<span style="margin-right:5px;">• ${g.name||''}${g.type==='compound'?'<span class="cpd-badge" style="vertical-align:middle;margin-left:2px;">複合</span>':''}</span>`).join('') + (ings.length>4?`<span class="sub">…共${ings.length}項</span>`:'');
+    const ingPreview = ings.slice(0,4).map(g=>`<span style="margin-right:5px;">• ${g.name||''}${(g.type==='compound'||g.isCompound)?'<span class="cpd-badge" style="vertical-align:middle;margin-left:2px;">複合</span>':''}</span>`).join('') + (ings.length>4?`<span class="sub">…共${ings.length}項</span>`:'');
     return `<div class="card" style="margin-bottom:8px;border-color:var(--yellow);">
       <div class="fb">
         <div><span style="font-weight:600;font-size:13px;">${a.name}</span><span class="badge bg-brown" style="margin-left:5px;">${a.client}</span></div>
@@ -1601,10 +1603,17 @@ async function loadRdHistory() {
 }
 
 async function doRdReview(id, approved) {
-  if (!confirm(`確認${approved?'核准此研發申請？（分頁自動建立功能 Batch 3 實作，目前只更新狀態）':'拒絕此研發申請'}？`)) return;
+  // QC-4：更新確認文字（Batch 3 已上線，核准後自動建立分頁）
+  if (!confirm(`確認${approved?'核准此研發申請？核准後將自動建立新酒譜分頁。':'拒絕此研發申請？'}？`)) return;
   const res = await api({ action:'reviewRdApply', id, approve:String(approved), reviewer:curUser.username });
-  if (res.ok) { toast(approved?'已核准':'已拒絕'); renderApplyPage(document.getElementById('mainContent')); }
-  else toast('操作失敗：'+res.error);
+  if (res.ok) {
+    // QC-1：顯示 warn（createRecipeSheet 失敗時 GAS 回傳 ok:true + warn）
+    if (res.warn) toast('⚠️ 已核准，但建立分頁失敗：' + res.warn);
+    else toast(approved ? '已核准，新分頁已建立' : '已拒絕');
+    renderApplyPage(document.getElementById('mainContent'));
+    // QC-5：核准後重新整理酒譜清單（GAS cache 已清，前端需同步更新）
+    if (approved && !res.warn) doRefresh();
+  } else toast('操作失敗：'+res.error);
 }
 
 // ── 全域事件 ──
@@ -1617,5 +1626,6 @@ document.getElementById('loginUser').addEventListener('change', () => setTimeout
 </script>
 </body>
 </html>
+
 
 
