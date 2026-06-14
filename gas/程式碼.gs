@@ -185,7 +185,9 @@ function getRecipe(p) {
   const ws = ss.getSheetByName(sheet);
   if (!ws) return { ok: false, error: '找不到分頁: ' + sheet };
 
-  const data = ws.getDataRange().getValues();
+  const range = ws.getDataRange();
+  const data = range.getValues();
+  const formulas = range.getFormulas(); // 取 F 欄公式字串(getValues 看不到 =H12),供複合原料解析
   // Row1=大標題 Row2=客戶/酒款名稱 Row3=欄位標頭 Row4+=原料
   let recipeName = '', totalVol = 0, abv = 0;
   const ingredients = [];
@@ -202,25 +204,38 @@ function getRecipe(p) {
     abv = parseFloat(abvRaw) || 0;
   }
 
-  // Row4 起讀原料，直到遇到「總體積」、「基礎原料」、「製程備註」
+  // ── 階段一：定位子料區邊界並建 subMap(根治 v10.3 第19.2 脆弱點) ──
+  // 子料區 = 「總體積」列下方 ~ 「{n}ml版總食材成本」列上方(實機驗證,見第十八章)
+  // subMap: { 列號(1-based) : { name, unitPrice(F), packVol(G), unitCost(H值) } }
+  // 子料的每ml成本 unitCost 直接讀 H 欄計算值(Sheet 公式 =IFERROR(F/G,"") 已算好)
+  let totalVolRow = -1, subEndRow = -1;
   for (let i = 3; i < data.length; i++) {
+    const a = String(data[i][0] || '').trim();
+    if (totalVolRow < 0 && a === '總體積') { totalVolRow = i; continue; }
+    if (totalVolRow >= 0 && (/ml版總食材成本/.test(a) || a === '製程備註')) { subEndRow = i; break; }
+  }
+  const subMap = {};
+  if (totalVolRow >= 0) {
+    const end = subEndRow >= 0 ? subEndRow : data.length;
+    for (let i = totalVolRow + 1; i < end; i++) {
+      const a = String(data[i][0] || '').trim();
+      if (!a || a === '基礎原料') continue; // 跳子料區標題列
+      // 子料 H 欄(index 7)= 每ml成本;若 H 空,退而用 F/G 自算
+      let unitCost = parseFloat(data[i][7]) || 0;
+      const fVal = parseFloat(data[i][5]) || 0, gVal = parseFloat(data[i][6]) || 0;
+      if (!unitCost && fVal > 0 && gVal > 0) unitCost = fVal / gVal;
+      subMap[i + 1] = { name: a, unitPrice: fVal, packVol: gVal, unitCost: unitCost };
+    }
+  }
+
+  // ── 階段二：讀原料區(Row4 ~ 總體積列上方),複合母料附加 subMaterials ──
+  const ingEnd = totalVolRow >= 0 ? totalVolRow : data.length;
+  for (let i = 3; i < ingEnd; i++) {
     const row = data[i];
     const cellA = String(row[0] || '').trim();
-
-    if (cellA === '製程備註') {
-      if (i + 1 < data.length) {
-        processNote = String(data[i + 1][0] || data[i + 1][1] || '').trim();
-      }
-      break;
-    }
-    if (cellA === '總體積') {
-      totalVol = parseFloat(row[2]) || 0;
-      abv = parseFloat(row[3]) || abv;
-      continue;
-    }
     if (cellA === '基礎原料') continue;
 
-    // 一般原料行：A=名稱, B=占比(0.1=10%), C=體積, D=ABV, I=成本
+    // 一般原料行：A=名稱, B=占比(0.1=10%), C=體積, D=ABV, F=進貨單價, I=成本
     const name = cellA;
     if (!name || String(row[1]).indexOf('%') >= 0 && !parseFloat(row[1])) continue;
     const rawPct = parseFloat(row[1]) || 0;
@@ -235,8 +250,30 @@ function getRecipe(p) {
     const ingAbv = parseFloat(row[3]) || 0;
     const cost = parseFloat(row[8]) || 0;
     if (name && (pct > 0 || vol > 0)) {
-      ingredients.push({ name, pct, vol, abv: ingAbv, cost });
+      const ing = { name, pct, vol, abv: ingAbv, cost };
+      // 複合原料偵測：F 欄(index 5)是公式 → 解析子料(第十八章 18.5)
+      const fFormula = (formulas[i] && formulas[i][5]) ? String(formulas[i][5]) : '';
+      const cpd = parseCompoundFormula(fFormula, subMap);
+      if (cpd.isCompound) {
+        ing.isCompound = true;
+        ing.hasLoss = cpd.hasLoss;
+        ing.subMaterials = cpd.subMaterials;
+      }
+      ingredients.push(ing);
       ingredientCost += cost;
+    }
+  }
+
+  // totalVol / abv 從「總體積」列補讀(階段一已定位 totalVolRow)
+  if (totalVolRow >= 0) {
+    totalVol = parseFloat(data[totalVolRow][2]) || 0;
+    abv = parseFloat(data[totalVolRow][3]) || abv;
+  }
+  // 製程備註：從 subEndRow(若是製程備註列)或往下找
+  for (let i = (subEndRow >= 0 ? subEndRow : ingEnd); i < data.length; i++) {
+    if (String(data[i][0] || '').trim() === '製程備註') {
+      if (i + 1 < data.length) processNote = String(data[i + 1][0] || data[i + 1][1] || '').trim();
+      break;
     }
   }
 
@@ -257,6 +294,36 @@ function getRecipe(p) {
 
 function calcTax(abv, vol) {
   return (abv <= 20 ? abv * 7 / 1000 : 185 / 1000) * vol;
+}
+
+// ── 複合原料 F 欄公式解析(v10.3 第十八章,5 案例實機驗證)────────
+// 支援的公式形式(母料 F 欄):
+//   =H12                    單子料,無係數無耗損
+//   =H13*2                  單子料 + 係數(在後)
+//   =(H14*1+H17*2+H15*100)/0.8   多子料相加 + 各係數 + 耗損
+// 規則:H{列} 參照「總體積下方子料」的 H 欄;係數=配方比例;/0.8=耗損旗標。
+// 子料明細 contrib(貢獻成本) = 係數 × 子料每ml成本(unitCost)。
+function parseCompoundFormula(formula, subMap) {
+  if (!formula || formula.charAt(0) !== '=') return { isCompound: false };
+  const hasLoss = /\/\s*0\.8/.test(formula); // /0.8 或 / 0.8
+  const subMaterials = [];
+  // 抓所有 H{列}[*係數] 項;係數選配且在 H 之後(實機 5 案例皆係數在後)
+  const re = /H(\d+)\s*(?:\*\s*(\d+\.?\d*))?/g;
+  let m;
+  while ((m = re.exec(formula)) !== null) {
+    const row = parseInt(m[1]);
+    const coef = m[2] ? parseFloat(m[2]) : 1;
+    if (subMap[row]) {
+      subMaterials.push({
+        name: subMap[row].name,
+        coef: coef,                          // 配方比例係數
+        unitCost: subMap[row].unitCost,      // 子料每ml成本(H值)
+        contrib: coef * subMap[row].unitCost // 該子料貢獻成本
+      });
+    }
+  }
+  if (subMaterials.length === 0) return { isCompound: false };
+  return { isCompound: true, hasLoss: hasLoss, subMaterials: subMaterials };
 }
 
 // ── 儲存製程備註 ─────────────────────────────────────────────
