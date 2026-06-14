@@ -190,6 +190,18 @@ tbody tr:hover td{background:#faf3e8;}
 .ing-unit{font-size:11px;color:var(--ink3);}
 .ing-sep{font-size:12px;color:var(--ink3);}
 .ing-abv{font-size:11px;color:var(--ink3);margin-left:auto;}
+/* ── 複合原料展開（酒譜頁，Batch 1）── */
+.ing-compound{background:#fdf8f0;border-left:3px solid var(--gold);padding-left:7px;border-radius:5px;}
+.cpd-badge{display:inline-block;font-size:10px;font-weight:600;color:#fff;background:var(--gold-dk);padding:1px 6px;border-radius:99px;margin-left:4px;vertical-align:middle;}
+.cpd-expand{margin-top:7px;padding:7px 8px;background:rgba(201,170,120,.1);border-radius:6px;}
+.cpd-sub-hd{font-size:11px;color:var(--ink3);font-weight:600;margin-bottom:5px;}
+.cpd-loss-tag{color:var(--red);font-weight:600;font-size:10px;background:#fde8e8;padding:1px 5px;border-radius:99px;}
+.cpd-sub-row{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;}
+.cpd-sub-name{flex:1;min-width:0;color:var(--ink2);}
+.cpd-sub-inp{width:52px;padding:3px 5px;border:1.5px solid var(--border);border-radius:5px;font-size:12px;text-align:right;}
+.cpd-sub-inp:focus{border-color:var(--gold);outline:none;}
+.cpd-sub-unit{font-size:10px;color:var(--ink3);white-space:nowrap;}
+.cpd-sub-contrib{font-size:11px;color:var(--gold-dk);font-weight:600;white-space:nowrap;min-width:54px;text-align:right;}
 .total-bar{font-size:12px;color:var(--ink2);padding:6px 0;border-top:1px solid var(--border);}
 .ing-list{margin:8px 0;}
 /* ── 資材費用 ── */
@@ -539,12 +551,32 @@ function renderRecipeDetail(area) {
   const quote = Math.round(cost * 1.15 * 100) / 100, tv = rdata.totalVol || 0;
 
   // ── 雙行版面原料列 ──────────────────────────────
-  // 第一行：原料名稱 + 成本
+  // 第一行：原料名稱（複合原料加標記）+ 成本
   // 第二行：占比輸入 ↔ 體積輸入（互算）
-  const rows = (rdata.ingredients || []).map((ing, idx) => `
-    <div class="ing-row" id="ingrow_${idx}">
+  // 複合原料：第二行下方展開子料明細（子料用量可調，即時重算成本，占比不動）
+  const rows = (rdata.ingredients || []).map((ing, idx) => {
+    // 複合原料子料展開區（直接展開，無 toggle）
+    let subHtml = '';
+    if (ing.isCompound && (ing.subMaterials || []).length) {
+      const subRows = ing.subMaterials.map((s, si) => `
+        <div class="cpd-sub-row">
+          <span class="cpd-sub-name">${s.name}</span>
+          <input type="number" class="cpd-sub-inp" id="cs_${idx}_${si}"
+            value="${nt(s.coef, 2)}" min="0" step="0.1"
+            oninput="recalcCompound(${idx})" title="配方比例係數">
+          <span class="cpd-sub-unit">× $${nt(s.unitCost, 3)}/ml</span>
+          <span class="cpd-sub-contrib" id="csc_${idx}_${si}">= $${nt(s.coef * s.unitCost, 2)}</span>
+        </div>`).join('');
+      subHtml = `
+        <div class="cpd-expand" id="cpdx_${idx}">
+          <div class="cpd-sub-hd">複合原料子料${ing.hasLoss ? '　<span class="cpd-loss-tag">÷0.8 耗損</span>' : ''}</div>
+          ${subRows}
+        </div>`;
+    }
+    return `
+    <div class="ing-row${ing.isCompound ? ' ing-compound' : ''}" id="ingrow_${idx}">
       <div class="ing-r1">
-        <div class="ing-name">${ing.name}</div>
+        <div class="ing-name">${ing.name}${ing.isCompound ? ' <span class="cpd-badge">複合</span>' : ''}</div>
         <div class="ing-cost" id="rc_${idx}">${fm(ing.cost)}</div>
       </div>
       <div class="ing-r2">
@@ -561,7 +593,9 @@ function renderRecipeDetail(area) {
         <span class="ing-unit">ml</span>
         <span class="ing-abv">ABV ${nt(ing.abv,1)}%</span>
       </div>
-    </div>`).join('');
+      ${subHtml}
+    </div>`;
+  }).join('');
 
   area.innerHTML = `
     <div class="recipe-meta">
@@ -634,6 +668,30 @@ function recalcIngCost(idx, pct, vol) {
   const cost = unitCost * vol;
   ing._curCost = cost;
   const cc = document.getElementById('rc_'+idx); if (cc) cc.textContent = fm(cost);
+}
+// 複合原料子料調整 → 重算複合料成本（占比不動，僅成本連動）
+// 複合料成本 = (Σ 子料係數 × 子料每ml成本) / (hasLoss ? 0.8 : 1) × 該複合料體積
+// 註：subMaterials[].contrib = 係數 × unitCost = 每 1ml 成品的子料成本貢獻
+function recalcCompound(idx) {
+  const ing = rdata?.ingredients?.[idx];
+  if (!ing || !ing.isCompound) return;
+  // 讀子料當前係數，重算每 ml 成品成本
+  let perMl = 0;
+  (ing.subMaterials || []).forEach((s, si) => {
+    const coef = parseFloat(document.getElementById('cs_'+idx+'_'+si)?.value) || 0;
+    s.coef = coef;
+    s.contrib = coef * (s.unitCost || 0);
+    perMl += s.contrib;
+    const ce = document.getElementById('csc_'+idx+'_'+si);
+    if (ce) ce.textContent = '= $' + nt(s.contrib, 2);
+  });
+  if (ing.hasLoss) perMl = perMl / 0.8;
+  // 複合料總成本 = 每ml成品成本 × 該複合料當前體積（占比不動，體積由現有占比決定）
+  const vol = parseFloat(document.getElementById('rv_'+idx)?.value) || ing.vol || 0;
+  const cost = perMl * vol;
+  ing._curCost = cost;
+  const cc = document.getElementById('rc_'+idx); if (cc) cc.textContent = fm(cost);
+  recalcSummary(); // 更新總成本/報價/含稅（占比總和不變）
 }
 // 重算所有匯總
 function recalcSummary() {
