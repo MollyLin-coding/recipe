@@ -1026,6 +1026,7 @@ async function renderRdPage(mc) {
     <button class="btn btn-ghost btn-sm" onclick="lockRun(this, rdSave)">💾 儲存</button>
     <button class="btn btn-ghost btn-sm" onclick="rdLoadList()">📋 載入</button>
     <button class="btn btn-ghost btn-sm" onclick="rdExportCSV()">⬇ CSV</button>
+    <button class="btn btn-primary btn-sm" onclick="lockRun(this, rdSubmitApply)">📤 送出申請</button>
   </div>`;
 
   rdRender(); rdUpdateMat(); rdCalc();
@@ -1276,17 +1277,24 @@ async function rdLoadList() {
   if (!res.ok) { toast('載入失敗'); return; }
   const records = res.records || [];
   if (!records.length) { toast('無儲存記錄'); return; }
-  const modal = makeModal(`<div class="modal-title">載入試算記錄</div>
-    <div style="max-height:300px;overflow-y:auto;">${records.map((r,i)=>`<div class="rd-rec-item" onclick="rdLoadOne(${i},this.closest('.modal-bg'))">
-      <div style="font-weight:500;font-size:13px;">${r.name}</div>
-      <div class="sub">${r.client||'—'} · ${r.creator} · ${String(r.createdAt).substring(0,10)}</div>
+  const modal = makeModal(`<div class="modal-title">試算記錄</div>
+    <div style="max-height:300px;overflow-y:auto;">${records.map((r,i)=>`<div class="rd-rec-item" style="display:flex;align-items:center;gap:6px;cursor:default;padding-right:6px;">
+      <div style="flex:1;cursor:pointer;" onclick="rdLoadOne(${i},this.closest('.modal-bg'))">
+        <div style="font-weight:500;font-size:13px;">${r.name||'未命名'}</div>
+        <div class="sub">${r.client||'—'} · ${r.creator} · ${String(r.createdAt).substring(0,10)}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="flex-shrink:0;font-size:12px;padding:5px 8px;" title="送出申請" onclick="rdApplyFromRecord(this.closest('.modal-bg')._records[${i}])">📤</button>
     </div>`).join('')}</div>
     <div class="fe" style="margin-top:10px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button></div>`);
   modal._records = records;
 }
 function rdLoadOne(i, modalBg) {
   const r = modalBg?._records?.[i]; if (!r) return;
-  rdState = { ings:r.ingredients||[], tv:r.volume||4000, bt:r.bottle||'4L桶', title:r.name||'', client:r.client||'' };
+  // Bug fix：ingredients 從 GAS 回傳是 JSON string，需先 parse 才能當 array 使用
+  let ings = r.ingredients || [];
+  if (typeof ings === 'string') { try { ings = JSON.parse(ings); } catch(e) { ings = []; } }
+  rdState = { ings, tv:r.volume||4000, bt:r.bottle||'4L桶', title:r.name||'', client:r.client||'' };
+  if (!rdState.matSel) rdState.matSel = {};
   modalBg.remove();
   switchTab('rd');
   toast('已載入：'+r.name);
@@ -1306,6 +1314,57 @@ function rdExportCSV() {
   lines.push([nt(r.abv,1)+'%',nt(r.tax,2),nt(r.totalCost,2),nt(r.quote,2),nt(r.matCost,2),nt(r.totalAll,2)].join(','));
   const blob = new Blob(['\uFEFF'+lines.join('\n')], {type:'text/csv;charset=utf-8'});
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (rdState.title||'試算')+'.csv'; a.click();
+}
+
+// 研發申請送審表單 modal（name/client 可預填；任一為空時強制填寫）
+function showRdApplyModal(defaults, onSubmit) {
+  const clients = clientList.length ? clientList.map(c=>c.name) : ['Feeling Bar','南坡萬公版','Feeling Bar Cafe','南坡萬v.2'];
+  const clientOpts = clients.map(c=>`<option value="${c}"${defaults.client===c?' selected':''}>${c}</option>`).join('');
+  const modal = makeModal(`
+    <div class="modal-title">📤 送出研發申請</div>
+    <div class="fg" style="margin-bottom:10px;"><label class="lb">酒款名稱</label>
+      <input class="inp" id="_rdaName" value="${(defaults.name||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}" placeholder="請填寫酒款名稱" style="margin-top:4px;"></div>
+    <div class="fg"><label class="lb">客戶</label>
+      <select class="inp" id="_rdaClient" style="margin-top:4px;">${clientOpts}</select></div>
+    <div class="fe mt8" style="gap:6px;margin-top:16px;">
+      <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button>
+      <button class="btn btn-primary btn-sm" id="_rdaOk">確認送出</button>
+    </div>`);
+  const btn = document.getElementById('_rdaOk');
+  btn.addEventListener('click', () => lockRun(btn, async () => {
+    const n = document.getElementById('_rdaName')?.value.trim();
+    const c = document.getElementById('_rdaClient')?.value;
+    if (!n) { toast('請填寫酒款名稱'); return; }
+    if (!c) { toast('請選擇客戶'); return; }
+    modal.remove();
+    await onSubmit(n, c);
+  }));
+}
+
+// 試算頁「📤 送出申請」
+async function rdSubmitApply() {
+  if (!rdState.ings.length) { toast('請先加入原料'); return; }
+  showRdApplyModal({ name: rdState.title||'', client: rdState.client||'' }, async (name, client) => {
+    const res = await api({ action:'submitRdApply', creator:curUser.username, client, name,
+      volume:rdState.tv, bottle:rdState.bt, abv:(window._rdRes?.abv||0),
+      ingredients:JSON.stringify(rdState.ings), results:JSON.stringify(window._rdRes||{}) });
+    if (res.ok) toast('研發申請已送出！');
+    else toast('送出失敗：'+(res.error||''));
+  });
+}
+
+// 記錄列表「📤」— 直接用儲存記錄的資料送審
+async function rdApplyFromRecord(r) {
+  if (!r) return;
+  let parsedResults = {};
+  try { parsedResults = JSON.parse(r.results||'{}'); } catch(e) {}
+  showRdApplyModal({ name: r.name||'', client: r.client||'' }, async (name, client) => {
+    const res = await api({ action:'submitRdApply', creator:curUser.username, client, name,
+      volume:r.volume||0, bottle:r.bottle||'', abv:parsedResults.abv||0,
+      ingredients:r.ingredients||'[]', results:r.results||'{}' });
+    if (res.ok) toast('研發申請已送出！');
+    else toast('送出失敗：'+(res.error||''));
+  });
 }
 
 // ════════════════════════════════════════════════
@@ -1456,8 +1515,13 @@ async function renderApplyPage(mc) {
     <div class="sec-hd"><div class="card-title" style="margin:0">待審核申請</div><button class="btn btn-ghost btn-sm" onclick="renderApplyPage(document.getElementById('mainContent'))">↻</button></div>
     <div id="applyArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div>
   </div>
-  <div class="card"><div class="card-title">審核歷史</div><div id="histArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div></div>`;
-  loadApplies(); loadHistory();
+  <div class="card" style="margin-bottom:10px;"><div class="card-title">審核歷史</div><div id="histArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div></div>
+  <div class="card" style="margin-bottom:10px;">
+    <div class="sec-hd"><div class="card-title" style="margin:0">🔬 研發申請 — 待審核</div></div>
+    <div id="rdApplyArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div>
+  </div>
+  <div class="card"><div class="card-title">🔬 研發申請 — 歷史</div><div id="rdHistArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div></div>`;
+  loadApplies(); loadHistory(); loadRdApplies(); loadRdHistory();
 }
 async function loadApplies() {
   const res = await api({ action:'getApplies' }); const area = document.getElementById('applyArea'); if (!area) return;
@@ -1489,6 +1553,60 @@ async function doReview(id, approved) {
   else toast('操作失敗:'+res.error);
 }
 
+// ── 研發申請審核 ─────────────────────────────────────────────
+async function loadRdApplies() {
+  const res = await api({ action:'getRdApplies' });
+  const area = document.getElementById('rdApplyArea'); if (!area) return;
+  if (!res.ok) { area.innerHTML=`<div class="warn" style="padding:10px;">${res.error}</div>`; return; }
+  const list = res.list || [];
+  if (!list.length) { area.innerHTML='<div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">目前無待審核</div>'; return; }
+  area.innerHTML = list.map(a => {
+    let ings=[]; try { ings=JSON.parse(a.ingredients||'[]'); } catch(e){}
+    let rr={}; try { rr=JSON.parse(a.results||'{}'); } catch(e){}
+    const ingPreview = ings.slice(0,4).map(g=>`<span style="margin-right:5px;">• ${g.name||''}${g.type==='compound'?'<span class="cpd-badge" style="vertical-align:middle;margin-left:2px;">複合</span>':''}</span>`).join('') + (ings.length>4?`<span class="sub">…共${ings.length}項</span>`:'');
+    return `<div class="card" style="margin-bottom:8px;border-color:var(--yellow);">
+      <div class="fb">
+        <div><span style="font-weight:600;font-size:13px;">${a.name}</span><span class="badge bg-brown" style="margin-left:5px;">${a.client}</span></div>
+        <div class="sub">${a.creator} · ${String(a.createdAt).substring(0,10)}</div>
+      </div>
+      <div style="margin-top:6px;font-size:12px;color:var(--ink2);">
+        ABV ${nt(rr.abv||0,1)}% · 食材成本 ${fm(rr.totalCost||0)} · 總成本 ${fm(rr.totalAll||0)}
+      </div>
+      <div style="margin-top:5px;font-size:12px;line-height:1.8;">${ingPreview}</div>
+      ${curUser?.role==='admin'?`<div class="fe mt8" style="gap:6px;">
+        <button class="btn btn-success btn-sm" onclick="lockRun(this,()=>doRdReview('${a.id}',true))">✓ 核准</button>
+        <button class="btn btn-danger btn-sm" onclick="lockRun(this,()=>doRdReview('${a.id}',false))">✕ 拒絕</button>
+      </div>`:''}
+    </div>`;
+  }).join('');
+}
+
+async function loadRdHistory() {
+  const res = await api({ action:'getRdHistory' });
+  const area = document.getElementById('rdHistArea'); if (!area) return;
+  if (!res.ok) { area.innerHTML=`<div class="warn" style="padding:10px;">${res.error}</div>`; return; }
+  const list = res.list || [];
+  if (!list.length) { area.innerHTML='<div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">尚無歷史</div>'; return; }
+  area.innerHTML = list.map(r => `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
+    <div class="fb">
+      <div>
+        <span style="font-weight:500;font-size:13px;">${r.name}</span>
+        <span class="badge ${r.status==='已核准'?'bg-green':'bg-red'}" style="margin-left:5px;">${r.status}</span>
+        <span class="badge bg-brown" style="margin-left:3px;">${r.client}</span>
+      </div>
+      <div class="sub">${r.reviewer||''} · ${String(r.reviewedAt||'').substring(0,10)}</div>
+    </div>
+    ${r.newSheet?`<div class="sub" style="margin-top:3px;">📄 已建分頁：${r.newSheet}</div>`:r.status==='已核准'?`<div class="sub" style="margin-top:3px;color:var(--ink3);">分頁待建（Batch 3）</div>`:''}
+  </div>`).join('');
+}
+
+async function doRdReview(id, approved) {
+  if (!confirm(`確認${approved?'核准此研發申請？（分頁自動建立功能 Batch 3 實作，目前只更新狀態）':'拒絕此研發申請'}？`)) return;
+  const res = await api({ action:'reviewRdApply', id, approve:String(approved), reviewer:curUser.username });
+  if (res.ok) { toast(approved?'已核准':'已拒絕'); renderApplyPage(document.getElementById('mainContent')); }
+  else toast('操作失敗：'+res.error);
+}
+
 // ── 全域事件 ──
 document.addEventListener('click', e => {
   if (!e.target.closest('.sbox') && !e.target.closest('.sdrop'))
@@ -1499,4 +1617,5 @@ document.getElementById('loginUser').addEventListener('change', () => setTimeout
 </script>
 </body>
 </html>
+
 
