@@ -90,6 +90,7 @@ function doGet(e) {
       case 'getInventory':   result = getInventory(); break;
       case 'addBatchRecord': result = addBatchRecord(p); break;
       case 'updateBatchRecord': result = updateBatchRecord(p); break;
+      case 'deleteBatchRecord': result = deleteBatchRecord(p); break;
       case 'getBatchRecords':result = getBatchRecords(); break;
       case 'submitApply':    result = submitApply(p); break;
       case 'getApplies':     result = getApplies(); break;
@@ -262,6 +263,9 @@ function getRecipe(p) {
         ing.isCompound = true;
         ing.hasLoss = cpd.hasLoss;
         ing.subMaterials = cpd.subMaterials;
+        // G欄(index 6)=批次容量：F欄公式算出的是「每 batchVol ml 的子料總成本」
+        // 必須除以此值才得每ml成本，recalcCompound 需要它（Issue 4 root cause）
+        ing.batchVol = parseFloat(data[i][6]) || 1;
       }
       ingredients.push(ing);
       ingredientCost += cost;
@@ -498,6 +502,21 @@ function updateBatchRecord(p) {
         p.volume, p.bottle, p.cap, p.frontLabel, p.backLabel,
         p.bottleCount, p.laborCost, p.ingredientQuote, p.note
       ]]);
+      return { ok: true };
+    }
+  }
+  return { ok: false, error: '找不到記錄 id: ' + p.id };
+}
+
+// Issue 3: 刪除製作記錄（admin 操作，刪除 Sheet 整列）
+function deleteBatchRecord(p) {
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('製作記錄');
+  if (!ws) return { ok: false, error: '找不到製作記錄分頁' };
+  const rows = ws.getDataRange().getValues();
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) === String(p.id)) {
+      ws.deleteRow(i + 1);
       return { ok: true };
     }
   }
