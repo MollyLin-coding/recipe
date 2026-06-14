@@ -678,7 +678,16 @@ function reviewRdApply(p) {
     ws.getRange(i + 1, 11).setValue(status);   // K=status
     ws.getRange(i + 1, 12).setValue(p.reviewer || '');  // L=reviewer
     ws.getRange(i + 1, 13).setValue(new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })); // M=reviewedAt
-    // ⏳ Batch 3：if (approve) { try { createRecipeSheet(rows[i]); } catch(e) {} }
+    // Batch 3：核准時建立新酒譜分頁
+    if (approve) {
+      try {
+        var newSheetName = createRecipeSheet(rows[i]);
+        ws.getRange(i + 1, 14).setValue(newSheetName);  // N=newSheet 回填
+      } catch(e) {
+        // 建分頁失敗不影響審核狀態，但回傳 warn
+        return { ok: true, warn: '核准成功但建立分頁失敗: ' + e.message };
+      }
+    }
     return { ok: true };
   }
   return { ok: false, error: '找不到申請 id' };
@@ -699,6 +708,205 @@ function getRdHistory() {
       newSheet:String(r[13] || '') });
   }
   return { ok: true, list };
+}
+
+// ── Batch 3：建立新酒譜分頁 ──────────────────────────────────
+// 從研發申請記錄 row（array）建立新酒譜分頁。
+// 流程：複製同客戶第一個酒譜分頁為樣板 → 清除 Row4+ 舊資料
+//       → 依「型態 B 公式寫入」規格寫入原料與子料 → 回傳新分頁名稱。
+// ⚠️ 動態列號是最大難點：先算好每列最終 row number，再組 H{列} 公式，避免錯位。
+function createRecipeSheet(row) {
+  // ── 解析輸入 ──
+  var client     = String(row[3]);
+  var recipeName = String(row[4]);
+  var totalVol   = parseFloat(row[5]) || 4000;
+  var abv        = parseFloat(row[7]) || 0;
+  var rawIngs    = [];
+  try { rawIngs = JSON.parse(String(row[8])); } catch(e) {}
+
+  // ── 標準化原料 ──
+  var ings = normalizeRdIngs(rawIngs, totalVol);
+
+  // ── 取客戶 Sheet ──
+  var cfg  = getClientCfg(client);
+  var ss   = SpreadsheetApp.openById(cfg.id);
+  var sheets = ss.getSheets();
+
+  // ── 找樣板（同客戶第一個酒譜分頁）──
+  var tmpl = null;
+  for (var wi = 0; wi < sheets.length; wi++) {
+    if (isRecipeSheet(sheets[wi].getName())) { tmpl = sheets[wi]; break; }
+  }
+  if (!tmpl) throw new Error('找不到可用樣板酒譜分頁（' + client + '）');
+
+  // ── 推導分頁前綴（從樣板名稱去掉 strip regex）──
+  var tn      = tmpl.getName();
+  var stripped = tn.replace(cfg.strip, '');
+  var prefix  = (stripped !== tn) ? tn.slice(0, tn.length - stripped.length) : '';
+  var newSheetName = prefix + recipeName;
+
+  // ── 防重名 ──
+  for (var si = 0; si < sheets.length; si++) {
+    if (sheets[si].getName() === newSheetName) throw new Error('分頁名稱已存在: ' + newSheetName);
+  }
+
+  // ── 複製樣板並改名 ──
+  var ns = tmpl.copyTo(ss);
+  ns.setName(newSheetName);
+
+  // ── 動態版面計算（先排版，才能組正確的 H{列} 公式）──
+  var N = ings.length;
+  var allSubs = collectSubs(ings);  // 子料去重清單（跨所有複合母料）
+  var S = allSubs.length;
+  var hasCompound = S > 0;
+
+  var ING_START      = 4;               // 第一個母料：Row4（1-based）
+  var TOTAL_VOL_ROW  = ING_START + N;   // 總體積
+  var SUB_LABEL_ROW  = hasCompound ? TOTAL_VOL_ROW + 1 : -1;  // 基礎原料 標題列
+  var SUB_START_ROW  = hasCompound ? TOTAL_VOL_ROW + 2 : -1;  // 第一個子料
+  var TOTAL_COST_ROW = hasCompound ? SUB_START_ROW + S : TOTAL_VOL_ROW + 1;
+  var PROC_NOTE_ROW  = TOTAL_COST_ROW + 1;
+
+  // 子料列號 map：名稱 → 1-based 列號（決定 H{列} 參照的正確列號）
+  var subRowMap = {};
+  allSubs.forEach(function(sub, i){ subRowMap[sub.name] = SUB_START_ROW + i; });
+
+  // ── 清除 Row4 以下舊資料（保留 Row1-3 樣板格式）──
+  var lastRow = ns.getMaxRows();
+  if (lastRow >= ING_START) {
+    ns.getRange(ING_START, 1, lastRow - ING_START + 1, ns.getMaxColumns()).clearContent();
+  }
+
+  // ── Row 2：更新酒款名稱(E2) 與 ABV(I2)，客戶名稱不動 ──
+  ns.getRange(2, 5).setValue(recipeName);
+  ns.getRange(2, 9).setValue(abv + '%');
+
+  // ── 寫入母料列（Row4 ~ Row(3+N)）──
+  ings.forEach(function(ing, idx) {
+    var r = ING_START + idx;                    // 當前列號（1-based）
+    ns.getRange(r, 1).setValue(ing.name);       // A：名稱
+    ns.getRange(r, 2).setValue(ing.pct / 100);  // B：占比（小數，0.1=10%）
+    ns.getRange(r, 3).setValue(ing.vol);        // C：實際體積
+    ns.getRange(r, 4).setValue(ing.abv || 0);  // D：ABV
+
+    if (ing.isCompound) {
+      // F：複合料公式。格式：=IFERROR((H{r1}*{v1}+H{r2}*{v2})/{totalSubVol}[/0.8],"")
+      // 用「絕對體積/總體積」代表比例係數，與子料列號精確對應（型態 B 公式寫入）
+      var terms = (ing.subs || []).map(function(s){
+        return 'H' + subRowMap[s.name] + '*' + s.vol;
+      });
+      var sumPart = terms.length > 1 ? '(' + terms.join('+') + ')' : terms[0];
+      var fFormula = '=IFERROR(' + sumPart + '/' + ing.totalSubVol
+                   + (ing.hasLoss ? '/0.8' : '') + ',"")';
+      ns.getRange(r, 6).setFormula(fFormula);   // F：公式
+      ns.getRange(r, 7).setValue(1);            // G = 1（per-ml cost / 1 = per-ml cost）
+    } else {
+      ns.getRange(r, 6).setValue(ing.price   || 0);  // F：進貨單價
+      ns.getRange(r, 7).setValue(ing.unitVol || 0);  // G：包裝容量
+    }
+    ns.getRange(r, 8).setFormula('=IFERROR(F' + r + '/G' + r + ',"")');  // H：每ml成本
+    ns.getRange(r, 9).setFormula('=IFERROR(H' + r + '*C' + r + ',"")');  // I：總成本
+  });
+
+  // ── 總體積列 ──
+  ns.getRange(TOTAL_VOL_ROW, 1).setValue('總體積');
+  ns.getRange(TOTAL_VOL_ROW, 3).setValue(totalVol);
+  ns.getRange(TOTAL_VOL_ROW, 4).setValue(abv);
+
+  // ── 子料區（有複合原料才建）──
+  if (hasCompound) {
+    ns.getRange(SUB_LABEL_ROW, 1).setValue('基礎原料');
+    allSubs.forEach(function(sub, i) {
+      var r = SUB_START_ROW + i;
+      ns.getRange(r, 1).setValue(sub.name);
+      ns.getRange(r, 6).setValue(sub.price   || 0);  // F：進貨單價
+      ns.getRange(r, 7).setValue(sub.unitVol || 0);  // G：包裝容量
+      ns.getRange(r, 8).setFormula('=IFERROR(F' + r + '/G' + r + ',"")');  // H：每ml成本
+      // I：子料不需總成本（C欄空，不填 I 公式）
+    });
+  }
+
+  // ── 總食材成本列 ──
+  ns.getRange(TOTAL_COST_ROW, 1).setValue(totalVol + 'ml版總食材成本');
+
+  // ── 製程備註 ──
+  ns.getRange(PROC_NOTE_ROW, 1).setValue('製程備註');
+  ns.getRange(PROC_NOTE_ROW + 1, 1).setValue('');
+
+  // ── 清除 recipeList 快取（新分頁須出現在酒譜清單）──
+  CacheService.getScriptCache().remove('recipeList_v1');
+
+  return newSheetName;
+}
+
+// 原料標準化：把 R&D 試算格式（type='compound'）和酒譜頁格式（isCompound=true）
+// 統一轉換為 createRecipeSheet 所需格式：
+// { name, pct(%), vol, abv, isCompound, hasLoss, price, unitVol, totalSubVol, subs:[] }
+function normalizeRdIngs(rawIngs, totalVol) {
+  return rawIngs.map(function(ing) {
+    // ── R&D 試算複合格式（type='compound', subs=[]）──
+    if (ing.type === 'compound') {
+      var subVol = (ing.subs || []).reduce(function(s, x){ return s + (parseFloat(x.volume)||0); }, 0);
+      return {
+        name        : String(ing.name || ''),
+        pct         : totalVol > 0 ? (subVol / totalVol * 100) : 0,
+        vol         : subVol,
+        abv         : parseFloat(ing.abv) || 0,
+        isCompound  : true,
+        hasLoss     : !!ing.hasLoss,
+        totalSubVol : subVol,
+        subs        : (ing.subs || []).map(function(s){
+          return { name: String(s.name||''), price: parseFloat(s.price)||0,
+                   unitVol: parseFloat(s.unitVol)||0, vol: parseFloat(s.volume)||0 };
+        })
+      };
+    }
+    // ── 酒譜頁複合格式（isCompound=true, subMaterials=[]）──
+    if (ing.isCompound && ing.subMaterials) {
+      var ingVol = parseFloat(ing.vol) || parseFloat(ing.volume) || 0;
+      return {
+        name        : String(ing.name || ''),
+        pct         : parseFloat(ing.pct) || parseFloat(ing.ratio) || 0,
+        vol         : ingVol,
+        abv         : parseFloat(ing.abv) || 0,
+        isCompound  : true,
+        hasLoss     : !!ing.hasLoss,
+        totalSubVol : ingVol,
+        subs        : (ing.subMaterials || []).map(function(s){
+          var pv = parseFloat(s.packVol) || 1;
+          return { name: String(s.name||''), price: (parseFloat(s.unitCost)||0) * pv,
+                   unitVol: pv, vol: (parseFloat(s.coef)||0) * ingVol };
+        })
+      };
+    }
+    // ── 一般原料（R&D 試算 或 酒譜頁 兩種格式均相容）──
+    return {
+      name       : String(ing.name || ''),
+      pct        : parseFloat(ing.ratio) || parseFloat(ing.pct) || 0,
+      vol        : parseFloat(ing.volume) || parseFloat(ing.vol) || 0,
+      abv        : parseFloat(ing.abv) || 0,
+      isCompound : false,
+      hasLoss    : !!ing.hasLoss,
+      price      : parseFloat(ing.price) || 0,
+      unitVol    : parseFloat(ing.unitVol) || 0,
+      subs       : []
+    };
+  });
+}
+
+// 從所有複合母料收集子料，依名稱去重（先出現者優先，保留 price/unitVol）
+function collectSubs(normalizedIngs) {
+  var seen = {}, result = [];
+  normalizedIngs.forEach(function(ing) {
+    if (!ing.isCompound) return;
+    (ing.subs || []).forEach(function(s) {
+      if (!seen[s.name]) {
+        seen[s.name] = true;
+        result.push({ name: s.name, price: s.price, unitVol: s.unitVol });
+      }
+    });
+  });
+  return result;
 }
 
 // ============================================================
@@ -767,4 +975,5 @@ function runSelfTest() {
   Logger.log(report.join('\n'));
   return { pass: pass, report: report };
 }
+
 
