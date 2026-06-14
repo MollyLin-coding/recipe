@@ -175,7 +175,7 @@ tbody tr:hover td{background:#faf3e8;}
 @keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
 .skeleton{height:56px;border-radius:var(--r-sm);background:linear-gradient(90deg,var(--border) 25%,#f5f0e8 50%,var(--border) 75%);background-size:800px;animation:shimmer 1.4s infinite;}
 .divider{height:1px;background:var(--border);margin:8px 0;}
-@media(min-width:768px){body{font-size:14px;}#mainContent{padding:18px;max-width:1000px;margin:0 auto;}#navbar{justify-content:center;}.nav-tab{max-width:100px;}}
+@media(min-width:768px){body{font-size:14px;}#mainContent{padding:18px;max-width:1000px;margin:0 auto;width:100%;}#navbar{justify-content:center;}.nav-tab{max-width:100px;}.profit-grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));}}
 
 /* ── 原料雙行版面 ── */
 .ing-row{padding:8px 0;border-bottom:1px solid var(--border);}
@@ -686,9 +686,11 @@ function recalcCompound(idx) {
     if (ce) ce.textContent = '= $' + nt(s.contrib, 2);
   });
   if (ing.hasLoss) perMl = perMl / 0.8;
-  // 複合料總成本 = 每ml成品成本 × 該複合料當前體積（占比不動，體積由現有占比決定）
+  // 複合料每ml成本 = perMl / batchVol（G欄批次容量；batchVol=1 代表 createRecipeSheet 建的新酒譜）
+  // 根因(Bug Issue 4)：少此除法導致成本放大 batchVol 倍（實機驗算：103×/60×）
+  const batchVol = ing.batchVol || 1;
   const vol = parseFloat(document.getElementById('rv_'+idx)?.value) || ing.vol || 0;
-  const cost = perMl * vol;
+  const cost = (perMl / batchVol) * vol;
   ing._curCost = cost;
   const cc = document.getElementById('rc_'+idx); if (cc) cc.textContent = fm(cost);
   recalcSummary(); // 更新總成本/報價/含稅（占比總和不變）
@@ -859,9 +861,8 @@ function renderProfitData(res) {
       <div class="pn">${nm}${d.warn?' <span title="售價或成本讀取為 0，疑似毛利分頁欄位跑掉，請檢查 Sheet" style="cursor:help;">⚠️</span>':''}</div>
       <div style="font-size:11px;color:var(--ink3);margin-bottom:2px;">售價</div>
       <div class="pp">${fm(pr)}</div>
-      <div class="pm-row"><span>食材成本</span><span>${fm(d.ingredientCost)}</span></div>
-      <div class="pm-row"><span>總成本(含稅)</span><span>${fm(d.totalCostTax)}</span></div>
-      <div class="pm-row"><span>毛利</span><span class="pv">${fm(d.profit)}</span></div>
+      <div class="pm-row"><span>總成本</span><span>NT$${Math.round(d.totalCostTax)}</span></div>
+      <div class="pm-row"><span>毛利</span><span class="pv">NT$${Math.round(d.profit)}</span></div>
       <div class="pm-row"><span>毛利率</span><span style="font-weight:600;">${nt(rate,1)}%</span></div>
     </div>`;
     }).join('') + '</div>';
@@ -887,7 +888,7 @@ function renderProfitData(res) {
             <div class="bv">${fm(pr)}</div>
             <div class="br">毛利率 ${nt(rate,1)}%</div>
             <div class="bt2">毛利 ${fm(d.profit)}</div>
-            <div class="bt2">總成本(含稅) ${fm(d.totalCostTax)}</div>
+            <div class="bt2">總成本 NT$${Math.round(d.totalCostTax)}</div>
           </div>`;
         }).join('')}</div>
       </div>`;
@@ -1138,12 +1139,18 @@ function rdRender() {
     const ref = `rdState.ings[${i}]`;
     if (ing.type === 'compound') {
       const lossOn = ing.hasLoss;
+      // Issue 2: 計算複合料子料總體積（用於顯示各子料占比%）
+      const _csvTot = (ing.subs||[]).reduce((t,s)=>t+(s.volume||0),0);
       const subsHtml = (ing.subs||[]).map((s,pi) => {
         const sr = `rdState.ings[${i}].subs[${pi}]`;
+        const _pct = _csvTot>0 ? (_csvTot>0?(s.volume||0)/_csvTot*100:0).toFixed(1) : '0.0';
         return `<div class="sub-row">
           <div class="sd-name" style="font-size:12px;">${s.brand?s.brand+'｜':''}${s.name}</div>
-          <div class="if"><label>用量ml</label><input type="number" value="${s.volume||''}" id="rsv_${i}_${pi}" oninput="${sr}.volume=parseFloat(this.value)||0;rdCalc()" placeholder="ml" style="width:70px;"></div>
-          <div style="font-size:11px;color:var(--ink3);">${fm(rdCpm(s)*(s.volume||0))}</div>
+          <div class="if"><label>占比%</label><input type="number" value="${_pct}" id="rsr_${i}_${pi}"
+            oninput="rdSubRatio(${i},${pi},parseFloat(this.value)||0)" placeholder="%" style="width:55px;"></div>
+          <div class="if"><label>用量ml</label><input type="number" value="${s.volume||''}" id="rsv_${i}_${pi}"
+            oninput="${sr}.volume=parseFloat(this.value)||0;rdSubVolUpdate(${i});rdCalc()" placeholder="ml" style="width:65px;"></div>
+          <div style="font-size:11px;color:var(--ink3);" id="rsvc_${i}_${pi}">${fm(rdCpm(s)*(s.volume||0))}</div>
           <button class="del-btn" onclick="${sr}=null;rdState.ings[${i}].subs=rdState.ings[${i}].subs.filter(Boolean);rdRender();rdCalc()">✕</button>
         </div>`;
       }).join('');
@@ -1209,6 +1216,30 @@ function rdPickSub(pi, item) {
   document.getElementById('sdrop_'+pi)?.classList.remove('open');
   rdRender(); rdCalc();
 }
+// Issue 2: 子料占比% 輸入 → 重算該子料的 ml，並更新所有子料的占比顯示
+// 策略：保持其他子料 ml 不變，此子料 ml = ratio/(100-ratio) * otherVol
+function rdSubRatio(ii, pi, ratio) {
+  const subs = rdState.ings[ii]?.subs; if (!subs) return;
+  const otherVol = subs.reduce((t,s,i)=>t+(i!==pi?(s.volume||0):0),0);
+  let newVol = 0;
+  if (ratio <= 0) newVol = 0;
+  else if (ratio >= 100) newVol = otherVol * 99; // 避免 /0
+  else newVol = ratio / (100 - ratio) * otherVol;
+  newVol = Math.round(newVol);
+  if (subs[pi]) subs[pi].volume = newVol;
+  const ve = document.getElementById('rsv_'+ii+'_'+pi);
+  if (ve) ve.value = newVol;
+  rdSubVolUpdate(ii); rdCalc();
+}
+// 當任一子料 ml 改動後，重算並更新所有占比%顯示
+function rdSubVolUpdate(ii) {
+  const subs = rdState.ings[ii]?.subs; if (!subs) return;
+  const tot = subs.reduce((t,s)=>t+(s.volume||0),0);
+  subs.forEach((s,pi)=>{
+    const re = document.getElementById('rsr_'+ii+'_'+pi);
+    if (re) re.value = tot>0 ? ((s.volume||0)/tot*100).toFixed(1) : '0.0';
+  });
+}
 function rdCalc() {
   let totalCost=0, totalAbv=0, totalPct=0;
   const cpm = rdCpm;
@@ -1219,7 +1250,12 @@ function rdCalc() {
     if (ing.type === 'compound') {
       // 複合原料：子原料用量加總 = 它在整批中的體積，自動納入占比與ABV
       let sub = 0, subVol = 0;
-      (ing.subs||[]).forEach(s => { sub += cpm(s)*(s.volume||0); subVol += (s.volume||0); totalAbv += (s.abv||0)*((s.volume||0)/(rdState.tv||1)); });
+      (ing.subs||[]).forEach((s,spi) => {
+        sub += cpm(s)*(s.volume||0); subVol += (s.volume||0); totalAbv += (s.abv||0)*((s.volume||0)/(rdState.tv||1));
+        // Issue 2: 即時更新子料成本顯示
+        const svc = document.getElementById('rsvc_'+i+'_'+spi);
+        if (svc) svc.textContent = fm(cpm(s)*(s.volume||0));
+      });
       const cRatio = rdState.tv>0 ? subVol/rdState.tv*100 : 0;
       totalPct += cRatio;
       const rp = document.getElementById('rcp_'+i); if (rp) rp.textContent = subVol>0 ? '占比 '+cRatio.toFixed(1)+'%（'+nt(subVol,0)+'ml）' : '';
@@ -1396,6 +1432,7 @@ function renderBatchList(mc) {
   const rows = filtered.map(r => { const oi = batchRecs.indexOf(r); return `<tr onclick="showBatchModal(${oi})">
     <td><div style="font-weight:500;font-size:13px;">${r.recipe||'—'}</div><div class="sub">${r.client||''} · ${r.date||''}</div></td>
     <td class="tr"><div style="font-size:12px;">${r.bottle||'—'} × ${r.bottleCount||0}</div><div class="sub">${r.pm||''}</div></td>
+    ${curUser?.role==='admin'?`<td style="width:36px;padding:4px;"><button class="del-btn" title="刪除" style="font-size:14px;" onclick="event.stopPropagation();batchDel('${r.id}')">🗑</button></td>`:'<td></td>'}
   </tr>`; }).join('');
   mc.innerHTML = `<div class="card">
     <div class="sec-hd">
@@ -1412,7 +1449,7 @@ function renderBatchList(mc) {
       ${(_bf.client||_bf.from||_bf.to)?`<div class="fg" style="flex:0 0 auto;display:flex;align-items:flex-end;"><button class="btn btn-ghost btn-sm" onclick="_bf={client:'',from:'',to:''};renderBatchList()">清除</button></div>`:''}
     </div>
     <div class="sub" style="margin-bottom:5px;">共 ${filtered.length} 筆${(_bf.client||_bf.from||_bf.to)?`（全部 ${batchRecs.length} 筆）`:''}</div>
-    <div class="tbl-wrap"><table><thead><tr><th>酒款 / 日期</th><th class="tr">瓶型 / PM</th></tr></thead>
+    <div class="tbl-wrap"><table><thead><tr><th>酒款 / 日期</th><th class="tr">瓶型 / PM</th>${curUser?.role==='admin'?'<th></th>':''}</tr></thead>
     <tbody>${rows||'<tr><td colspan="2" style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">尚無記錄</td></tr>'}</tbody></table></div>
   </div>`;
 }
@@ -1502,6 +1539,13 @@ function calcBatchSuggest() {
   const btls = Math.floor(vol / spec.volFill);
   const cntEl = document.getElementById('mb_cnt');
   if (cntEl && !cntEl.value) cntEl.value = btls;
+}
+// Issue 3: 刪除製作記錄（admin only，二次確認防誤刪）
+async function batchDel(id) {
+  if (!confirm('確定要刪除這筆製作記錄？此動作無法復原。')) return;
+  const res = await api({ action:'deleteBatchRecord', id });
+  if (res.ok) { toast('已刪除'); C.batch=null; renderBatchPage(); }
+  else toast('刪除失敗：'+(res.error||''));
 }
 function updMbRecipe(client) {
   const sel = document.getElementById('mb_rec'); if (!sel) return;
