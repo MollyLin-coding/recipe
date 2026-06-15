@@ -86,6 +86,8 @@ function doGet(e) {
       case 'changePassword': result = changePassword(p); break;
       case 'getRecipeList':  result = getRecipeList(); break;
       case 'getRecipe':      result = getRecipe(p); break;
+      case 'getClientRecipeList':    result = getClientRecipeList(p); break;     // Phase C 訂單系統
+      case 'getRecipeForProduction': result = getRecipeForProduction(p); break;  // Phase C 訂單系統
       case 'saveProcessNote':result = saveProcessNote(p); break;
       case 'getInventory':   result = getInventory(); break;
       case 'addBatchRecord': result = addBatchRecord(p); break;
@@ -332,6 +334,80 @@ function parseCompoundFormula(formula, subMap) {
   }
   if (subMaterials.length === 0) return { isCompound: false };
   return { isCompound: true, hasLoss: hasLoss, subMaterials: subMaterials };
+}
+
+// ── Phase C 訂單系統：調酒師酒譜製作 API（唯讀，成本欄一律過濾）──────
+// 規格起點見接手文件第二十五章。決議：
+//   #2 酒款下拉連動該客戶 Sheet 既有酒譜
+//   #3 調酒師選訂單→跳該客戶酒譜製作
+//   #4 成本欄 F/H/I 在 GAS 端就剔除（cost / tax / ingredientCost / 子料 unitCost·contrib），前端拿不到
+//   #5 看正式版（Sheet 現值），不碰研發申請暫存
+//   #9 整單用量照原值等比放大，耗損 /0.8 不自動加（hasLoss 僅作旗標顯示）
+function _round(n, d) { const m = Math.pow(10, d || 0); return Math.round((Number(n) || 0) * m) / m; }
+
+// 決議 #2：選客戶後，酒款下拉只列該客戶 Sheet 既有酒譜分頁
+function getClientRecipeList(p) {
+  const client = p.client;
+  if (!client) return { ok: false, error: '缺少 client' };
+  getClientCfg(client); // 未知客戶直接擋下
+  const all = getRecipeList(); // 沿用既有快取（recipeList_v1）
+  const list = (all.list || []).filter(function(r) { return r.client === client; });
+  return { ok: true, client: client, list: list };
+}
+
+// 決議 #3#4#9：調酒師選訂單後，取該款酒譜製作（過濾成本、整單放大、子料展開為配方比例）
+//   參數：client(客戶) sheet(酒譜分頁名) volume(規格 ml，如 "100ml") qty(訂單瓶數)
+function getRecipeForProduction(p) {
+  const client = p.client, sheet = p.sheet;
+  const volume = parseFloat(String(p.volume || '').replace(/[^\d.]/g, '')) || 0;
+  const qty = parseInt(p.qty, 10) || 0;
+  if (!client || !sheet) return { ok: false, error: '缺少 client 或 sheet' };
+  if (volume <= 0 || qty <= 0) return { ok: false, error: '規格或瓶數無效' };
+
+  // 沿用既有 getRecipe（已正確解析複合料子料，第十八章），再做成本過濾與放大
+  const r = getRecipe({ client: client, sheet: sheet });
+  if (!r.ok) return r;
+  if (!r.totalVol || r.totalVol <= 0) {
+    return { ok: false, error: '此酒譜未設定「總體積」，無法換算整單用量' };
+  }
+
+  const orderTotalMl = volume * qty;     // 訂單成品總量
+  const scale = orderTotalMl / r.totalVol; // 放大倍率（決議 25.3 公式）
+
+  const ingredients = (r.ingredients || []).map(function(ing) {
+    const o = {
+      name: ing.name,
+      abv: ing.abv,
+      perBatchVol: _round(ing.vol, 1),       // 單批用量(參考)
+      orderVol: _round(ing.vol * scale, 1)   // 整單用量
+    };
+    if (ing.isCompound) {
+      o.isCompound = true;
+      o.hasLoss = ing.hasLoss;               // 旗標顯示用，用量不自動加耗損(決議 #9)
+      // 子料只給「配方比例」coef（=預調比例，調酒師要的）；剔除 unitCost / contrib 成本
+      o.subMaterials = (ing.subMaterials || []).map(function(s) {
+        return { name: s.name, ratio: s.coef };
+      });
+    }
+    return o;
+  });
+
+  return {
+    ok: true,
+    recipeName: r.recipeName,
+    client: client,
+    sheet: sheet,
+    abv: r.abv,                 // ABV 非成本，可顯示(供調酒師判斷酒體)
+    batchTotalVol: r.totalVol,  // 批次總體積
+    orderTotalMl: orderTotalMl, // 整單成品總量
+    bottles: qty,
+    bottleVol: volume,
+    scaleFactor: _round(scale, 3),
+    processNote: r.processNote, // 製程備註(製作說明，調酒師需要)
+    ingredients: ingredients
+    // ⚠️ 刻意不回傳：ingredientCost / tax / 各原料 cost / 子料 unitCost·contrib
+    //    成本機密只在 admin 酒譜/毛利頁顯示(決議 #4)
+  };
 }
 
 // ── 儲存製程備註 ─────────────────────────────────────────────
