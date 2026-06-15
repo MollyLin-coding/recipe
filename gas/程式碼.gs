@@ -88,6 +88,9 @@ function doGet(e) {
       case 'getRecipe':      result = getRecipe(p); break;
       case 'getClientRecipeList':    result = getClientRecipeList(p); break;     // Phase C 訂單系統
       case 'getRecipeForProduction': result = getRecipeForProduction(p); break;  // Phase C 訂單系統
+      case 'createOrder':            result = createOrder(p); break;             // Phase C 訂單系統
+      case 'getOrders':              result = getOrders(p); break;               // Phase C 訂單系統
+      case 'completeOrderItem':      result = completeOrderItem(p); break;       // Phase C 訂單系統
       case 'saveProcessNote':result = saveProcessNote(p); break;
       case 'getInventory':   result = getInventory(); break;
       case 'addBatchRecord': result = addBatchRecord(p); break;
@@ -408,6 +411,148 @@ function getRecipeForProduction(p) {
     // ⚠️ 刻意不回傳：ingredientCost / tax / 各原料 cost / 子料 unitCost·contrib
     //    成本機密只在 admin 酒譜/毛利頁顯示(決議 #4)
   };
+}
+
+// ── Phase C 訂單系統：訂單寫入 / 讀取 / 完成回報 ──────────────────
+// 訂單主表(主資料庫)11 欄：
+//   A訂單編號 B客戶名稱 C訂單類型 D出貨日 E酒款明細(JSON) F總金額 G尾款 H訂金狀態 I製作狀態 J PM K建立時間
+// 製作狀態：per-item 存於 E 的 JSON(status)，I 欄為整單彙總(全完成→已完成，否則製作中)。
+
+function _genOrderNo(ws) {
+  const now = new Date();
+  const datePart = '' + now.getFullYear()
+    + ('0' + (now.getMonth() + 1)).slice(-2)
+    + ('0' + now.getDate()).slice(-2);
+  const prefix = 'NPW-' + datePart + '-';
+  const data = ws.getDataRange().getValues();
+  let maxSeq = 0;
+  for (let i = 1; i < data.length; i++) {
+    const no = String(data[i][0] || '');
+    if (no.indexOf(prefix) === 0) {
+      const seq = parseInt(no.slice(prefix.length), 10);
+      if (seq > maxSeq) maxSeq = seq;
+    }
+  }
+  return prefix + ('00' + (maxSeq + 1)).slice(-3);
+}
+
+// 前台送單
+function createOrder(p) {
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('訂單主表');
+  if (!ws) return { ok: false, error: '找不到訂單主表分頁' };
+  if (!p.client) return { ok: false, error: '缺少客戶' };
+  getClientCfg(p.client); // 未知客戶擋下(對應酒譜 Sheet)
+  let items;
+  try { items = typeof p.items === 'string' ? JSON.parse(p.items) : (p.items || []); }
+  catch (e) { return { ok: false, error: '酒款明細 JSON 解析失敗' }; }
+  if (!items || !items.length) return { ok: false, error: '訂單至少要有一款酒' };
+  items = items.map(function (it) {
+    return {
+      product: it.product || '', sheet: it.sheet || '', volume: it.volume || '',
+      bottleType: it.bottleType || '', qty: Number(it.qty) || 0,
+      status: it.status || '待製作'
+    };
+  });
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const orderNo = _genOrderNo(ws);
+    const now = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+    ws.appendRow([orderNo, p.client, p.orderType || '', p.deliveryDate || '',
+      JSON.stringify(items), Number(p.total) || 0, Number(p.balance) || 0,
+      p.depositStatus || '', '待製作', p.pm || '', now]);
+    return { ok: true, orderNo: orderNo };
+  } finally { lock.releaseLock(); }
+}
+
+// 讀訂單；view='bartender' → 過濾金額/訂金、只回未完成、依出貨日排序
+function getOrders(p) {
+  const view = p && p.view;
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('訂單主表');
+  if (!ws) return { ok: true, orders: [] };
+  const data = ws.getDataRange().getValues();
+  const orders = [];
+  for (let i = 1; i < data.length; i++) {
+    const r = data[i];
+    if (!r[0]) continue;
+    let items = [];
+    try { items = r[4] ? JSON.parse(r[4]) : []; } catch (e) { items = []; }
+    const base = {
+      orderNo: String(r[0]), client: String(r[1]), orderType: String(r[2]),
+      deliveryDate: String(r[3]), items: items, status: String(r[8] || '').trim(),
+      pm: String(r[9] || ''), createdAt: String(r[10] || '')
+    };
+    if (view === 'bartender') {
+      if (base.status === '已完成') continue; // 不回完成單
+      base.items = items.map(function (it) {
+        return {
+          product: it.product, sheet: it.sheet, volume: it.volume,
+          bottleType: it.bottleType, qty: it.qty, status: it.status || '待製作'
+        };
+      });
+      orders.push(base); // 刻意不含 total/balance/depositStatus(決議：調酒師不看金額)
+    } else {
+      base.total = Number(r[5]) || 0;
+      base.balance = Number(r[6]) || 0;
+      base.depositStatus = String(r[7] || '');
+      orders.push(base);
+    }
+  }
+  if (view === 'bartender') {
+    orders.sort(function (a, b) { return (a.deliveryDate || '').localeCompare(b.deliveryDate || ''); });
+  }
+  return { ok: true, orders: orders };
+}
+
+// 完成回報：共用 addBatchRecord 寫一筆製作記錄(F欄=關聯訂單編號)，再更新訂單主表 item 狀態
+function completeOrderItem(p) {
+  const orderNo = p.orderNo;
+  const idx = parseInt(p.itemIndex, 10);
+  if (!orderNo) return { ok: false, error: '缺少 orderNo' };
+  if (isNaN(idx)) return { ok: false, error: '缺少 itemIndex' };
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('訂單主表');
+  if (!ws) return { ok: false, error: '找不到訂單主表分頁' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const data = ws.getDataRange().getValues();
+    let rowIdx = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(orderNo)) { rowIdx = i; break; }
+    }
+    if (rowIdx < 0) return { ok: false, error: '找不到訂單: ' + orderNo };
+    const r = data[rowIdx];
+    const client = String(r[1]), deliveryDate = String(r[3]);
+    let items;
+    try { items = JSON.parse(r[4] || '[]'); } catch (e) { return { ok: false, error: '酒款明細解析失敗' }; }
+    if (idx < 0 || idx >= items.length) return { ok: false, error: 'itemIndex 超出範圍' };
+    const item = items[idx];
+    // 1) 寫製作記錄(共用同一筆；addBatchRecord 不變，18 欄、F=orderId)
+    const today = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }).split(' ')[0];
+    const batch = addBatchRecord({
+      creator: p.creator || p.pm || '', client: client, pm: p.pm || p.creator || '',
+      orderId: orderNo, recipe: item.product, date: today, deliveryDate: deliveryDate,
+      volume: (parseFloat(item.volume) || item.volume),
+      bottle: (p.bottle || item.bottleType || ''),
+      cap: p.cap || '', frontLabel: p.frontLabel || '', backLabel: p.backLabel || '',
+      bottleCount: (Number(p.bottleCount) || item.qty || 0),
+      laborCost: (p.laborCost != null && p.laborCost !== '' ? Number(p.laborCost) : ''),
+      ingredientQuote: (p.ingredientQuote != null && p.ingredientQuote !== '' ? Number(p.ingredientQuote) : ''),
+      note: p.note || ''
+    });
+    if (!batch.ok) return batch;
+    // 2) 更新 item 狀態 + 整單彙總
+    items[idx].status = '完成';
+    items[idx].batchId = batch.id;
+    const allDone = items.every(function (it) { return it.status === '完成'; });
+    const orderStatus = allDone ? '已完成' : '製作中';
+    ws.getRange(rowIdx + 1, 5).setValue(JSON.stringify(items)); // E 酒款明細
+    ws.getRange(rowIdx + 1, 9).setValue(orderStatus);           // I 製作狀態
+    return { ok: true, batchId: batch.id, orderStatus: orderStatus, item: item.product };
+  } finally { lock.releaseLock(); }
 }
 
 // ── 儲存製程備註 ─────────────────────────────────────────────
