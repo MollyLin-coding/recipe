@@ -278,6 +278,7 @@ tbody tr:hover td{background:#faf3e8;}
     <div class="nav-tab"        data-tab="inventory" onclick="switchTab('inventory')"><span class="ni">🧪</span><span>原料庫</span></div>
     <div class="nav-tab"        data-tab="rd"        onclick="switchTab('rd')">       <span class="ni">🔬</span><span>研發試算</span></div>
     <div class="nav-tab"        data-tab="batch"     onclick="switchTab('batch')">    <span class="ni">📦</span><span>製作記錄</span></div>
+    <div class="nav-tab"        data-tab="order"     onclick="switchTab('order')">    <span class="ni">🍸</span><span>製作任務</span></div>
     <div class="nav-tab admin-only" data-tab="apply" onclick="switchTab('apply')">   <span class="ni">✏️</span><span>審核</span></div>
   </div>
 </div>
@@ -490,7 +491,7 @@ function switchTab(tab) {
   curTab = tab;
   document.querySelectorAll('.nav-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
   const mc = document.getElementById('mainContent'); mc.scrollTop = 0;
-  ({ recipe:renderRecipePage, profit:renderProfitPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderBatchPage, apply:renderApplyPage })[tab]?.(mc);
+  ({ recipe:renderRecipePage, profit:renderProfitPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderBatchPage, order:renderOrderPage, apply:renderApplyPage })[tab]?.(mc);
 }
 
 // ════════════════════════════════════════════════
@@ -1550,6 +1551,111 @@ async function batchDel(id) {
 function updMbRecipe(client) {
   const sel = document.getElementById('mb_rec'); if (!sel) return;
   sel.innerHTML = recipeList.filter(i=>i.client===client).map(i=>`<option>${i.recipeName}</option>`).join('');
+}
+
+// ════════════════════════════════════════════════
+// 🍸 製作任務（Phase C 訂單系統 — 調酒師端）
+// ════════════════════════════════════════════════
+function daysToShip(s){ if(!s) return null; const d=new Date(s+'T00:00:00'); if(isNaN(d)) return null; const t=new Date(); t.setHours(0,0,0,0); return Math.round((d-t)/86400000); }
+
+async function renderOrderPage(mc){
+  mc.innerHTML = `<div class="card" style="margin-bottom:10px;">
+    <div class="sec-hd"><div class="card-title" style="margin:0">🍸 我的製作任務</div>
+      <button class="btn btn-ghost btn-sm" onclick="renderOrderPage(document.getElementById('mainContent'))">↻</button></div>
+    <div id="orderTaskArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div>
+  </div>`;
+  loadOrderTasks();
+}
+
+async function loadOrderTasks(){
+  const res = await api({ action:'getOrders', view:'bartender' });
+  const area = document.getElementById('orderTaskArea'); if(!area) return;
+  if(!res.ok){ area.innerHTML=`<div class="warn" style="padding:10px;">${res.error||'讀取失敗'}</div>`; return; }
+  const orders = res.orders || [];
+  window._orderTasks = orders;
+  if(!orders.length){ area.innerHTML=`<div style="text-align:center;color:var(--ink3);padding:24px;font-size:13px;">目前沒有待製作的訂單 🎉</div>`; return; }
+  area.innerHTML = orders.map((o,oi)=>{
+    const d = daysToShip(o.deliveryDate);
+    const dbadge = d===null ? '' : d<0 ? `<span class="badge bg-red">逾期${-d}天</span>`
+      : d<=7 ? `<span class="badge bg-red">剩${d}天</span>` : `<span class="badge bg-brown">${d}天後出貨</span>`;
+    const items = (o.items||[]).map((it,ii)=>{
+      const done = it.status==='完成';
+      const bound = !!it.sheet;
+      const click = (done||!bound) ? '' : `onclick="openTaskRecipe(${oi},${ii})"`;
+      return `<div ${click} style="display:flex;align-items:center;gap:8px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;${done?'opacity:.55;':'cursor:pointer;'}background:${done?'var(--bg)':'var(--card)'};">
+        <div style="flex:1;">
+          <div style="font-weight:600;font-size:14px;">${it.product||'（未綁定酒譜）'}</div>
+          <div style="font-size:12px;color:var(--ink3);">${it.volume} × ${it.qty} 瓶${it.bottleType?(' · '+it.bottleType):''}</div>
+        </div>
+        ${done ? '<span class="badge bg-green">已完成</span>'
+          : bound ? '<span class="badge bg-brown">待製作 ›</span>'
+          : '<span class="badge bg-yellow">未綁酒譜</span>'}
+      </div>`;
+    }).join('');
+    return `<div class="card" style="margin-bottom:10px;padding:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div><b>${o.orderNo}</b> <span style="color:var(--ink3);font-size:12px;">${o.client}</span></div>${dbadge}
+      </div>
+      <div style="font-size:11px;color:var(--ink3);margin:4px 0 2px;">出貨日 ${o.deliveryDate||'—'}${o.orderType?(' · '+o.orderType):''}</div>
+      ${items}
+    </div>`;
+  }).join('');
+}
+
+async function openTaskRecipe(oi,ii){
+  const o = window._orderTasks[oi]; if(!o) return;
+  const it = o.items[ii]; if(!it) return;
+  if(!it.sheet){ toast('此酒款尚未綁定酒譜，請洽管理員'); return; }
+  const area = document.getElementById('orderTaskArea');
+  area.innerHTML = `<div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入酒譜中…</div>`;
+  const r = await api({ action:'getRecipeForProduction', client:o.client, sheet:it.sheet, volume:it.volume, qty:it.qty });
+  if(!r.ok){ area.innerHTML=`<div class="warn" style="padding:10px;">${r.error}</div><button class="btn btn-ghost btn-sm" onclick="loadOrderTasks()" style="margin-top:8px;">‹ 返回</button>`; return; }
+  const rows = (r.ingredients||[]).map(ing=>{
+    let sub='';
+    if(ing.isCompound && ing.subMaterials && ing.subMaterials.length){
+      sub = `<tr><td colspan="2" style="padding:2px 8px 4px 18px;border:0;font-size:11px;color:var(--ink3);">↳ 子料比例：${ing.subMaterials.map(s=>s.name+'×'+s.ratio).join(' · ')}${ing.hasLoss?'（有耗損）':''}</td></tr>`;
+    }
+    return `<tr><td>${ing.isCompound?'<span class="badge bg-blue" style="font-size:9px;">複合</span> ':''}${ing.name}</td><td class="tr">${ing.orderVol} ml</td></tr>${sub}`;
+  }).join('');
+  const bt = it.bottleType || Object.keys(BSPEC)[0];
+  area.innerHTML = `
+    <button class="btn btn-ghost btn-sm" onclick="loadOrderTasks()" style="margin-bottom:10px;">‹ 返回任務</button>
+    <div class="card" style="padding:12px;">
+      <div class="card-title">${r.recipeName}</div>
+      <div style="font-size:12px;color:var(--ink3);margin-bottom:8px;">${o.orderNo} · ${o.client} · ${it.volume}×${it.qty}瓶 ｜ 整單放大 ${r.scaleFactor}×（批次 ${r.batchTotalVol}ml → ${r.orderTotalMl}ml）</div>
+      <div class="tbl-wrap"><table><thead><tr><th>食材</th><th class="tr">整單用量</th></tr></thead><tbody>${rows}</tbody></table></div>
+      ${r.processNote?`<div style="font-size:12px;color:var(--ink2);margin-top:8px;background:var(--bg);padding:8px;border-radius:6px;">📝 ${r.processNote}</div>`:''}
+      <div style="font-size:11px;color:var(--ink3);margin-top:6px;">ABV ${r.abv}%</div>
+    </div>
+    <div class="card" style="padding:12px;">
+      <div class="card-title">✓ 完成回報</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <div class="fg"><label>實際裝瓶數</label><input class="inp" type="number" id="ot_cnt" value="${it.qty}" style="margin:0;"></div>
+        <div class="fg"><label>瓶型</label><select id="ot_bt">${Object.keys(BSPEC).map(b=>`<option${b===bt?' selected':''}>${b}</option>`).join('')}</select></div>
+      </div>
+      <div style="display:flex;gap:16px;margin:8px 0;">
+        <label style="display:flex;gap:6px;align-items:center;font-size:13px;"><input type="checkbox" id="ot_front" checked style="width:auto;"> 前標</label>
+        <label style="display:flex;gap:6px;align-items:center;font-size:13px;"><input type="checkbox" id="ot_back" checked style="width:auto;"> 後標</label>
+      </div>
+      <div class="fg" style="margin-bottom:10px;"><label>備註</label><input class="inp" id="ot_note" placeholder="選填" style="margin:0;"></div>
+      <button class="btn btn-success btn-full" onclick="lockRun(this,()=>doCompleteTask(${oi},${ii}))">標記完成並建立製作記錄</button>
+    </div>`;
+}
+
+async function doCompleteTask(oi,ii){
+  const o = window._orderTasks[oi]; const it = o.items[ii];
+  const count = parseInt(document.getElementById('ot_cnt').value,10) || it.qty;
+  const bt = document.getElementById('ot_bt').value;
+  const front = document.getElementById('ot_front').checked;
+  const back = document.getElementById('ot_back').checked;
+  const note = document.getElementById('ot_note').value;
+  const spec = BSPEC[bt] || {};
+  const labor = count * ((spec.labor||0) + (front?1.5:0) + (back?1.5:0)); // 代工費=每瓶代工+選配標籤
+  const res = await api({ action:'completeOrderItem', orderNo:o.orderNo, itemIndex:ii,
+    bottleCount:count, bottle:bt, cap:'✓', frontLabel:front?'✓':'', backLabel:back?'✓':'',
+    laborCost:labor, pm:(curUser&&curUser.username)||'', creator:(curUser&&curUser.username)||'', note });
+  if(res.ok){ toast(`已完成：${it.product}（訂單${res.orderStatus}）`); loadOrderTasks(); }
+  else toast('回報失敗：'+(res.error||''));
 }
 
 // ════════════════════════════════════════════════
