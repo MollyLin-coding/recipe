@@ -384,6 +384,9 @@ function calcTax(abv, vol) {
 function fm(v){ return 'NT$' + (Math.round((+v||0)*100)/100).toLocaleString('zh-TW',{minimumFractionDigits:0,maximumFractionDigits:2}); }
 function nt(v, d=0){ return Number(v||0).toFixed(d); }
 function fm0(v){ return 'NT$' + Math.round(+v||0).toLocaleString('zh-TW'); }
+// 原料完整顯示名稱：品牌 品名 類別（彙整價格表把三者分欄存，選入酒譜後須組回完整名稱，
+// 與酒譜頁原有原料的單一完整名稱顯示格式一致；空欄自動略過）。Bug：研發試算選入材料只顯示「品牌｜品名」，名稱不完整。
+function fullIngName(o){ return [o&&o.brand, o&&o.name, o&&o.category].filter(x=>x&&String(x).trim()).join(' '); }
 // 每ml成本：優先用原料庫 unitCost（GAS算好），無則 price/vol 補算
 function invUC(item){ const uc=+(item.unitCost!==undefined?item.unitCost:item.unit)||0; if(uc>0) return uc; return (item.price>0&&item.vol>0)?item.price/item.vol:0; }
 // 試算每ml成本：選料原料用 unitCost；手動輸入用 單價/容量
@@ -797,7 +800,7 @@ function showApplyModal() {
     <td style="font-size:13px;">${ing.name}</td>
     <td class="tr" style="font-size:13px;">${nt(ing.pct,1)}%</td>
     <td><input type="number" id="nr_${i}" placeholder="新%" style="width:62px;padding:5px;border:1.5px solid var(--border);border-radius:5px;font-size:12px;"></td>
-    <td><input type="text" id="rs_${i}" placeholder="原因" style="width:100%;padding:5px;border:1.5px solid var(--border);border-radius:5px;font-size:12px;"></td>
+    <td><input type="text" id="rs_${i}" placeholder="原因（必填）" style="width:100%;padding:5px;border:1.5px solid var(--border);border-radius:5px;font-size:12px;"></td>
   </tr>`).join('');
   const modal = makeModal(`<div class="modal-title">✏️ 更改申請 — ${rdata.recipeName||rdata._dn}</div>
     <div class="tbl-wrap" style="margin-bottom:12px;"><table><thead><tr><th>原料</th><th>現在%</th><th>新%</th><th>原因</th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -806,9 +809,19 @@ function showApplyModal() {
   apBtn.onclick = () => lockRun(apBtn, async () => {
     const items = rdata.ingredients.map((ing,i) => {
       const nr = document.getElementById('nr_'+i)?.value;
-      return nr ? { name:ing.name, oldVal:ing.pct, newVal:parseFloat(nr), reason:document.getElementById('rs_'+i)?.value||'' } : null;
+      return nr ? { name:ing.name, oldVal:ing.pct, newVal:parseFloat(nr), reason:(document.getElementById('rs_'+i)?.value||'').trim() } : null;
     }).filter(Boolean);
     if (!items.length) { toast('請至少填一筆'); return; }
+    // 原因必填：有填新%的原料一律須填原因，否則不可送出（Molly 決議 2026-06-20）
+    const noReason = items.filter(it => !it.reason);
+    if (noReason.length) {
+      toast(`「${noReason.map(it=>it.name).join('、')}」尚未填寫更改原因`);
+      // 聚焦第一個缺原因的欄位
+      const firstIdx = rdata.ingredients.findIndex(ing => ing.name === noReason[0].name);
+      const el = document.getElementById('rs_'+firstIdx);
+      if (el) { el.style.borderColor = 'var(--red)'; el.focus(); }
+      return;
+    }
     // 占比總和檢查（B）：套用後總和 = 有填新值用新值，其餘維持原 pct
     const chg = {}; items.forEach(it => { chg[it.name] = it.newVal; });
     const sumPct = rdata.ingredients.reduce((s,ing) => s + (chg[ing.name] !== undefined ? chg[ing.name] : (ing.pct||0)), 0);
@@ -1107,13 +1120,13 @@ function rdDrop() {
   drop.classList.add('open');
   drop.innerHTML = list.slice(0,30).map(item =>
     `<div class="sd-item" onclick="rdPick(${JSON.stringify(item).replace(/"/g,'&quot;')})">
-      <div class="sd-name">${item.brand?item.brand+'｜':''}${item.name}</div>
+      <div class="sd-name">${fullIngName(item)}</div>
       <div class="sd-sub">${item.category||''} · ${fm0(item.price)}/${item.vol?nt(item.vol,0)+'ml':'—'} · ABV ${item.abv||0}%</div>
     </div>`).join('');
 }
 function rdPick(item) {
   const solid = item.isSolid;
-  rdState.ings.push({ type:'single', name:item.name, brand:item.brand||'', abv:item.abv||0, price:item.price||0, unitVol:item.vol||0, unitCost:invUC(item), ratio:0, volume:0, hasLoss:solid, isManual:false });
+  rdState.ings.push({ type:'single', name:item.name, brand:item.brand||'', category:item.category||'', abv:item.abv||0, price:item.price||0, unitVol:item.vol||0, unitCost:invUC(item), ratio:0, volume:0, hasLoss:solid, isManual:false });
   document.getElementById('rd_kw').value = '';
   document.getElementById('rd_drop')?.classList.remove('open');
   rdRender(); rdCalc();
@@ -1146,7 +1159,7 @@ function rdRender() {
         const sr = `rdState.ings[${i}].subs[${pi}]`;
         const _pct = _csvTot>0 ? (_csvTot>0?(s.volume||0)/_csvTot*100:0).toFixed(1) : '0.0';
         return `<div class="sub-row">
-          <div class="sd-name" style="font-size:12px;">${s.brand?s.brand+'｜':''}${s.name}</div>
+          <div class="sd-name" style="font-size:12px;">${fullIngName(s)}</div>
           <div class="if"><label>占比%</label><input type="number" value="${_pct}" id="rsr_${i}_${pi}"
             oninput="rdSubRatio(${i},${pi},parseFloat(this.value)||0)" placeholder="%" style="width:55px;"></div>
           <div class="if"><label>用量ml</label><input type="number" value="${s.volume||''}" id="rsv_${i}_${pi}"
@@ -1171,7 +1184,7 @@ function rdRender() {
     } else {
       return `<div class="ing-card">
         <div class="ic-r1">
-          <div class="ing-name">${ing.isManual?`<input class="ing-name-i" value="${ing.name}" onchange="${ref}.name=this.value;rdCalc()" placeholder="原料名稱">`:(ing.brand?ing.brand+'｜':'')+ing.name}</div>
+          <div class="ing-name">${ing.isManual?`<input class="ing-name-i" value="${ing.name}" onchange="${ref}.name=this.value;rdCalc()" placeholder="原料名稱">`:fullIngName(ing)}</div>
           <div id="rc_${i}" class="ing-cost"></div>
           <button class="del-btn" onclick="rdDel(${i})">✕</button>
         </div>
@@ -1208,12 +1221,12 @@ function rdSubDropList(pi) {
   const list = (C.inv || []).filter(i => !kw || i.name.toLowerCase().includes(kw) || (i.brand||'').toLowerCase().includes(kw));
   el.innerHTML = list.slice(0,30).map(item =>
     `<div class="sd-item" onclick="rdPickSub(${pi},${JSON.stringify(item).replace(/"/g,'&quot;')})">
-      <div class="sd-name">${item.brand?item.brand+'｜':''}${item.name}</div>
+      <div class="sd-name">${fullIngName(item)}</div>
       <div class="sd-sub">${item.category||''} · ${fm0(item.price)}/${item.vol?nt(item.vol,0)+'ml':'—'}</div>
     </div>`).join('') || '<div style="padding:10px;font-size:12px;color:var(--ink3);text-align:center;">無符合原料</div>';
 }
 function rdPickSub(pi, item) {
-  rdState.ings[pi].subs.push({ type:'single', name:item.name, brand:item.brand||'', abv:item.abv||0, price:item.price||0, unitVol:item.vol||0, unitCost:invUC(item), volume:0, hasLoss:false, isManual:false });
+  rdState.ings[pi].subs.push({ type:'single', name:item.name, brand:item.brand||'', category:item.category||'', abv:item.abv||0, price:item.price||0, unitVol:item.vol||0, unitCost:invUC(item), volume:0, hasLoss:false, isManual:false });
   document.getElementById('sdrop_'+pi)?.classList.remove('open');
   rdRender(); rdCalc();
 }
@@ -1692,11 +1705,22 @@ async function loadHistory() {
   if (!res.ok) { area.innerHTML=`<div class="warn" style="padding:10px;">${res.error}</div>`; return; }
   const list = res.list || [];
   if (!list.length) { area.innerHTML='<div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">尚無歷史</div>'; return; }
-  area.innerHTML = list.map(r => `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
-    <div class="fb"><div><span style="font-weight:500;font-size:13px;">${r.recipe}</span><span class="badge ${r.status==='核准'?'bg-green':'bg-red'}" style="margin-left:5px;">${r.status}</span><span class="badge bg-brown" style="margin-left:3px;">${r.client}</span></div>
+  area.innerHTML = list.map(r => {
+    // 申請記錄 G 欄 items（JSON）含每筆原料 name/oldVal/newVal/reason，歷史頁需展開顯示改動原因
+    let items = [];
+    try { items = JSON.parse(r.items || '[]'); } catch(e) {}
+    const itemsHtml = items.length ? `<div style="margin-top:6px;">${items.map(it=>{
+      const ov=it.oldVal||0, nv=it.newVal||0, big=Math.abs(nv-ov)>=10;
+      return `<div style="font-size:12px;margin-bottom:3px;"><span style="font-weight:500;">${it.name}</span>：${nt(ov,1)}% → <span style="color:${big?'var(--red)':'var(--gold-dk)'};font-weight:600;">${nt(nv,1)}%</span>${big?` <span class="badge bg-red">差${nt(nv-ov,1)}%</span>`:''}${it.reason?`<span class="sub"> （${it.reason}）</span>`:'<span class="sub" style="color:var(--red);"> （未填原因）</span>'}</div>`;
+    }).join('')}</div>` : '';
+    const approved = String(r.status).indexOf('核准') >= 0; // 值為「已核准」/「已拒絕」
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
+    <div class="fb"><div><span style="font-weight:500;font-size:13px;">${r.recipe}</span><span class="badge ${approved?'bg-green':'bg-red'}" style="margin-left:5px;">${r.status}</span><span class="badge bg-brown" style="margin-left:3px;">${r.client}</span></div>
     <div class="sub">${r.reviewer} · ${String(r.createdAt).substring(0,10)}</div></div>
+    ${itemsHtml}
     ${r.note?`<div class="sub" style="margin-top:3px;">${r.note}</div>`:''}
-  </div>`).join('');
+  </div>`;
+  }).join('');
 }
 async function doReview(id, approved) {
   if (!confirm(`確認${approved?'核准並寫入酒譜':'拒絕'}？`)) return;
