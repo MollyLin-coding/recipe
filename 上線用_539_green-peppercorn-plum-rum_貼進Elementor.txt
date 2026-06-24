@@ -1,0 +1,311 @@
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital@0;1&family=Noto+Serif+TC:wght@400;500;700;900&family=Noto+Sans+TC:wght@300;400;500&family=Playfair+Display:ital@0;1&family=Fraunces:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<script>document.documentElement.className+=' js';</script>
+<style>
+.knb{--night:#0c1f12;--green:#102315;--green2:#13291b;--warn:#160808;--gold:#D2AC60;--gold2:#e7c47d;--cream:#ece6d6;--cream2:#cdc5ad;--muted:#a89e80;--line:rgba(210,172,96,.22);--serif:"Noto Serif TC",serif;--sans:"Noto Sans TC",sans-serif;--eng:"Cormorant Garamond",serif;--disp:"Fraunces",serif;--num:"Playfair Display",serif;font-family:var(--sans);color:var(--cream);background:var(--night);position:relative}
+.knb *{margin:0;padding:0;box-sizing:border-box}.knb a{color:inherit;text-decoration:none}.knb img{max-width:100%;display:block}
+.knb .wrap{max-width:1200px;margin:0 auto;padding:0 32px}
+.knb::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.06;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.knb::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(110% 70% at 50% -8%,rgba(210,172,96,.07),transparent 55%),radial-gradient(120% 65% at 50% 108%,rgba(0,0,0,.4),transparent 60%)}
+.knb>*{position:relative;z-index:1}
+/* NAV */
+.knb .nav{position:sticky;top:0;z-index:999;display:flex;align-items:center;justify-content:space-between;padding:16px 32px;background:rgba(10,26,13,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.knb .nav .logo{height:34px;width:auto}.knb .nl{display:flex;gap:26px;font-size:13.5px;letter-spacing:.04em}.knb .nl a{position:relative;padding:4px 0}.knb .nl a:hover{color:var(--gold)}
+.knb .nl a::after{content:"";position:absolute;left:0;bottom:-2px;width:0;height:1px;background:var(--gold);transition:.3s}.knb .nl a:hover::after{width:100%}
+.knb .bg{display:none;flex-direction:column;gap:6px;cursor:pointer;padding:6px}.knb .bg span{width:26px;height:2px;background:var(--gold);border-radius:2px;transition:.35s}
+.knb .bg.o span:nth-child(1){transform:translateY(8px) rotate(45deg)}.knb .bg.o span:nth-child(2){opacity:0}.knb .bg.o span:nth-child(3){transform:translateY(-8px) rotate(-45deg)}
+/* 燙金植物分隔線 */
+.knb .rule{display:flex;align-items:center;justify-content:center;gap:16px;padding:8px 0}
+.knb .rule i{height:1px;width:120px;background:linear-gradient(90deg,transparent,var(--gold))}
+.knb .rule i+i{background:linear-gradient(90deg,var(--gold),transparent)}
+.knb .rule b{width:7px;height:7px;border:1px solid var(--gold);transform:rotate(45deg);display:inline-block}
+/* HERO（兩欄・瓶身進第一屏） */
+.knb .hero{position:relative;overflow:hidden;padding:66px 0 60px;background:radial-gradient(70% 85% at 76% 32%,#22502d,#0a1a0d 72%)}
+.knb .hero .mark{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);font-family:var(--disp);font-style:italic;font-weight:400;font-size:clamp(46px,12.5vw,176px);color:rgba(210,172,96,.06);white-space:nowrap;z-index:0;pointer-events:none}
+.knb .hero-grid{display:grid;grid-template-columns:1fr .82fr;gap:46px;align-items:center;position:relative;z-index:2}
+.knb .eb{font-family:var(--disp);font-style:italic;font-size:18px;color:var(--gold);letter-spacing:.04em}
+.knb h1{font-family:var(--serif);font-weight:700;font-size:clamp(30px,4.6vw,50px);color:#f7f2e4;letter-spacing:.12em;margin:14px 0 8px}
+.knb .en{font-family:var(--disp);font-style:italic;font-size:20px;color:var(--cream2)}
+.knb .lead{font-family:var(--serif);font-weight:400;font-size:clamp(16px,1.6vw,20px);line-height:1.95;color:#e4dcc6;max-width:520px;margin:24px auto 0;letter-spacing:.02em}
+.knb .meta{display:flex;gap:40px;justify-content:center;margin:30px auto 0;border-top:1px solid var(--line);padding-top:22px;width:fit-content;flex-wrap:wrap}
+.knb .meta .c{font-size:10px;color:var(--muted);letter-spacing:.16em}
+.knb .meta .v{font-family:var(--num);font-size:23px;color:var(--gold);margin-top:5px}
+.knb .meta .v.s{font-family:var(--serif);font-size:17px}
+.knb .meta .v.price{color:var(--gold2)}
+.knb .hero-bottle{display:flex;justify-content:center}
+.knb .hero-bottle .frame{position:relative;display:inline-block;max-width:430px;width:100%}
+.knb .hero-bottle img{width:100%;border-radius:14px;box-shadow:0 40px 90px rgba(0,0,0,.6)}
+.knb .hero-bottle .ring{position:absolute;inset:-13px;border:1px solid var(--line);border-radius:18px;pointer-events:none}
+/* 區塊底色交替 */
+.knb .sec{padding:66px 0;overflow:hidden}
+.knb .b2{background:var(--green2)}
+.knb .b1{background:var(--green)}
+/* 酒款特色 左圖右文分割 */
+.knb .split2{display:grid;grid-template-columns:1fr 1fr;gap:58px;align-items:center}
+.knb .storyimg{border-radius:14px;overflow:hidden;box-shadow:0 30px 70px rgba(0,0,0,.5);aspect-ratio:4/5;border:1px solid var(--line)}
+.knb .storyimg img{width:100%;height:100%;object-fit:cover;object-position:center 50%;display:block;transition:.6s}
+.knb .storyimg:hover img{transform:scale(1.03)}
+/* 羽化亮色帶（明暗交錯・喘息） */
+.knb .lightband{position:relative;background:#e8e2d4;color:#3a352a}
+.knb .lightband::before{content:"";position:absolute;top:0;left:0;right:0;height:110px;z-index:1;pointer-events:none;background:linear-gradient(var(--night),rgba(232,226,212,0))}
+.knb .lightband::after{content:"";position:absolute;bottom:0;left:0;right:0;height:110px;z-index:1;pointer-events:none;background:linear-gradient(rgba(232,226,212,0),var(--night))}
+.knb .lightband>.wrap{position:relative;z-index:2}
+.knb .lightband .ht{color:#8a6a2e}
+.knb .lightband .ing-lead{color:#574f3d}
+.knb .lightband .ing-row .ring2{border-color:#c6a35a;box-shadow:0 16px 34px rgba(120,100,60,.2)}
+.knb .lightband .ing-row .cap{color:#2e2b22}
+.knb .lightband .ing-row .en2{color:#8f876f}
+.knb .lightband .filmnote2{color:#8f876f}
+.knb .lightband .it h4{color:#2e2b22}
+.knb .lightband .it p{color:#574f3d}
+.knb .lightband .it a{color:#8a6a2e;border-bottom-color:rgba(138,106,46,.4)}
+.knb .ht{font-family:var(--serif);font-weight:500;font-size:17px;color:var(--gold);letter-spacing:.22em;margin-bottom:22px}
+.knb .c2{display:grid;grid-template-columns:1fr 1fr;gap:54px}
+/* 風味意象 圓形並排 */
+.knb .ingredients{text-align:center}
+.knb .ing-lead{font-size:14px;line-height:2;color:var(--cream2);max-width:620px;margin:14px auto 0}
+.knb .filmnote2{margin-top:26px;font-size:11px;color:var(--muted);letter-spacing:.03em}
+.knb .ing-row{display:flex;justify-content:center;align-items:flex-start;gap:56px;flex-wrap:wrap;margin-top:42px}
+.knb .ing-row .ic{width:182px}
+.knb .ing-row .ring2{width:182px;height:182px;border-radius:50%;padding:6px;border:1px solid var(--gold);box-shadow:0 18px 40px rgba(0,0,0,.5);transition:.45s}
+.knb .ing-row .ring2 img{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
+.knb .ing-row .ic:hover .ring2{transform:translateY(-5px)}
+.knb .ing-row .cap{margin-top:16px;font-family:var(--serif);font-size:14.5px;color:var(--cream);letter-spacing:.12em}
+.knb .ing-row .en2{font-family:var(--eng);font-style:italic;font-size:12px;color:var(--muted);margin-top:3px}
+/* 酒款特色 + 規格 */
+.knb .feat p{font-size:14px;line-height:2.05;color:var(--cream2);margin-bottom:22px}
+.knb .specs{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:4px}
+.knb .spec{border-top:1px solid var(--gold);padding-top:13px}
+.knb .spec .k{font-size:11px;color:var(--muted);letter-spacing:.14em}
+.knb .spec .v{font-family:var(--serif);font-size:15px;color:var(--cream);margin-top:8px;line-height:1.5}
+/* 風味（雷達＋品飲筆記合併） */
+.knb .vizhead{text-align:center;margin-bottom:30px}
+.knb .radarwrap{display:flex;flex-direction:column;align-items:center;gap:18px}
+.knb .radar{width:100%;max-width:380px;display:block}
+.knb .ktags{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+.knb .tag{font-size:12.5px;letter-spacing:.08em;color:var(--cream2);border:1px solid var(--line);border-radius:30px;padding:7px 16px}
+.knb .nb{margin-bottom:20px}.knb .nb .l{font-family:var(--eng);font-style:italic;font-size:13.5px;color:var(--muted);letter-spacing:.18em}
+.knb .nb p{font-size:13px;line-height:1.85;color:var(--cream2);margin-top:5px}
+/* 體驗 */
+.knb .exp{display:grid;grid-template-columns:repeat(3,1fr);gap:38px}
+.knb .it{display:flex;gap:15px;align-items:flex-start}
+.knb .it .d{width:38px;height:38px;border-radius:50%;border:1px solid var(--gold);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.knb .it .d span{width:9px;height:9px;background:var(--gold);transform:rotate(45deg)}
+.knb .it h4{font-family:var(--serif);font-size:15px;color:#f1ecdc;font-weight:500}
+.knb .it p{font-size:13px;color:var(--cream2);line-height:1.8;margin-top:5px}
+.knb .it a{color:var(--gold);border-bottom:1px solid var(--line)}
+/* ② 推薦區塊 你可能也喜歡 */
+.knb .recwrap{position:relative;max-width:700px;margin:38px auto 0}
+.knb .recs{display:flex;flex-wrap:nowrap;gap:22px;margin:0;padding:6px 8px;overflow-x:auto;scroll-snap-type:x proximity;scrollbar-width:none;-ms-overflow-style:none;scroll-behavior:smooth}
+.knb .recs::-webkit-scrollbar{display:none}
+.knb .rec{flex:0 0 178px;width:178px;scroll-snap-align:start}
+.knb .rec .card{background:#11241a;border:1px solid var(--line);border-radius:12px;padding:8px 8px 13px;box-shadow:0 14px 30px rgba(0,0,0,.42);transition:.45s cubic-bezier(.2,.7,.2,1)}
+.knb .rec .ph{width:100%;height:124px;border-radius:7px;overflow:hidden}
+.knb .rec .ph img{width:100%;height:100%;object-fit:cover;display:block;transition:.6s}
+.knb .rec:hover .card{transform:translateY(-6px);border-color:var(--gold);box-shadow:0 22px 40px rgba(0,0,0,.55)}
+.knb .rec:hover .ph img{transform:scale(1.05)}
+.knb .rec .nm{font-family:var(--serif);font-size:12px;color:#eee4cf;text-align:center;letter-spacing:.03em;line-height:1.4;margin-top:11px}
+.knb .rec .go{display:block;text-align:center;font-size:10.5px;color:var(--gold);letter-spacing:.08em;margin-top:6px;transition:.3s}
+.knb .rec:hover .go{color:var(--gold2)}
+.knb .recnav{position:absolute;top:70px;transform:translateY(-50%);width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:rgba(12,31,18,.85);color:var(--gold);font-size:18px;line-height:1;cursor:pointer;z-index:3;display:flex;align-items:center;justify-content:center;transition:.3s}
+.knb .recnav:hover{border-color:var(--gold);background:var(--gold);color:#241b08}
+.knb .recnav.prev{left:-54px}.knb .recnav.next{right:-54px}
+/* 購買據點 CTA 柔性橫條 */
+.knb .cta{text-align:center;padding:56px 24px;background:var(--green)}
+.knb .cta .t{font-family:var(--serif);font-size:20px;color:#f3ecda;letter-spacing:.08em}
+.knb .cta .s{font-size:13px;color:var(--cream2);margin:10px 0 22px}
+.knb .btn-g{display:inline-block;font-size:13.5px;letter-spacing:.08em;padding:14px 34px;background:var(--gold);color:#241b08;font-weight:500;transition:.3s}
+.knb .btn-g:hover{background:var(--gold2)}
+.knb .back{text-align:center;padding:30px 0}
+.knb .btn-o{display:inline-block;font-size:13px;letter-spacing:.08em;padding:13px 28px;border:1px solid rgba(236,230,214,.4);color:var(--cream);transition:.3s}
+.knb .btn-o:hover{border-color:var(--gold);color:var(--gold)}
+.knb .warn{background:var(--warn);text-align:center;padding:26px}.knb .warn .a{color:#fff;font-size:13px;letter-spacing:.1em}.knb .warn .b{color:#e0a0a0;font-size:12px;margin-top:6px}
+/* 捲動淡入（無 JS 照常顯示） */
+html.js .knb .rv{opacity:0;transform:translateY(26px);transition:.9s cubic-bezier(.2,.7,.2,1)}
+html.js .knb .rv.on{opacity:1;transform:none}
+/* ⑤ 雷達描繪 + 麵包屑 */
+html.js .knb .rdraw{stroke-dasharray:640;stroke-dashoffset:640}
+html.js .knb .rv.on .rdraw{stroke-dashoffset:0;transition:stroke-dashoffset 1.5s cubic-bezier(.4,0,.2,1) .25s}
+html.js .knb .rdot{opacity:0}
+html.js .knb .rv.on .rdot{opacity:1;transition:opacity .5s ease 1.35s}
+.knb .crumb{font-size:12px;color:var(--muted);letter-spacing:.04em;padding:14px 0 0}
+.knb .crumb a:hover{color:var(--gold)}.knb .crumb b{color:var(--cream2);font-weight:400}
+/* ③ 信任徽章 */
+.knb .trust{display:flex;justify-content:center;flex-wrap:wrap;gap:14px 32px;padding:30px 0 4px}
+.knb .trust .tb{display:flex;align-items:center;gap:9px;font-size:12.5px;color:var(--cream2);letter-spacing:.03em}
+/* ② 手機底部行動列 */
+.knb .mobar{display:none}
+@media(max-width:860px){
+  .knb .mobar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:997;align-items:center;gap:10px;padding:10px 14px;background:rgba(8,18,10,.96);backdrop-filter:blur(8px);border-top:1px solid var(--line)}
+  .knb .mobar .pr{font-family:var(--num);font-size:17px;color:var(--gold2);white-space:nowrap}
+  .knb .mobar a{flex:1;text-align:center;font-size:13px;letter-spacing:.04em;padding:11px 8px;border-radius:6px}
+  .knb .mobar .l{background:#06C755;color:#fff}
+  .knb .mobar .b{background:var(--gold);color:#241b08}
+  .knb .warn{padding-bottom:86px}
+}
+@media(max-width:860px){
+  .knb .nl{display:none}.knb .bg{display:flex}
+  .knb .hero-grid{grid-template-columns:1fr;gap:34px}
+  .knb .hero-bottle{order:-1}
+  .knb .hero-bottle .frame{max-width:62%}
+  .knb .meta{gap:26px;justify-content:center;margin-left:auto;margin-right:auto}
+  .knb .eb,.knb h1,.knb .en,.knb .lead{text-align:center}
+  .knb .lead{margin-left:auto;margin-right:auto}
+  .knb .c2{grid-template-columns:1fr;gap:36px}
+  .knb .exp{grid-template-columns:1fr;gap:24px}
+  .knb .ing-row{gap:28px}.knb .ing-row .ic,.knb .ing-row .ring2{width:130px}.knb .ing-row .ring2{height:130px}
+  .knb .recs{gap:16px;padding:6px 24px}
+  .knb .rec{flex:0 0 142px;width:142px}
+  .knb .rec .ph{height:106px}
+  .knb .recnav{display:none}
+  .knb .split2{grid-template-columns:1fr;gap:28px}
+  .knb .storyimg{aspect-ratio:16/11}
+  .knb .mnav{position:fixed;inset:0;z-index:998;background:rgba(8,20,11,.97);backdrop-filter:blur(6px);display:flex;flex-direction:column;justify-content:center;padding:40px;transform:translateX(100%);transition:.45s cubic-bezier(.4,0,.2,1)}
+  .knb .mnav.open{transform:none}
+  .knb .mnav a{font-family:var(--serif);font-size:23px;color:var(--cream);letter-spacing:.08em;padding:18px 4px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+  .knb .mnav a:last-child{border-bottom:none}
+  .knb .mnav a span{font-family:var(--eng);font-style:italic;font-size:13px;color:var(--muted)}
+}
+@media(min-width:861px){.knb .mnav{display:none}}
+.knb .hero-copy{text-align:center}
+@keyframes knbUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:no-preference){
+.knb .hero-copy>*{animation:knbUp .9s cubic-bezier(.2,.7,.2,1) both}
+.knb .hero-copy>*:nth-child(1){animation-delay:.08s}
+.knb .hero-copy>*:nth-child(2){animation-delay:.2s}
+.knb .hero-copy>*:nth-child(3){animation-delay:.32s}
+.knb .hero-copy>*:nth-child(4){animation-delay:.44s}
+.knb .hero-copy>*:nth-child(5){animation-delay:.56s}
+.knb .hero-bottle{animation:knbUp 1.1s cubic-bezier(.2,.7,.2,1) both .34s}
+.knb .hero .mark{animation:knbUp 1.4s ease both .1s}
+}
+</style>
+<div class="knb">
+  <div class="nav">
+    <a href="/"><img class="logo" src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/logo_white_3.png" alt="凱文南坡萬實業社"></a>
+    <div class="nl"><a href="/products/">酒款</a><a href="/where-to-buy/">購買據點</a><a href="/oem/">代工服務</a><a href="/news/">最新消息</a><a href="/cocktail-class/">調酒教室</a><a href="/about/">關於</a><a href="/contact/">聯絡</a></div>
+    <div class="bg" onclick="document.querySelector('.mnav').classList.toggle('open');this.classList.toggle('o')"><span></span><span></span><span></span></div>
+  </div>
+  <nav class="mnav">
+    <a href="/products/">酒款<span>Products</span></a><a href="/where-to-buy/">購買據點<span>Where to buy</span></a><a href="/oem/">代工服務<span>OEM</span></a><a href="/news/">最新消息<span>News</span></a><a href="/cocktail-class/">調酒教室<span>Cocktail Class</span></a><a href="/about/">關於<span>About</span></a><a href="/contact/">聯絡<span>Contact</span></a>
+  </nav>
+
+  <div class="wrap crumb"><a href="/">首頁</a> / <a href="/products/">酒款</a> / <b>青花椒烏梅蘭姆酒</b></div>
+
+  <div class="hero">
+    <div class="mark">Green Peppercorn Plum Rum</div>
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <div class="eb">台灣青花椒 × 工藝蒸餾蘭姆酒（＊波本威士忌）</div>
+        <h1>青花椒烏梅蘭姆酒</h1>
+        <div class="en">Green Peppercorn Plum Rum</div>
+        <p class="lead">青花椒的辛麻、烏梅的煙燻酸甜——有個性、有稜角，卻令人著迷。</p>
+        <div class="meta">
+          <div><div class="c">系列</div><div class="v s">經典</div></div>
+          <div><div class="c">ABV</div><div class="v">14%</div></div>
+          <div><div class="c">容量</div><div class="v s">100ml</div></div>
+          <div><div class="c">價格</div><div class="v price">NT$250</div></div>
+        </div>
+      </div>
+      <div class="hero-bottle"><div class="frame"><span class="ring"></span><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/%E9%9D%92%E8%8A%B1%E6%A4%92_%E7%99%BD%E5%AD%97-1.png" alt="青花椒烏梅蘭姆酒"></div></div>
+    </div>
+  </div>
+
+  <div class="wrap"><div class="trust">
+    <div class="tb"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#D2AC60" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v3a4 4 0 0 1-8 0z"/><path d="M8 5H5v1a3 3 0 0 0 3 3M16 5h3v1a3 3 0 0 1-3 3"/><path d="M12 11v4M9 19h6M10 19l.5-4M14 19l-.5-4"/></svg>2024 台灣水果調飲大賽 優勝</div>
+    <div class="tb"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#D2AC60" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V9l8-5 8 5v11"/><path d="M9 20v-5h6v5"/></svg>供應 20+ 餐酒館與五星級飯店</div>
+    <div class="tb"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#D2AC60" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12.3l2.3 2.3 4.6-4.8"/></svg>專業調酒師群研發 · 工廠標準化品質</div>
+  </div></div>
+
+  <section class="sec ingredients rv">
+    <div class="wrap">
+      <div class="ht" style="text-align:center">風味意象 · Flavor Notes</div>
+      <p class="ing-lead">青花椒的辛麻、烏梅的煙燻酸甜，與木桶烈酒的厚實——有稜角、有個性，卻令人著迷。</p>
+      <div class="ing-row">
+        <div class="ic"><div class="ring2"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/nanpowan-sichuan-pepper-2x-34612103.jpg" alt="青花椒"></div><div class="cap">青花椒<div class="en2">Sichuan Pepper</div></div></div>
+        <div class="ic"><div class="ring2"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/nanpowan-smoked-plum-11828235.jpg" alt="烏梅"></div><div class="cap">烏梅<div class="en2">Smoked Plum</div></div></div>
+        <div class="ic"><div class="ring2"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/nanpowan-dark-rum2-7254864.jpg" alt="黑蘭姆"></div><div class="cap">黑蘭姆<div class="en2">Dark Rum</div></div></div>
+      </div>
+      <div class="filmnote2">原料照｜自有素材</div>
+    </div>
+  </section>
+
+  <section class="sec rv">
+    <div class="wrap" style="max-width:740px;text-align:center">
+      <div class="ht">酒款特色 · Story</div>
+      <p style="font-size:14.5px;line-height:2.15;color:var(--cream2);margin-top:4px">以台灣青花椒獨特的辛麻香氣破題，融入古法烏梅的煙燻酸甜，再以南坡萬工藝蒸餾蘭姆酒與波本威士忌的木桶厚韻壓陣；辛、酸、甜、木桶層層堆疊，是一杯給「敢喝的人」的個性之作。</p>
+      <div class="specs" style="max-width:520px;margin:32px auto 0">
+        <div class="spec"><div class="k">主要原料</div><div class="v">台灣青花椒 × 古法烏梅</div></div>
+        <div class="spec"><div class="k">烈酒基底</div><div class="v">南坡萬工藝蒸餾蘭姆酒 ＊波本威士忌</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec b2 rv">
+    <div class="wrap">
+      <div class="vizhead"><div class="ht" style="margin:0">風味 · Tasting &amp; Profile</div></div>
+      <div class="c2" style="align-items:center">
+        <div class="radarwrap">
+          <svg class="radar" viewBox="0 0 240 215">
+            <polygon points="120,30 198,84 168,178 72,178 42,84" fill="none" stroke="rgba(210,172,96,.28)"/>
+            <polygon points="120,56 172,92 152,156 88,156 68,92" fill="none" stroke="rgba(210,172,96,.18)"/>
+            <line x1="120" y1="110" x2="120" y2="30" stroke="rgba(210,172,96,.16)"/><line x1="120" y1="110" x2="198" y2="84" stroke="rgba(210,172,96,.16)"/><line x1="120" y1="110" x2="168" y2="178" stroke="rgba(210,172,96,.16)"/><line x1="120" y1="110" x2="72" y2="178" stroke="rgba(210,172,96,.16)"/><line x1="120" y1="110" x2="42" y2="84" stroke="rgba(210,172,96,.16)"/>
+            <polygon class="rdraw" points="120,62 198,84 149,151 72,178 42,84" fill="rgba(210,172,96,.26)" stroke="#D2AC60" stroke-width="2"/>
+            <circle class="rdot" cx="120" cy="62" r="3.5" fill="#D2AC60"/><circle class="rdot" cx="198" cy="84" r="3.5" fill="#D2AC60"/><circle class="rdot" cx="149" cy="151" r="3.5" fill="#D2AC60"/><circle class="rdot" cx="72" cy="178" r="3.5" fill="#D2AC60"/><circle class="rdot" cx="42" cy="84" r="3.5" fill="#D2AC60"/>
+            <text x="120" y="20" text-anchor="middle" fill="#ece6d6" font-size="12">甜度</text><text x="208" y="82" fill="#ece6d6" font-size="12">辛麻</text><text x="176" y="196" text-anchor="middle" fill="#ece6d6" font-size="12">果香</text><text x="64" y="196" text-anchor="middle" fill="#ece6d6" font-size="12">酒體</text><text x="32" y="82" text-anchor="end" fill="#ece6d6" font-size="12">餘韻</text>
+          </svg>
+          <div class="ktags"><span class="tag">青花椒</span><span class="tag">烏梅</span><span class="tag">辛麻</span><span class="tag">木桶</span><span class="tag">煙燻</span></div>
+        </div>
+        <div>
+          <div class="nb"><div class="l">NOSE</div><p>青花椒的辛麻清香先衝，烏梅的煙燻酸甜與木桶香隨後展開。</p></div>
+          <div class="nb"><div class="l">PALATE</div><p>入口烏梅的酸甜飽滿，青花椒的辛麻在中段竄出，蘭姆與波本的木桶厚韻撐起酒體。</p></div>
+          <div class="nb"><div class="l">FINISH</div><p>辛麻與煙燻酸甜交替而退，餘韻悠長帶勁，尾段微微回辛。</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec rv">
+    <div class="wrap">
+      <div class="ht" style="text-align:center;margin-bottom:34px">品飲體驗 · Experience</div>
+      <div class="exp">
+        <div class="it"><div class="d"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#D2AC60" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v8M5 3v5a2 2 0 0 0 2 2M9 3v5a2 2 0 0 1-2 2M7 11v10"/><path d="M16 3c-1.4 0-2.4 1.6-2.4 4.2s1 4.2 2.4 4.2V21"/></svg></div><div><h4>風味佐搭</h4><p>佐麻辣、川味、滷味等重口味料理，或煙燻、燒烤肉品；辛香與油脂最對味。</p></div></div>
+        <div class="it"><div class="d"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#D2AC60" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6h14l-7 7.5z"/><path d="M12 13.5V20"/><path d="M8.5 20h7"/></svg></div><div><h4>Signature 調飲靈感</h4><p>加大冰球純飲，或兌少量氣泡水延展，讓辛麻與烏梅更立體。<a href="/cocktail-class/">看調酒教室做法 →</a></p></div></div>
+        <div class="it"><div class="d"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#D2AC60" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4.5a1.8 1.8 0 0 1 1.8 1.8v8.1a3.4 3.4 0 1 1-3.6 0V6.3A1.8 1.8 0 0 1 12 4.5z"/><path d="M12 10v6"/></svg></div><div><h4>適飲溫度</h4><p>純飲或加大冰球皆宜，室溫微涼最能展現辛麻與木桶層次。</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec b2 rv">
+    <div class="wrap">
+      <div class="ht" style="text-align:center;margin-bottom:4px">你可能也喜歡 · You May Also Like</div>
+      <div class="recwrap">
+      <button class="recnav prev" aria-label="上一個" onclick="this.nextElementSibling.scrollBy({left:-340,behavior:'smooth'})">‹</button>
+      <div class="recs">
+        <a class="rec" href="/products/honey-black-tea-lychee-gin/"><div class="card"><div class="ph"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-label-01.jpg" alt="蜜香紅茶荔枝琴酒"></div><div class="nm">蜜香紅茶荔枝琴酒</div><div class="go">看這支 →</div></div></a>
+        <a class="rec" href="/products/jasmine-crispy-plum-gin/"><div class="card"><div class="ph"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-label-02.jpg" alt="茉莉香片脆梅琴酒"></div><div class="nm">茉莉香片脆梅琴酒</div><div class="go">看這支 →</div></div></a>
+        <a class="rec" href="/products/thai-milk-oolong-rum/"><div class="card"><div class="ph"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-label-03.jpg" alt="泰奶焙火烏龍蘭姆酒"></div><div class="nm">泰奶焙火烏龍蘭姆酒</div><div class="go">看這支 →</div></div></a>
+        <a class="rec" href="/products/gardenia-jinxuan-whisky/"><div class="card"><div class="ph"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-label-04.jpg" alt="梔子花金萱威士忌"></div><div class="nm">梔子花金萱威士忌</div><div class="go">看這支 →</div></div></a>
+        <a class="rec" href="/products/guava-green-tea-plum-wine/"><div class="card"><div class="ph"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-label-05.jpg" alt="芭樂綠茶梅酒"></div><div class="nm">芭樂綠茶梅酒</div><div class="go">看這支 →</div></div></a>
+        <a class="rec" href="/products/smoked-passion-fruit-rum/"><div class="card"><div class="ph"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-label-06.jpg" alt="煙燻百香果蘭姆酒"></div><div class="nm">煙燻百香果蘭姆酒</div><div class="go">看這支 →</div></div></a>
+        <a class="rec" href="/products/white-peach-mojito/"><div class="card"><div class="ph"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-label-07.jpg" alt="白桃翠玉莫奇朵"></div><div class="nm">白桃翠玉莫奇朵</div><div class="go">看這支 →</div></div></a>
+        <a class="rec" href="/products/watermelon-sea-salt-mojito/"><div class="card"><div class="ph"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-label-08.jpg" alt="海鹽西瓜莫奇朵"></div><div class="nm">海鹽西瓜莫奇朵</div><div class="go">看這支 →</div></div></a>
+        <a class="rec" href="/products/baozhong-tea-umeshu/"><div class="card"><div class="ph"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-label-09.jpg" alt="包種茶青梅甜酒"></div><div class="nm">包種茶青梅甜酒</div><div class="go">看這支 →</div></div></a>
+      </div>
+      <button class="recnav next" aria-label="下一個" onclick="this.previousElementSibling.scrollBy({left:340,behavior:'smooth'})">›</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="cta">
+    <div class="t">想喝喝看？</div>
+    <div class="s">親自走一趟，把這支台灣茶調酒帶回家。</div>
+    <a class="btn-g" href="/where-to-buy/">尋找購買據點</a>
+  </div>
+  <div class="back"><a class="btn-o" href="/products/">← 回到所有酒款</a></div>
+  <div class="warn"><div class="a">禁止酒駕　飲酒過量，有害健康</div><div class="b">本產品含酒精成分，未滿十八歲者請勿飲用。飲酒請適量。</div></div>
+  <div class="mobar"><span class="pr">NT$250</span><a class="l" href="/contact/">LINE 諮詢</a><a class="b" href="/where-to-buy/">購買據點</a></div>
+</div>
+<script>
+(function(){var els=[].slice.call(document.querySelectorAll('.knb .rv'));if(els.length){if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es){es.forEach(function(en){if(en.isIntersecting){en.target.classList.add('on');io.unobserve(en.target);}});},{threshold:0,rootMargin:'0px 0px 14% 0px'});els.forEach(function(e){io.observe(e);});}else{els.forEach(function(e){e.classList.add('on');});}}})();
+(function(){var p=document.querySelector('.recs');if(!p)return;var r=[].slice.call(p.children);for(var i=r.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=r[i];r[i]=r[j];r[j]=t;}r.forEach(function(el,idx){el.style.display=idx<5?'':'none';p.appendChild(el);});})();
+</script>
