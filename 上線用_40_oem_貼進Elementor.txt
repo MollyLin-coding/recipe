@@ -1,2 +1,267 @@
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;700;900&family=Noto+Sans+TC:wght@300;400;500&family=Playfair+Display:ital@0;1&family=Fraunces:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script>document.documentElement.className+=' js';</script>
+<style>
+.knb{--night:#16130d;--green:#1c1812;--green2:#211c14;--warn:#160808;--gold:#D2AC60;--gold2:#e7c47d;--cream:#ece6d6;--muted:#a89e80;--bronze:#b0915f;--line:rgba(210,172,96,.22);--line2:rgba(210,172,96,.07);--serif:"Noto Serif TC",serif;--sans:"Noto Sans TC",sans-serif;--disp:"Fraunces",serif;--num:"Playfair Display",serif;--mono:"JetBrains Mono",monospace;font-family:var(--sans);color:var(--cream);background:var(--night);position:relative}
+.knb *{margin:0;padding:0;box-sizing:border-box}.knb a{color:inherit;text-decoration:none}.knb img{max-width:100%;display:block}
+.knb .wrap{max-width:1140px;margin:0 auto;padding:0 32px}
+.knb::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.06;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.knb::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(110% 70% at 50% -8%,rgba(210,172,96,.06),transparent 55%),radial-gradient(120% 65% at 50% 108%,rgba(0,0,0,.4),transparent 60%)}
+.knb>*{position:relative;z-index:1}
+.knb .blueprint{background-image:linear-gradient(var(--line2) 1px,transparent 1px),linear-gradient(90deg,var(--line2) 1px,transparent 1px);background-size:66px 66px}
+.knb .nav{position:sticky;top:0;z-index:999;display:flex;align-items:center;justify-content:space-between;padding:16px 32px;background:rgba(22,19,13,.94);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.knb .nav .logo{height:34px;width:auto}.knb .nl{display:flex;gap:26px;font-size:13.5px;letter-spacing:.04em}.knb .nl a{position:relative;padding:4px 0}.knb .nl a:hover{color:var(--gold)}
+.knb .nl a::after{content:"";position:absolute;left:0;bottom:-2px;width:0;height:1px;background:var(--gold);transition:.3s}.knb .nl a:hover::after{width:100%}
+.knb .nl a.cur{color:var(--gold)}.knb .nl a.cur::after{width:100%}
+.knb .bg{display:none;flex-direction:column;gap:6px;cursor:pointer;padding:6px}.knb .bg span{width:26px;height:2px;background:var(--gold);border-radius:2px;transition:.35s}
+.knb .bg.o span:nth-child(1){transform:translateY(8px) rotate(45deg)}.knb .bg.o span:nth-child(2){opacity:0}.knb .bg.o span:nth-child(3){transform:translateY(-8px) rotate(-45deg)}
+.knb .mono{font-family:var(--mono);font-size:11.5px;letter-spacing:.2em;color:var(--bronze);text-transform:uppercase}
+.knb h2{font-family:var(--serif);font-weight:700;font-size:clamp(24px,3.2vw,36px);color:#f7f2e4;letter-spacing:.05em;line-height:1.45}
+.knb .lead{font-family:var(--serif);font-weight:400;font-size:clamp(15px,1.5vw,17px);line-height:2;color:#e4dcc6;letter-spacing:.02em}
+.knb .sec{padding:84px 0;overflow:hidden}
+.knb .well{background:#0e0c07}
+.knb .shead{display:flex;align-items:baseline;gap:16px;margin-bottom:38px}
+.knb .shead .nm{font-family:var(--mono);font-size:12px;color:var(--bronze);letter-spacing:.1em;padding-top:4px}
+/* HERO 標題塊 */
+.knb .hero2{padding:88px 0 72px;border-bottom:1px solid var(--line);background:radial-gradient(95% 130% at 20% -10%,rgba(120,96,48,.3),transparent 55%),radial-gradient(60% 90% at 90% 0%,rgba(210,172,96,.08),transparent 60%)}
+.knb .hero2 .grid{display:grid;grid-template-columns:1.3fr .7fr;gap:clamp(30px,5vw,64px);align-items:end}
+.knb .hero2 .corner{font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--muted);margin-bottom:22px}
+.knb .hero2 h1{font-family:var(--serif);font-weight:900;font-size:clamp(32px,5.6vw,62px);color:#f7f2e4;letter-spacing:.04em;line-height:1.2}
+.knb .hero2 .en{font-family:var(--disp);font-style:italic;font-size:clamp(18px,2.3vw,27px);color:var(--gold);margin-top:14px}
+.knb .hero2 .lead{margin-top:22px;max-width:520px}
+/* 全幅大圖 Hero（混搭：A 版面 + C 大圖） */
+.knb .hero{position:relative;min-height:clamp(420px,66vh,620px);display:flex;align-items:center;overflow:hidden;background:#100e09;border-bottom:1px solid var(--line)}
+.knb .hero .ph{position:absolute;inset:0;background-image:url("https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-oem-hero.jpg");background-size:cover;background-position:center}
+.knb .hero .ov{position:absolute;inset:0;background:linear-gradient(90deg,rgba(14,12,8,.92),rgba(14,12,8,.6) 55%,rgba(14,12,8,.35)),linear-gradient(0deg,rgba(22,19,13,.9),transparent 42%)}
+.knb .hero .wrap{position:relative;z-index:2}
+.knb .hero .corner{font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--muted);margin-bottom:20px;text-transform:uppercase}
+.knb .hero h1{font-family:var(--serif);font-weight:900;font-size:clamp(36px,6.2vw,70px);color:#f7f2e4;letter-spacing:.05em;line-height:1.14;margin:0 0 14px}
+.knb .hero .en{font-family:var(--disp);font-style:italic;font-size:clamp(19px,2.5vw,29px);color:var(--gold2)}
+.knb .hero .hl{font-family:var(--serif);font-size:clamp(14px,1.6vw,17px);color:#e6ddc7;line-height:1.95;max-width:560px;margin-top:18px}
+@media (prefers-reduced-motion:no-preference){.knb .hero .wrap>*{animation:knbUp 1s cubic-bezier(.2,.7,.2,1) both}.knb .hero .wrap>*:nth-child(2){animation-delay:.12s}.knb .hero .wrap>*:nth-child(3){animation-delay:.24s}.knb .hero .wrap>*:nth-child(4){animation-delay:.36s}}
+.knb .tblock{border:1px solid var(--line)}
+.knb .tblock .tr{display:flex;justify-content:space-between;align-items:baseline;padding:15px 18px;border-bottom:1px solid var(--line2);gap:16px}
+.knb .tblock .tr:last-child{border-bottom:none}
+.knb .tblock .tr .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+.knb .tblock .tr .v{font-family:var(--serif);font-size:14px;color:#eee4cf;text-align:right;line-height:1.4}
+.knb .tblock .tr .v b{font-family:var(--num);font-size:21px;color:var(--gold);font-weight:400}
+/* 兩方案規格卡 */
+.knb .tiers{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.knb .tier{border:1px solid var(--line);background:rgba(0,0,0,.2);padding:34px 32px;position:relative;transition:.4s}
+.knb .tier:hover{border-color:var(--gold);transform:translateY(-4px)}
+.knb .tier .no{font-family:var(--mono);font-size:12px;color:var(--bronze);letter-spacing:.14em}
+.knb .tier h3{font-family:var(--serif);font-weight:700;font-size:23px;color:#f7f2e4;letter-spacing:.04em;margin:10px 0 6px}
+.knb .tier .for{font-family:var(--disp);font-style:italic;font-size:13.5px;color:var(--gold);margin-bottom:18px}
+.knb .tier ul{list-style:none;display:flex;flex-direction:column;gap:11px}
+.knb .tier li{font-family:var(--serif);font-size:14px;color:#d8cfb4;line-height:1.6;padding-left:18px;position:relative}
+.knb .tier li::before{content:"";position:absolute;left:0;top:9px;width:6px;height:6px;border:1px solid var(--gold);transform:rotate(45deg)}
+/* 為什麼選 split */
+.knb .why{display:grid;grid-template-columns:1fr 1fr;gap:clamp(30px,5vw,60px);align-items:center}
+.knb .why .panel{border:1px solid var(--line);background:rgba(210,172,96,.04)}
+.knb .why .panel .row{padding:22px 26px;border-bottom:1px solid var(--line2)}
+.knb .why .panel .row:last-child{border-bottom:none}
+.knb .why .panel .row .n{font-family:var(--num);font-size:26px;color:var(--gold)}
+.knb .why .panel .row .l{font-family:var(--serif);font-size:13.5px;color:#d8cfb4;margin-top:4px}
+/* B2B 服務網格 */
+.knb .b2b{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line2);border:1px solid var(--line)}
+.knb .b2b .cell{background:var(--green);padding:30px 24px;transition:.3s}
+.knb .b2b .cell:hover{background:rgba(210,172,96,.05)}
+.knb .b2b .cell .no{font-family:var(--mono);font-size:11px;color:var(--bronze);letter-spacing:.12em}
+.knb .b2b .cell h3{font-family:var(--serif);font-weight:700;font-size:17px;color:#f7f2e4;margin:10px 0 9px;letter-spacing:.03em}
+.knb .b2b .cell p{font-family:var(--serif);font-size:13px;color:#cfc6ab;line-height:1.7}
+/* LOGO 驗證牆 */
+.knb .lgroup+.lgroup{margin-top:40px}
+.knb .lgroup .gt{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+.knb .lgroup .gt .mono{white-space:nowrap}
+.knb .lgroup .gt i{height:1px;flex:1;background:var(--line)}
+.knb .lgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.knb .ltile{background:transparent;display:flex;align-items:center;justify-content:center;text-align:center;min-height:60px;padding:0;font-family:var(--serif);color:#cfc6ab;font-size:11px;font-weight:500;letter-spacing:.02em;line-height:1.4;transition:.3s}
+.knb .ltile img{max-height:56px;width:auto;max-width:100%;object-fit:contain}
+.knb .ltile:hover{transform:translateY(-3px);box-shadow:0 12px 24px rgba(0,0,0,.4)}
+.knb .lnote{font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.08em;margin-top:18px;text-align:center}
+/* 合作品牌 無縫輪播 */
+.knb .marquee{position:relative;overflow:hidden;padding:2px 0;-webkit-mask-image:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent);mask-image:linear-gradient(90deg,transparent,#000 7%,#000 93%,transparent)}
+.knb .mtrack{display:flex;gap:0;width:max-content;will-change:transform}
+.knb .mtrack.m1{animation:knbMarqL 42s linear infinite}
+.knb .mtrack.m2{animation:knbMarqR 50s linear infinite}
+.knb .marquee:hover .mtrack{animation-play-state:paused}
+.knb .marquee .ltile{flex:0 0 auto;width:146px;margin-right:22px}
+@keyframes knbMarqL{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@keyframes knbMarqR{from{transform:translateX(-50%)}to{transform:translateX(0)}}
+@media (prefers-reduced-motion:reduce){.knb .mtrack{animation:none}.knb .marquee{overflow-x:auto}}
+/* CTA */
+.knb .cta{border:1px solid var(--line);background:linear-gradient(180deg,rgba(210,172,96,.07),transparent);padding:58px 40px;text-align:center}
+.knb .cta h2{margin-bottom:10px}.knb .cta .lead{max-width:560px;margin:0 auto 28px}
+.knb .btns{display:flex;gap:16px;justify-content:center;flex-wrap:wrap}
+.knb .btn-g{display:inline-block;font-size:13.5px;letter-spacing:.08em;padding:14px 34px;background:var(--gold);color:#241b08;font-weight:500;transition:.3s}.knb .btn-g:hover{background:var(--gold2)}
+.knb .btn-o{display:inline-block;font-size:13.5px;letter-spacing:.08em;padding:13px 32px;border:1px solid rgba(236,230,214,.4);color:var(--cream);transition:.3s}.knb .btn-o:hover{border-color:var(--gold);color:var(--gold)}
+/* FOOTER */
+.knb .ft{background:#0e0c07;border-top:1px solid var(--line)}
+.knb .ftgrid{display:grid;grid-template-columns:1.4fr .8fr 1.2fr;gap:clamp(30px,5vw,60px);padding:64px 32px 52px;max-width:1140px;margin:0 auto}
+.knb .ft .logo{height:38px;width:auto;margin-bottom:18px}
+.knb .ft .ftabout{font-family:var(--serif);font-size:13.5px;color:#cfc6ab;line-height:1.85;max-width:340px}
+.knb .ft .ftline{display:inline-flex;align-items:center;gap:8px;margin-top:20px;font-size:12.5px;letter-spacing:.06em;padding:10px 22px;border:1px solid var(--gold);color:var(--gold);transition:.3s}
+.knb .ft .ftline:hover{background:var(--gold);color:#241b08}
+.knb .ft h4{font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--bronze);text-transform:uppercase;margin-bottom:18px}
+.knb .ft .ftnav a{display:block;font-family:var(--serif);font-size:14px;color:#d8cfb4;padding:7px 0;transition:.3s}.knb .ft .ftnav a:hover{color:var(--gold)}
+.knb .ft .ftc{font-family:var(--serif);font-size:13.5px;color:#d8cfb4;line-height:1.5}
+.knb .ft .ftc .row{display:flex;gap:10px;padding:7px 0;align-items:baseline}
+.knb .ft .ftc .row .k{font-family:var(--mono);font-size:10px;color:var(--bronze);letter-spacing:.08em;flex:0 0 52px;text-transform:uppercase;padding-top:2px}.knb .ft .ftc a:hover{color:var(--gold)}
+.knb .ft .ftbar{border-top:1px solid var(--line2);padding:20px 32px;text-align:center}
+.knb .ft .ftbar .a{color:#e7dcc2;font-size:12px;letter-spacing:.08em}.knb .ft .ftbar .b{color:#9a8e70;font-size:11px;margin-top:5px}.knb .ft .ftbar .c{color:#6f6750;font-size:11px;margin-top:8px}
+.knb .sticky{display:none}
+html.js .knb .rv{opacity:0;transform:translateY(26px);transition:.9s cubic-bezier(.2,.7,.2,1)}html.js .knb .rv.on{opacity:1;transform:none}
+@keyframes knbUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:no-preference){.knb .hero2 .grid>*{animation:knbUp .9s cubic-bezier(.2,.7,.2,1) both}.knb .hero2 .grid>*:nth-child(2){animation-delay:.16s}}
+@media(max-width:860px){
+  .knb .nl{display:none}.knb .bg{display:flex}.knb .sec{padding:58px 0}.knb .hero2{padding:56px 0 48px}
+  .knb .hero2 .grid{grid-template-columns:1fr;gap:32px}
+  .knb .tiers{grid-template-columns:1fr}.knb .why{grid-template-columns:1fr;gap:28px}
+  .knb .b2b{grid-template-columns:1fr 1fr}.knb .lgrid{grid-template-columns:repeat(3,1fr)}
+  .knb .sticky{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:997;border-top:1px solid var(--line);box-shadow:0 -8px 24px rgba(0,0,0,.4)}
+  .knb .sticky a{flex:1;text-align:center;padding:15px 8px;font-size:14px;letter-spacing:.06em;font-family:var(--serif)}
+  .knb .sticky .s-line{background:var(--gold);color:#241b08;font-weight:500}.knb .sticky .s-oem{background:#1c1812;color:var(--cream);border-left:1px solid var(--line)}
+  body{padding-bottom:54px}
+  .knb .ftgrid{grid-template-columns:1fr;gap:34px;padding:48px 32px 40px}
+  .knb .mnav{position:fixed;inset:0;z-index:998;background:rgba(16,13,9,.97);backdrop-filter:blur(6px);display:flex;flex-direction:column;justify-content:center;padding:40px;transform:translateX(100%);transition:.45s cubic-bezier(.4,0,.2,1)}
+  .knb .mnav.open{transform:none}
+  .knb .mnav a{font-family:var(--serif);font-size:23px;color:var(--cream);letter-spacing:.08em;padding:18px 4px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+  .knb .mnav a:last-child{border-bottom:none}.knb .mnav a span{font-family:var(--disp);font-style:italic;font-size:13px;color:var(--muted)}
+}
+@media(min-width:861px){.knb .mnav{display:none}}
+@media(max-width:520px){.knb .b2b{grid-template-columns:1fr}.knb .lgrid{grid-template-columns:repeat(2,1fr)}}
+</style>
+<div class="knb">
+  <div class="nav">
+    <a href="/"><img class="logo" src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/logo_white_3.png" alt="凱文南坡萬實業社"></a>
+    <div class="nl"><a href="/products/">酒款</a><a href="/where-to-buy/">購買據點</a><a href="/oem/" class="cur">代工服務</a><a href="/news/">最新消息</a><a href="/cocktail-class/">調酒教室</a><a href="/about/">關於</a><a href="/contact/">聯絡</a></div>
+    <div class="bg" onclick="document.querySelector('.mnav').classList.toggle('open');this.classList.toggle('o')"><span></span><span></span><span></span></div>
+  </div>
+  <nav class="mnav">
+    <a href="/products/">酒款<span>Products</span></a><a href="/where-to-buy/">購買據點<span>Where to buy</span></a><a href="/oem/">代工服務<span>OEM</span></a><a href="/news/">最新消息<span>News</span></a><a href="/cocktail-class/">調酒教室<span>Cocktail Class</span></a><a href="/about/">關於<span>About</span></a><a href="/contact/">聯絡<span>Contact</span></a>
+  </nav>
+
+  <header class="hero">
+    <div class="ph"></div><div class="ov"></div>
+    <div class="wrap">
+      <div class="corner">代工服務　/　OEM &amp; ODM — DOC. 02</div>
+      <h1>分級代工，<br>裝進你的品牌。</h1>
+      <div class="en">From Private Label to Full Bespoke.</div>
+      <p class="hl">從小量換標到企業全客製，南坡萬提供完整的瓶裝調酒代工解決方案——雞尾酒界的台積電，垂直整合、全製程掌控。</p>
+    </div>
+  </header>
+
+  <!-- 兩方案 -->
+  <section class="sec">
+    <div class="wrap">
+      <div class="shead"><span class="nm">§ 01</span><h2>選擇適合你的方案。</h2></div>
+      <div class="tiers">
+        <div class="tier rv">
+          <div class="no">TIER 01 — STANDARD</div>
+          <h3>標準款貼牌方案</h3>
+          <div class="for">小型業者・新創品牌・企業送禮・婚禮迎賓酒</div>
+          <ul>
+            <li>直接挑選現有 B2C 茶調酒款</li>
+            <li>換上您的品牌酒標即可出貨</li>
+            <li>小 MOQ，現金負擔輕</li>
+            <li>免前期研發等待</li>
+          </ul>
+        </div>
+        <div class="tier rv">
+          <div class="no">TIER 02 — BESPOKE</div>
+          <h3>全客製開發方案</h3>
+          <div class="for">大型企業・航空公司・國際飯店・大量進貨者</div>
+          <ul>
+            <li>量身研發專屬配方</li>
+            <li>完全獨家，全程保密</li>
+            <li>從風味到包裝一手包辦</li>
+            <li>大單量產，品質穩定</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 為什麼選 -->
+  <section class="sec well rv">
+    <div class="wrap">
+      <div class="shead"><span class="nm">§ 02</span><h2>為什麼選南坡萬。</h2></div>
+      <div class="why">
+        <p class="lead">南坡萬以「雞尾酒界的台積電」為品牌定位，從基酒製程、風味研發到瓶裝量產，所有環節垂直整合於自有廠區。我們同時是 B2C 自有品牌酒廠，以市場實戰驗證配方品質，讓代工客戶直接站在贏家肩膀上出發。</p>
+        <div class="panel">
+          <div class="row"><div class="n">100%</div><div class="l">基酒到瓶裝・垂直整合自有廠區</div></div>
+          <div class="row"><div class="n">B2C＋B2B</div><div class="l">市場實戰驗證的配方品質</div></div>
+          <div class="row"><div class="n">50+</div><div class="l">品牌與企業客戶的選擇</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- B2B 服務 -->
+  <section class="sec">
+    <div class="wrap">
+      <div class="shead"><span class="nm">§ 03</span><h2>其他 B2B 服務。</h2></div>
+      <div class="b2b rv">
+        <div class="cell"><div class="no">01</div><h3>基酒原料供應</h3><p>台灣在地農產製成的基酒原料，供應有自製能力的酒廠或飲品業者。</p></div>
+        <div class="cell"><div class="no">02</div><h3>桶裝即飲調酒</h3><p>大型活動、宴席、飯店宴會廳適用，現場注杯即可服務。</p></div>
+        <div class="cell"><div class="no">03</div><h3>設備租賃</h3><p>活動現場調酒設備出租，含專業器材與技術支援。</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- LOGO 牆 -->
+  <section class="sec well rv">
+    <div class="wrap">
+      <div class="shead"><span class="nm">§ 04</span><h2>合作品牌。</h2></div>
+      <div class="lgroup">
+        <div class="gt"><span class="mono">基酒・桶裝調酒</span><i></i></div>
+        <div class="marquee"><div class="mtrack m1">
+          <div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-keg-01.png" alt="AQUA 蒔瀞" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-keg-02.png" alt="le aqua 水相餐聚苑" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-keg-03.png" alt="西江水坊" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-keg-04.png" alt="台北遠東香格里拉 SHANGRI-LA" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-keg-05.png" alt="mp lounge" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-keg-06.png" alt="昭和浪漫" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-keg-07.png" alt="湧金啤酒 yong jin" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-keg-08.png" alt="Feeling Bar" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-07.png" alt="好野吧（南野子）" loading="lazy"></div>
+          <div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-keg-01.png" alt="AQUA 蒔瀞" loading="lazy"></div><div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-keg-02.png" alt="le aqua 水相餐聚苑" loading="lazy"></div><div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-keg-03.png" alt="西江水坊" loading="lazy"></div><div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-keg-04.png" alt="台北遠東香格里拉 SHANGRI-LA" loading="lazy"></div><div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-keg-05.png" alt="mp lounge" loading="lazy"></div><div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-keg-06.png" alt="昭和浪漫" loading="lazy"></div><div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-keg-07.png" alt="湧金啤酒 yong jin" loading="lazy"></div><div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-keg-08.png" alt="Feeling Bar" loading="lazy"></div><div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-07.png" alt="好野吧（南野子）" loading="lazy"></div>
+        </div></div>
+      </div>
+      <div class="lgroup">
+        <div class="gt"><span class="mono">瓶裝調酒代工</span><i></i></div>
+        <div class="marquee"><div class="mtrack m2">
+          <div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-01.png" alt="誠品書店" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-02.png" alt="CAPELLA" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-03.png" alt="昇長 jp-sake" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-04.png" alt="奉茗堂" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-05.png" alt="TUNG'S KITCHEN" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-06.png" alt="baby face" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-07.png" alt="南野子（好野吧）" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-08.png" alt="Placebo 安慰劑" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-09.png" alt="阿魯Bar" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-10.png" alt="VANDOME" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-11.png" alt="72 LANE" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-12.png" alt="福寶寶" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-13.png" alt="拾山" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-bananablue.png" alt="Banana blue Coffee" loading="lazy"></div>
+          <div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-01.png" alt="誠品書店" loading="lazy"></div><div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-02.png" alt="CAPELLA" loading="lazy"></div><div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-03.png" alt="昇長 jp-sake" loading="lazy"></div><div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-04.png" alt="奉茗堂" loading="lazy"></div><div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-05.png" alt="TUNG'S KITCHEN" loading="lazy"></div><div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-06.png" alt="baby face" loading="lazy"></div><div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-07.png" alt="南野子（好野吧）" loading="lazy"></div><div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-08.png" alt="Placebo 安慰劑" loading="lazy"></div><div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-09.png" alt="阿魯Bar" loading="lazy"></div><div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-10.png" alt="VANDOME" loading="lazy"></div><div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-11.png" alt="72 LANE" loading="lazy"></div><div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-12.png" alt="福寶寶" loading="lazy"></div><div class="ltile" aria-hidden="true"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-13.png" alt="拾山" loading="lazy"></div><div class="ltile"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-bananablue.png" alt="Banana blue Coffee" loading="lazy"></div>
+        </div></div>
+      </div>
+      <div class="lnote">— 以上為部份合作客戶；各品牌 LOGO 已上 WP 媒體庫—</div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="sec" style="padding-top:0">
+    <div class="wrap">
+      <div class="cta rv">
+        <div class="mono" style="margin-bottom:14px">Get Started — 詢價</div>
+        <h2>準備好開始了嗎？</h2>
+        <p class="lead">歡迎告訴我們您的需求，我們將在 2 個工作天內回覆。</p>
+        <div class="btns"><a class="btn-g" href="/contact/">聯絡我們 / 詢價</a><a class="btn-o" href="https://lin.ee/zrKvKz6" target="_blank" rel="noopener">LINE 諮詢</a></div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="ft">
+    <div class="ftgrid">
+      <div>
+        <img class="logo" src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/logo_white_3.png" alt="凱文南坡萬實業社">
+        <p class="ftabout">凱文南坡萬實業社｜雞尾酒界的台積電。台灣第一家全客製瓶裝調酒代工酒廠，自有品牌台灣茶調酒系列。</p>
+        <a class="ftline" href="https://lin.ee/zrKvKz6" target="_blank" rel="noopener">LINE 諮詢 →</a>
+      </div>
+      <div><h4>網站導覽</h4><nav class="ftnav"><a href="/products/">酒款</a><a href="/where-to-buy/">購買據點</a><a href="/oem/">代工服務</a><a href="/news/">最新消息</a><a href="/cocktail-class/">調酒教室</a><a href="/about/">關於</a><a href="/contact/">聯絡</a></nav></div>
+      <div><h4>聯絡我們</h4><div class="ftc">
+        <div class="row"><span class="k">Tel</span><a href="tel:0289910068">02-8991-0068</a></div>
+        <div class="row"><span class="k">Email</span><a href="mailto:kevinnumber1.managers@gmail.com">kevinnumber1.managers@gmail.com</a></div>
+        <div class="row"><span class="k">Add</span><span>新北市新莊區化成路 554 巷 37 號 1 樓</span></div>
+        <div class="row"><span class="k">Line</span><a href="https://lin.ee/zrKvKz6" target="_blank" rel="noopener">@kevinnumber1</a></div>
+      </div></div>
+    </div>
+    <div class="ftbar"><div class="a">禁止酒駕　飲酒過量，有害健康</div><div class="b">本產品含酒精成分，未滿十八歲者請勿飲用。飲酒請適量。</div><div class="c">© 2026 凱文南坡萬實業社 KEVIN NUMBER 1．All rights reserved.</div></div>
+  </footer>
+  <div class="sticky"><a class="s-line" href="https://lin.ee/zrKvKz6" target="_blank" rel="noopener">LINE 諮詢</a><a class="s-oem" href="/contact/">代工詢價</a></div>
+</div>
+<script>
+(function(){var els=[].slice.call(document.querySelectorAll('.knb .rv'));if(!els.length)return;if(!('IntersectionObserver' in window)){els.forEach(function(e){e.classList.add('on');});return;}var io=new IntersectionObserver(function(es){es.forEach(function(en){if(en.isIntersecting){en.target.classList.add('on');io.unobserve(en.target);}});},{threshold:0,rootMargin:'0px 0px 12% 0px'});els.forEach(function(e){io.observe(e);});})();
+</script>
+    
