@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>凱文南坡萬實業社｜把整座島的茶香，收進一支瓶裡</title>
+<meta name="description" content="台灣茶 × 自家酒廠工藝蒸餾。首波十款瓶裝茶調酒，低酒精，純為風味。">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@300;400;500;600;900&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,500;1,9..144,400&display=swap" rel="stylesheet">
+<script>document.documentElement.className+=' js';</script>
+<style>
+:root{
+  --night:#0c1f12;--green:#102315;--green2:#13291b;
+  --tea:#D2AC60;--tea2:#e7c47d;--bronze:#b0915f;
+  --cream:#ece6d6;--cream2:#b6b094;--muted:#8b8a6e;
+  --line:rgba(210,172,96,.20);
+  --serif:"Noto Serif TC",serif;--disp:"Fraunces",serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{background:var(--night);color:var(--cream);font-family:var(--serif);overflow-x:hidden}
+img{max-width:100%;display:block}a{color:inherit;text-decoration:none}
+::selection{background:rgba(210,172,96,.3);color:#fff}
+.gold{background:linear-gradient(160deg,#f3d79a,#d2ac60 55%,#a87f3e);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+/* 全頁顆粒 */
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:60;opacity:.5;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.045'/%3E%3C/svg%3E")}
+
+/* ===== NAV ===== */
+.nav{position:fixed;top:0;left:0;right:0;z-index:50;display:flex;align-items:center;justify-content:space-between;padding:22px 48px;transition:.4s}
+.nav.solid{background:rgba(10,24,15,.94);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);padding:14px 48px}
+.nav .logo{height:58px;width:auto;filter:drop-shadow(0 4px 14px rgba(0,0,0,.5));transition:.4s}
+.nav.solid .logo{height:42px}
+.nl{display:flex;gap:30px;font-size:13.5px;letter-spacing:.16em;color:var(--cream2)}
+.nl a{position:relative;padding:4px 0}.nl a:hover{color:var(--tea2)}
+.nl a::after{content:"";position:absolute;left:0;bottom:-3px;width:0;height:1px;background:var(--tea);transition:.3s}.nl a:hover::after{width:100%}
+.bg{display:none;flex-direction:column;gap:6px;cursor:pointer;padding:6px}.bg span{width:26px;height:2px;background:var(--tea);border-radius:2px;transition:.35s}
+.bg.o span:nth-child(1){transform:translateY(8px) rotate(45deg)}.bg.o span:nth-child(2){opacity:0}.bg.o span:nth-child(3){transform:translateY(-8px) rotate(-45deg)}
+.mnav{position:fixed;inset:0;z-index:49;background:rgba(9,22,14,.98);display:none;flex-direction:column;justify-content:center;padding:48px;transform:translateX(100%);transition:.45s cubic-bezier(.4,0,.2,1)}
+.mnav.open{transform:none}
+.mnav a{font-size:24px;color:var(--cream);letter-spacing:.1em;padding:18px 4px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.mnav a span{font-family:var(--disp);font-style:italic;font-size:13px;color:var(--cream2)}
+
+/* 共用：章節編號眉標 */
+.kick{font-family:var(--disp);font-style:italic;font-size:clamp(15px,1.4vw,19px);color:var(--tea);letter-spacing:.06em;display:flex;align-items:baseline;gap:13px}
+.kick b{font-style:normal;font-weight:500;font-size:.68em;letter-spacing:.32em;color:var(--cream2);text-transform:uppercase}
+.kick i{display:inline-block;width:52px;height:1px;background:linear-gradient(90deg,var(--tea),transparent);transform:translateY(-5px)}
+.kick.light{color:var(--tea2)}.kick.light b{color:rgba(255,255,255,.7)}
+
+/* reveal */
+html.js .rv{opacity:0;transform:translateY(34px);transition:1.05s cubic-bezier(.2,.7,.2,1)}html.js .rv.on{opacity:1;transform:none}
+
+/* ===== HERO 字成人像 ===== */
+.hero{position:relative;height:100vh;min-height:620px;overflow:hidden;background:radial-gradient(95% 95% at 47% 12%,#1c3a28,#0e2415 58%,#081a0f 100%)}
+.hero::before{content:"";position:absolute;inset:0;background:radial-gradient(120% 70% at 47% 22%,rgba(210,172,96,.12),transparent 55%);box-shadow:inset 0 0 280px rgba(0,0,0,.55);pointer-events:none;z-index:2}
+.hero canvas{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:1}
+.htate{position:absolute;top:50%;right:60px;transform:translateY(-50%);z-index:3;writing-mode:vertical-rl;text-orientation:upright;font-weight:600;font-size:clamp(22px,2.6vw,34px);letter-spacing:.3em;line-height:2;color:var(--cream)}
+.htate em{font-style:normal;color:var(--tea2)}
+.htate .htm{white-space:nowrap}
+.htate .sub{font-size:13px;letter-spacing:.32em;color:var(--cream2);font-weight:400}
+.hintro{position:absolute;left:48px;bottom:54px;max-width:340px;z-index:4;text-shadow:0 2px 18px rgba(5,12,8,1),0 0 8px rgba(5,12,8,.95)}
+.hintro::before{content:"";position:absolute;inset:-30px -60px -34px -60px;z-index:-1;pointer-events:none;background:radial-gradient(130% 120% at 22% 55%,rgba(6,14,9,.92),rgba(6,14,9,.55) 50%,transparent 78%)}
+.hintro .k{font-family:var(--disp);font-style:italic;font-size:18px;font-weight:500;color:var(--tea2);letter-spacing:.04em}
+.hintro p{margin-top:14px;font-size:16.5px;line-height:1.85;color:var(--cream);letter-spacing:.04em;font-weight:400}
+.hsig{display:flex;flex-direction:column;align-items:flex-start;gap:22px}
+.chop{flex:0 0 auto;font-family:"DFKai-SB","BiauKai","標楷體","KaiTi",serif;font-weight:400;font-size:19px;letter-spacing:.14em;color:transparent;-webkit-text-stroke:1.7px #b5402c;text-stroke:1.7px #b5402c;border:1.5px solid rgba(181,64,44,.72);border-radius:2px;padding:9px 14px 7px;transform:rotate(-4deg);white-space:nowrap;opacity:.94;-webkit-mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='120'%3E%3Cfilter id='r'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.045 0.08' numOctaves='3' seed='9'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1.6 -0.34'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23r)'/%3E%3C/svg%3E");-webkit-mask-size:100% 100%;mask-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='120'%3E%3Cfilter id='r'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.045 0.08' numOctaves='3' seed='9'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1.6 -0.34'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23r)'/%3E%3C/svg%3E");mask-size:100% 100%}
+.hline{margin-top:7px;font-size:15.5px;line-height:1.7;color:var(--cream);letter-spacing:.03em}
+/* 共用朱印 */
+.chop-sq{display:inline-grid;place-items:center;width:46px;height:46px;border-radius:4px;font-weight:600;font-size:22px;color:#f4e6cd;background:linear-gradient(155deg,#b54c36,#8a3322);box-shadow:0 5px 16px rgba(0,0,0,.45),inset 0 0 0 1px rgba(255,226,192,.22);flex:0 0 auto}
+/* 索引基酒標籤 */
+.crow .tag{font-size:11.5px;letter-spacing:.1em;color:var(--tea2);border:1px solid var(--line);border-radius:20px;padding:3px 12px;white-space:nowrap}
+/* 製酒所工藝規格 */
+.craft-spec{margin-top:24px;display:flex;align-items:center;gap:14px;font-size:12px;letter-spacing:.2em;color:var(--tea2);text-transform:uppercase}
+.craft-spec::before{content:"";width:34px;height:1px;background:linear-gradient(90deg,var(--tea),transparent)}
+/* CTA 收尾朱印 */
+.cta-seal{margin-top:60px;display:flex;align-items:center;gap:16px}
+.cta-seal .t{font-size:12.5px;letter-spacing:.16em;color:var(--cream2)}
+.hcue{position:absolute;left:50%;bottom:28px;transform:translateX(-50%);z-index:3;font-size:11.5px;letter-spacing:.24em;color:rgba(236,230,214,.4)}
+.fade{opacity:0;animation:fi 1.6s ease forwards}.d3{animation-delay:.7s}.d4{animation-delay:1s}
+@keyframes fi{to{opacity:1}}
+
+/* ===== 壹 理念 ===== */
+.phil{position:relative;min-height:100vh;overflow:hidden;background:radial-gradient(120% 90% at 18% 8%,#1b3826 0%,#0e2415 46%,#08160d 100%)}
+.phil::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:5;box-shadow:inset 0 0 320px rgba(0,0,0,.55);background:radial-gradient(80% 60% at 22% 16%,rgba(210,172,96,.09),transparent 60%)}
+.wm{position:absolute;right:-7vw;bottom:-12vh;z-index:0;writing-mode:vertical-rl;font-weight:900;font-size:64vh;line-height:.8;color:rgba(210,172,96,.045);user-select:none;pointer-events:none;letter-spacing:-.04em}
+.drift{position:absolute;inset:0;z-index:1;pointer-events:none;overflow:hidden}
+.drift span{position:absolute;color:rgba(236,230,214,.05);font-weight:400;animation:float linear infinite}
+@keyframes float{0%{transform:translateY(14px);opacity:0}18%{opacity:.6}82%{opacity:.6}100%{transform:translateY(-22px);opacity:0}}
+.phil-grid{position:relative;z-index:3;min-height:100vh;display:grid;grid-template-columns:1fr minmax(290px,400px);align-items:center;gap:clamp(36px,6vw,110px);padding:clamp(96px,10vh,128px) clamp(32px,6vw,116px) clamp(64px,8vh,100px)}
+.phil-lead,.phil-side{min-width:0}
+.phil-lead .kick{margin-bottom:28px}
+.tate{font-weight:900;line-height:1.1;font-size:min(72px,6vw,10.5vh);color:var(--cream);text-shadow:0 6px 40px rgba(0,0,0,.45);letter-spacing:.02em;white-space:nowrap}
+.tate span{display:inline-block;opacity:0;transform:translateY(26px);animation:rise .9s cubic-bezier(.2,.7,.2,1) forwards}
+@keyframes rise{to{opacity:1;transform:none}}
+.stamp{margin-top:30px;display:flex;align-items:center;gap:14px;opacity:0;animation:fade 1s ease 1.3s forwards}
+.stamp .seal{width:42px;height:42px;border:1px solid var(--line);border-radius:50%;display:grid;place-items:center;font-weight:600;color:var(--tea);font-size:18px}
+.stamp .t{font-size:12.5px;letter-spacing:.16em;color:var(--cream2);line-height:1.7}
+.stamp .t b{color:var(--cream);font-weight:500}
+@keyframes fade{to{opacity:1}}
+.phil-side .en{font-family:var(--disp);font-style:italic;font-size:14px;color:var(--bronze);letter-spacing:.04em;margin-bottom:20px}
+.phil-side p{font-size:clamp(14.5px,1.05vw,16px);line-height:2.15;color:var(--cream2);letter-spacing:.02em;font-weight:300}
+.phil-side p+p{margin-top:18px}
+.phil-side p .hl{color:var(--cream);font-weight:400}
+.stats{margin-top:clamp(36px,5vh,56px);border-top:1px solid var(--line)}
+.stat{display:flex;align-items:baseline;gap:20px;padding:20px 2px;border-bottom:1px solid var(--line);position:relative}
+.stat .n{font-family:var(--disp);font-weight:400;font-size:clamp(32px,3.4vw,46px);color:var(--tea2);line-height:1;min-width:3.4ch}
+.stat .l{font-size:13.5px;color:var(--cream);letter-spacing:.04em}
+.stat .s{font-size:11.5px;color:var(--muted);letter-spacing:.1em;margin-top:5px}
+.stat::after{content:"";position:absolute;left:0;bottom:-1px;width:0;height:1px;background:var(--tea);transition:width 1.1s cubic-bezier(.2,.7,.2,1)}
+.stats.go .stat::after{width:100%}
+
+/* ===== 貳 製酒所 ===== */
+.craft{position:relative;min-height:92vh;display:flex;align-items:center;overflow:hidden;background-size:cover;background-position:center;background-attachment:fixed}
+.craft::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(7,18,11,.92),rgba(7,18,11,.55) 55%,rgba(7,18,11,.25))}
+.craft-in{position:relative;z-index:2;width:100%;padding:clamp(80px,10vh,120px) clamp(32px,6vw,116px)}
+.craft-in .kick{margin-bottom:38px}
+.craft-tate{display:flex;align-items:flex-start;gap:clamp(10px,2vw,30px)}
+.ct-main{writing-mode:vertical-rl;text-orientation:upright;font-weight:900;font-size:min(118px,11vw,13.6vh);line-height:1.05;letter-spacing:.05em;color:#fff;text-shadow:0 8px 50px rgba(0,0,0,.6)}
+.ct-side{writing-mode:vertical-rl;text-orientation:upright;font-weight:400;font-size:min(27px,2.8vw,3.8vh);letter-spacing:.22em;color:var(--cream2);margin-top:8px;line-height:1.9}
+.craft-cap{max-width:430px;margin-top:44px;padding-left:18px;border-left:1px solid var(--line);font-size:15px;line-height:2.05;color:#e8e0cd;font-weight:300}
+.craft-cap b{color:#fff;font-weight:400}
+
+/* ===== 參 茶冊索引 ===== */
+.coll{position:relative;padding:clamp(96px,13vw,170px) 0;background:linear-gradient(180deg,#0c1f12,#0e2415)}
+.coll-wrap{max-width:1280px;margin:0 auto;padding:0 clamp(32px,6vw,72px);display:grid;grid-template-columns:auto 1fr;gap:clamp(30px,5vw,80px);align-items:start}
+.coll-title{position:sticky;top:120px}
+.coll-title .kick{margin-bottom:26px}
+.coll-title .vt{writing-mode:vertical-rl;text-orientation:upright;font-weight:900;font-size:clamp(40px,4.6vw,68px);letter-spacing:.14em;color:var(--cream);line-height:1.1}
+.coll-title .vt em{font-style:normal}
+.coll-title p{margin-top:24px;max-width:13ch;font-size:13.5px;line-height:1.95;color:var(--cream2);font-weight:300;writing-mode:horizontal-tb}
+.clist{border-top:1px solid var(--line)}
+.crow{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:clamp(16px,3vw,46px);padding:24px 8px;border-bottom:1px solid var(--line);transition:.4s cubic-bezier(.2,.7,.2,1);position:relative}
+.crow .no{font-family:var(--disp);font-size:clamp(18px,1.9vw,24px);color:var(--bronze);width:2.4em}
+.crow .nm{font-weight:600;font-size:clamp(18px,2.2vw,28px);color:#f4ecd9;letter-spacing:.04em}
+.crow .en{font-family:var(--disp);font-style:italic;font-size:clamp(12px,1.2vw,15px);color:var(--cream2);margin-top:4px}
+.crow .meta{display:flex;align-items:center;gap:18px;color:var(--cream2);font-size:13px;letter-spacing:.06em;white-space:nowrap}
+.crow .arr{font-family:var(--disp);font-style:italic;color:var(--tea);transition:.4s}
+.clist a:hover .crow{padding-left:24px;background:linear-gradient(90deg,rgba(210,172,96,.09),transparent)}
+.clist a:hover .nm{color:var(--tea2)}.clist a:hover .arr{transform:translateX(6px);color:var(--tea2)}
+
+/* ===== 肆 主理人 ===== */
+.founder{position:relative;min-height:92vh;display:flex;align-items:center;overflow:hidden;background-size:cover;background-position:center 28%;background-attachment:fixed}
+.founder::before{content:"";position:absolute;inset:0;background:linear-gradient(75deg,rgba(7,18,11,.92),rgba(7,18,11,.62) 60%,rgba(7,18,11,.34))}
+.founder-in{position:relative;z-index:2;max-width:860px;padding:clamp(80px,10vh,120px) clamp(32px,6vw,116px)}
+.founder-in .kick{margin-bottom:34px}
+.fq{display:block;font-weight:400;font-size:clamp(28px,4.3vw,58px);color:#fff;line-height:1.55;letter-spacing:.03em;text-shadow:0 6px 40px rgba(0,0,0,.5)}
+.fsig{margin-top:46px;display:flex;align-items:flex-start;gap:20px}
+.fsigtext{display:flex;flex-direction:column;gap:10px}
+.fsig .fname{font-family:var(--disp);font-style:italic;font-size:clamp(22px,2.4vw,30px);color:var(--cream)}
+.fsig .frole{font-size:13.5px;letter-spacing:.1em;color:var(--cream2)}
+.fcred{margin-top:8px;display:flex;gap:10px;flex-wrap:wrap}
+.fcred span{font-size:12px;letter-spacing:.08em;color:var(--tea2);border:1px solid var(--line);border-radius:30px;padding:6px 14px}
+
+/* ===== 伍 CTA ===== */
+.cta{position:relative;padding:clamp(110px,16vw,200px) 0;background:radial-gradient(120% 100% at 80% 20%,#16301f,#0c1f12 60%);overflow:hidden}
+.cta .wm{right:auto;left:-6vw;bottom:auto;top:-10vh;color:rgba(210,172,96,.04)}
+.cta-in{position:relative;z-index:2;max-width:1280px;margin:0 auto;padding:0 clamp(32px,6vw,72px)}
+.cta-in .kick{margin-bottom:30px}
+.cta-h{font-weight:700;font-size:clamp(30px,5vw,64px);color:#fbf5e8;letter-spacing:.04em;line-height:1.4}
+.cta-h .gold{font-weight:900}
+.cta-in p{margin:28px 0 40px;max-width:540px;font-size:15.5px;line-height:2.05;color:var(--cream2);font-weight:300}
+.btns{display:flex;gap:16px;flex-wrap:wrap}
+.btn-g{display:inline-block;font-size:13.5px;letter-spacing:.1em;padding:17px 40px;background:var(--tea);color:#16130b;font-weight:600;transition:.3s}.btn-g:hover{background:var(--tea2);transform:translateY(-2px)}
+.btn-o{display:inline-block;font-size:13.5px;letter-spacing:.1em;padding:16px 38px;border:1px solid var(--line);color:var(--cream);transition:.3s}.btn-o:hover{border-color:var(--tea);color:var(--tea2)}
+
+/* ===== warn ===== */
+.warn{background:#160808;text-align:center;padding:30px;position:relative;z-index:2}
+.warn .a{color:#fff;font-size:13px;letter-spacing:.1em}.warn .b{color:#d99a9a;font-size:12px;margin-top:6px}
+
+/* RWD */
+@media(max-width:900px){
+  .nav,.nav.solid{padding:14px 22px}.nl{display:none}.bg{display:flex}.mnav{display:flex}
+  .nav .logo{height:46px}.nav.solid .logo{height:38px}
+  .htate{right:22px;font-size:20px}.hintro{left:22px;bottom:32px;max-width:64%}
+  .phil-grid{grid-template-columns:1fr;gap:46px;padding:96px 26px 64px;align-content:start}
+  .wm{font-size:52vh;right:-12vw}
+  .craft,.founder{background-attachment:scroll;min-height:74vh}
+  .ct-main{font-size:min(96px,22vw,16vh)}
+  .coll-wrap{grid-template-columns:1fr;gap:36px}.coll-title{position:static}
+  .coll-title .vt{writing-mode:horizontal-tb}.coll-title p{max-width:none}
+  .crow{grid-template-columns:auto 1fr;gap:12px}.crow .meta{grid-column:2;justify-content:flex-start;margin-top:4px}
+  .clist a:hover .crow{padding-left:8px}
+}
+</style>
+</head>
+<body>
+<header class="nav" id="nav">
+  <a href="/"><img class="logo" src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/logo_white_3.png" alt="凱文南坡萬實業社 · Best Tailored Cocktail in Taiwan, Kevin No.1"></a>
+  <nav class="nl"><a href="/products/">酒款</a><a href="/where-to-buy/">購買據點</a><a href="/oem/">代工服務</a><a href="/news/">最新消息</a><a href="/cocktail-class/">調酒教室</a><a href="/about/">關於</a><a href="/contact/">聯絡</a></nav>
+  <div class="bg" onclick="document.querySelector('.mnav').classList.toggle('open');this.classList.toggle('o')"><span></span><span></span><span></span></div>
+</header>
+<nav class="mnav"><a href="/products/">酒款<span>Products</span></a><a href="/where-to-buy/">購買據點<span>Where to buy</span></a><a href="/oem/">代工服務<span>OEM</span></a><a href="/news/">最新消息<span>News</span></a><a href="/cocktail-class/">調酒教室<span>Cocktail Class</span></a><a href="/about/">關於<span>About</span></a><a href="/contact/">聯絡<span>Contact</span></a></nav>
+
+<!-- HERO -->
+<section class="hero">
+  <canvas id="c"></canvas>
+  <div class="htate fade d3"><span class="htm">以茶為<em>魂</em>，工藝為<em>骨</em></span><div class="sub">台灣茶 × 自家酒廠蒸餾</div></div>
+  <div class="hintro fade d4">
+    <div class="hsig">
+      <div>
+        <div class="k">From Leaf to Glass.</div>
+        <div class="hline">一座島的茶，一杯手中的酒。</div>
+      </div>
+      <div class="chop">凱文南坡萬實業社</div>
+    </div>
+  </div>
+  <div class="hcue fade d4">移動滑鼠擾動　·　向下捲動 ↓</div>
+</section>
+
+<!-- 壹 理念 -->
+<section class="phil">
+  <div class="wm">茶</div>
+  <div class="drift" id="drift"></div>
+  <div class="phil-grid">
+    <div class="phil-lead rv">
+      <div class="kick"><i></i>壹 <b>Philosophy</b></div>
+      <div class="tate">
+        <span style="animation-delay:.10s">風</span><span style="animation-delay:.18s">味</span><span style="animation-delay:.26s">，</span><span style="animation-delay:.36s">才</span><span style="animation-delay:.44s">是</span><span class="gold" style="animation-delay:.54s">主</span><span class="gold" style="animation-delay:.64s">角</span><span style="animation-delay:.74s">。</span>
+      </div>
+      <div class="stamp"><div class="seal">茶</div><div class="t"><b>低酒精，純為風味。</b><br>台灣茶 × 自家酒廠工藝蒸餾</div></div>
+    </div>
+    <div class="phil-side rv">
+      <div class="en">Flavor first. Always.</div>
+      <p>我們相信，一杯酒最該被記住的是<span class="hl">風味</span>，而不是酒精度。</p>
+      <p>南坡萬從台灣的茶園與果園出發——<span class="hl">蜜香紅茶</span>的荔枝尾韻、<span class="hl">金萱烏龍</span>的奶香、<span class="hl">茉莉香片</span>的清雅，逐一收進瓶中。</p>
+      <p>連基酒都不假他人之手：琴酒、蘭姆酒、薄荷酒，皆由自家酒廠<span class="hl">手工蒸餾</span>，只為托住那一口純粹的茶香。</p>
+      <div class="stats" id="stats">
+        <div class="stat"><div class="n">8–14%</div><div><div class="l">ABV 酒精濃度</div><div class="s">低酒精・入口溫柔</div></div></div>
+        <div class="stat"><div class="n" data-to="10">10</div><div><div class="l">首波台灣茶調酒</div><div class="s">十款・一島風土</div></div></div>
+        <div class="stat"><div class="n" data-to="100" data-suffix="%">100%</div><div><div class="l">自家酒廠手工自製</div><div class="s">從基酒到調配・一手包辦</div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 貳 製酒所 -->
+<section class="craft rv" style="background-image:url('https://images.pexels.com/photos/28792576/pexels-photo-28792576/free-photo-of-copper-distillery-equipment-with-copper-bowls.jpeg?auto=compress&cs=tinysrgb&w=1600');background-position:right center">
+  <div class="craft-in">
+    <div class="kick light"><i></i>貳 <b>The Craft</b></div>
+    <div class="craft-tate">
+      <div class="ct-main">親手蒸餾</div>
+      <div class="ct-side">從一支基酒，到一只杯</div>
+    </div>
+    <p class="craft-cap"><b>不買現成基酒。</b>琴酒、蘭姆酒、薄荷酒，全由團隊在自家酒廠手工自製，再以台灣名茶調入——才能讓 8–14% 的低酒精度，依然有飽滿層次與回甘。</p>
+    <div class="craft-spec">銅製壺式蒸餾　·　小批次手作　·　茶湯浸調</div>
+  </div>
+</section>
+
+<!-- 參 茶冊索引 -->
+<section class="coll rv">
+  <div class="coll-wrap">
+    <div class="coll-title">
+      <div class="kick"><i></i>參 <b>Our Cocktails</b></div>
+      <div class="vt">茶冊索引</div>
+      <p>以台灣名茶為靈魂、自製基酒為骨幹，首波十款，一島風土。</p>
+    </div>
+    <div class="clist">
+      <a href="/products/honey-black-tea-lychee-gin/"><div class="crow"><div class="no">01</div><div><div class="nm">蜜香紅茶荔枝琴酒</div><div class="en">Honey Black Tea Lychee Gin</div></div><div class="meta"><span class="tag">琴酒</span><span>ABV 8%</span><span class="arr">看這支 →</span></div></div></a>
+      <a href="/products/thai-milk-oolong-rum/"><div class="crow"><div class="no">02</div><div><div class="nm">泰奶焙火烏龍蘭姆酒</div><div class="en">Thai Milk Tea Oolong Rum</div></div><div class="meta"><span class="tag">蘭姆酒</span><span>ABV 14%</span><span class="arr">看這支 →</span></div></div></a>
+      <a href="/products/gardenia-jinxuan-whisky/"><div class="crow"><div class="no">03</div><div><div class="nm">梔子花金萱威士忌</div><div class="en">Gardenia Jinxuan Whisky</div></div><div class="meta"><span class="tag">威士忌</span><span>ABV 14%</span><span class="arr">看這支 →</span></div></div></a>
+      <a href="/products/jasmine-crispy-plum-gin/"><div class="crow"><div class="no">04</div><div><div class="nm">茉莉香片脆梅琴酒</div><div class="en">Jasmine Tea Plum Gin</div></div><div class="meta"><span class="tag">琴酒</span><span>ABV 8%</span><span class="arr">看這支 →</span></div></div></a>
+      <a href="/products/guava-green-tea-plum-wine/"><div class="crow"><div class="no">05</div><div><div class="nm">芭樂綠茶梅酒</div><div class="en">Guava Green Tea Plum Wine</div></div><div class="meta"><span class="tag">梅酒</span><span>ABV 8%</span><span class="arr">看這支 →</span></div></div></a>
+      <a href="/products/baozhong-tea-umeshu/"><div class="crow"><div class="no">06</div><div><div class="nm">包種茶青梅甜酒</div><div class="en">Baozhong Tea Umeshu</div></div><div class="meta"><span class="tag">梅酒</span><span>ABV 8%</span><span class="arr">看這支 →</span></div></div></a>
+      <a href="/products/smoked-passion-fruit-rum/"><div class="crow"><div class="no">07</div><div><div class="nm">煙燻百香果蘭姆酒</div><div class="en">Smoked Passion Fruit Rum</div></div><div class="meta"><span class="tag">蘭姆酒</span><span>ABV 14%</span><span class="arr">看這支 →</span></div></div></a>
+      <a href="/products/green-peppercorn-plum-rum/"><div class="crow"><div class="no">08</div><div><div class="nm">青花椒烏梅蘭姆酒</div><div class="en">Green Peppercorn Plum Rum</div></div><div class="meta"><span class="tag">蘭姆酒</span><span>ABV 14%</span><span class="arr">看這支 →</span></div></div></a>
+      <a href="/products/white-peach-mojito/"><div class="crow"><div class="no">09</div><div><div class="nm">白桃翠玉莫奇朵</div><div class="en">White Peach Mojito</div></div><div class="meta"><span class="tag">莫奇朵</span><span>ABV 8%</span><span class="arr">看這支 →</span></div></div></a>
+      <a href="/products/watermelon-sea-salt-mojito/"><div class="crow"><div class="no">10</div><div><div class="nm">海鹽西瓜莫奇朵</div><div class="en">Watermelon Sea Salt Mojito</div></div><div class="meta"><span class="tag">莫奇朵</span><span>ABV 8%</span><span class="arr">看這支 →</span></div></div></a>
+    </div>
+  </div>
+</section>
+
+<!-- 肆 主理人 -->
+<section class="founder rv" style="background-image:url('/home_img/bg-bar.jpg')">
+  <div class="founder-in">
+    <div class="kick light"><i></i>肆 <b>Founder</b></div>
+    <q class="fq">讓每一個台灣人，都能驕傲地舉起一杯，<span class="gold">屬於這座島嶼的酒</span>。</q>
+    <div class="fsig">
+      <div class="fsigtext">
+        <div class="fname">凱文 Kevin</div>
+        <div class="frole">主理人 / 首席調酒師</div>
+        <div class="fcred"><span>交大應化所</span><span>前台積電</span><span>台灣調酒生態系建構者</span></div>
+      </div>
+    </div>
+    <div class="btns" style="margin-top:42px"><a class="btn-g" href="/where-to-buy/">尋找購買據點</a><a class="btn-o" href="/contact/">聯絡我們</a></div>
+  </div>
+</section>
+
+<!-- 伍 CTA（整段移除，按鈕已移至主理人） -->
+<div class="warn"><div class="a">禁止酒駕　飲酒過量，有害健康</div><div class="b">本產品含酒精成分，未滿十八歲者請勿飲用。飲酒請適量。</div></div>
+
+<script>
+// nav solid on scroll
+var nav=document.getElementById('nav');
+function ns(){nav.classList.toggle('solid',window.scrollY>60)}ns();addEventListener('scroll',ns,{passive:true});
+// reveal
+(function(){var els=[].slice.call(document.querySelectorAll('.rv'));if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('on');io.unobserve(e.target);}});},{threshold:0,rootMargin:'0px 0px -8% 0px'});els.forEach(function(e){io.observe(e);});}else{els.forEach(function(e){e.classList.add('on');});}})();
+// 飄移風味字
+(function(){var POOL='蜜香紅茶荔枝焙火烏龍金萱梔子茉莉脆梅芭樂綠桂花百香龍眼椒翠玉薄荷海鹽西瓜杜松琴蘭姆回甘蒸餾島嶼風土'.split('');var d=document.getElementById('drift');if(!d)return;var N=window.innerWidth<700?16:30,h='';for(var i=0;i<N;i++){var x=Math.random()*100,fs=12+Math.random()*30,dur=9+Math.random()*12,del=-Math.random()*dur,y=Math.random()*100;h+='<span style="left:'+x.toFixed(1)+'%;top:'+y.toFixed(1)+'%;font-size:'+fs.toFixed(0)+'px;animation-duration:'+dur.toFixed(1)+'s;animation-delay:'+del.toFixed(1)+'s">'+POOL[(Math.random()*POOL.length)|0]+'</span>';}d.innerHTML=h;})();
+// 數據 count-up + 燙金線
+(function(){var box=document.getElementById('stats');if(!box)return;function run(){box.classList.add('go');[].forEach.call(box.querySelectorAll('.n[data-to]'),function(el){var to=+el.getAttribute('data-to'),suf=el.getAttribute('data-suffix')||'',t0=null,dur=1200;function step(ts){if(!t0)t0=ts;var p=Math.min((ts-t0)/dur,1),e=1-Math.pow(1-p,3);el.textContent=Math.round(to*e)+suf;if(p<1)requestAnimationFrame(step);}requestAnimationFrame(step);});}if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){run();io.disconnect();}})},{threshold:.4});io.observe(box);}else run();})();
+// HERO 字成人像（自我修復版）
+(function(){
+var cv=document.getElementById('c'),ctx=cv.getContext('2d');
+var POOL='蜜香紅茶荔枝焙火烏龍泰奶金萱梔子茉莉脆梅芭樂綠包種青梅桂花百香龍眼椒烏白桃翠玉薄荷海鹽西瓜杜松琴蘭姆威士忌回甘蒸餾台灣島嶼風土'.split('');
+var W=0,H=0,DPR=1,parts=[],mouse={x:-9999,y:-9999},raf=null,vis=true;
+var faceImg=new Image(),faceReady=false;
+function dims(){DPR=Math.min(window.devicePixelRatio||1,2);W=cv.clientWidth||cv.offsetWidth||window.innerWidth;H=cv.clientHeight||cv.offsetHeight||window.innerHeight;cv.width=W*DPR;cv.height=H*DPR;ctx.setTransform(DPR,0,0,DPR,0,0);}
+function build(){
+  if(!faceReady||!W||!H)return;
+  var o=document.createElement('canvas');o.width=W;o.height=H;var x=o.getContext('2d');
+  var dh=Math.min(W,H)*0.78, ar=(faceImg.width/faceImg.height)||1, dw=dh*ar, cx=W*(W>900?0.47:0.5);
+  x.drawImage(faceImg,cx-dw/2,H*0.5-dh/2,dw,dh);
+  var data=x.getImageData(0,0,W,H).data, step=Math.max(6,Math.round(Math.min(W,H)/104)), fp=step*1.06, pts=[];
+  for(var y=0;y<H;y+=step)for(var xx=0;xx<W;xx+=step){var i=(y*W+xx)*4;if(data[i+3]>40){var lum=0.299*data[i]+0.587*data[i+1]+0.114*data[i+2];if(lum<205)pts.push({x:xx+(Math.random()-.5)*step*.5,y:y+(Math.random()-.5)*step*.5});}}
+  var nx=[];
+  for(var k=0;k<pts.length;k++){var old=parts[k],ch=POOL[(Math.random()*POOL.length)|0],am=Math.random()<0.14;
+    if(old){old.tx=pts[k].x;old.ty=pts[k].y;old.fs=fp;old.am=am;nx.push(old);}
+    else nx.push({x:pts[k].x+(Math.random()-.5)*70,y:pts[k].y+(Math.random()-.5)*70,tx:pts[k].x,ty:pts[k].y,ch:ch,fs:fp,am:am,ph:Math.random()*6.28,sp:0.5+Math.random()*0.6});}
+  parts=nx;
+}
+var t=0;
+function frame(){raf=null;t+=0.016;ctx.clearRect(0,0,W,H);ctx.textAlign='center';ctx.textBaseline='middle';var R=120,R2=R*R;
+  for(var k=0;k<parts.length;k++){var p=parts[k];var bx=Math.sin(t*0.8+p.ph)*1.4,by=Math.cos(t*0.7+p.ph)*1.4,txx=p.tx+bx,tyy=p.ty+by;
+    var dx=p.x-mouse.x,dy=p.y-mouse.y,d2=dx*dx+dy*dy;if(d2<R2){var d=Math.sqrt(d2)||1,f=(R-d)/R;p.x+=dx/d*f*14;p.y+=dy/d*f*14;}
+    p.x+=(txx-p.x)*0.085*p.sp;p.y+=(tyy-p.y)*0.085*p.sp;
+    ctx.font='600 '+p.fs+'px "Noto Serif TC",serif';ctx.fillStyle=p.am?'rgba(210,172,96,0.95)':'rgba(236,230,214,0.84)';ctx.fillText(p.ch,p.x,p.y);}
+  if(vis&&parts.length)raf=requestAnimationFrame(frame);
+}
+function run(){if(!raf&&vis&&parts.length)raf=requestAnimationFrame(frame);}
+function rebuild(){dims();build();run();}
+addEventListener('pointermove',function(e){mouse.x=e.clientX;mouse.y=e.clientY;});
+addEventListener('pointerleave',function(){mouse.x=-9999;mouse.y=-9999;});
+addEventListener('resize',rebuild);
+if('IntersectionObserver' in window){new IntersectionObserver(function(es){es.forEach(function(e){vis=e.isIntersecting;if(vis)run();});},{threshold:0}).observe(document.querySelector('.hero'));}
+faceImg.onload=function(){faceReady=true;rebuild();};
+faceImg.onerror=function(){faceReady=true;};
+faceImg.src='/home_img/face.png';
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(rebuild);
+addEventListener('load',rebuild);
+setTimeout(rebuild,400);setTimeout(rebuild,1200);setTimeout(rebuild,2500);
+})();
+</script>
+</body>
+</html>

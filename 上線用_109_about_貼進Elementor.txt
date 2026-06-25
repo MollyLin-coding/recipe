@@ -4,45 +4,37 @@
 .knb{--night:#0c1f12;--green:#102315;--green2:#13291b;--warn:#160808;--gold:#D2AC60;--gold2:#e7c47d;--cream:#ece6d6;--cream2:#cdc5ad;--muted:#a89e80;--bronze:#b0915f;--line:rgba(210,172,96,.22);--line2:rgba(210,172,96,.07);--serif:"Noto Serif TC",serif;--sans:"Noto Sans TC",sans-serif;--disp:"Fraunces",serif;--num:"Playfair Display",serif;--mono:"JetBrains Mono",monospace;font-family:var(--sans);color:var(--cream);background:var(--night);position:relative}
 .knb *{margin:0;padding:0;box-sizing:border-box}.knb a{color:inherit;text-decoration:none}.knb img{max-width:100%;display:block}
 .knb .wrap{max-width:1140px;margin:0 auto;padding:0 32px}
-/* 顆粒紋＋暈影（沿用 DNA） */
 .knb::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.06;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
 .knb::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(110% 70% at 50% -8%,rgba(210,172,96,.06),transparent 55%),radial-gradient(120% 65% at 50% 108%,rgba(0,0,0,.4),transparent 60%)}
 .knb>*{position:relative;z-index:1}
-/* 藍圖格網（製程主題的差異化底紋） */
 .knb .blueprint{position:relative;background-image:linear-gradient(var(--line2) 1px,transparent 1px),linear-gradient(90deg,var(--line2) 1px,transparent 1px);background-size:66px 66px;background-position:center top}
 .knb .blueprint::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(130% 90% at 50% 38%,transparent 62%,rgba(12,31,18,.5))}
 .knb .blueprint>*{position:relative}
-/* NAV */
 .knb .nav{position:sticky;top:0;z-index:999;display:flex;align-items:center;justify-content:space-between;padding:16px 32px;background:rgba(10,26,13,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
 .knb .nav .logo{height:34px;width:auto}.knb .nl{display:flex;gap:26px;font-size:13.5px;letter-spacing:.04em}.knb .nl a{position:relative;padding:4px 0}.knb .nl a:hover{color:var(--gold)}
 .knb .nl a::after{content:"";position:absolute;left:0;bottom:-2px;width:0;height:1px;background:var(--gold);transition:.3s}.knb .nl a:hover::after{width:100%}
 .knb .nl a.cur{color:var(--gold)}.knb .nl a.cur::after{width:100%}
 .knb .bg{display:none;flex-direction:column;gap:6px;cursor:pointer;padding:6px}.knb .bg span{width:26px;height:2px;background:var(--gold);border-radius:2px;transition:.35s}
 .knb .bg.o span:nth-child(1){transform:translateY(8px) rotate(45deg)}.knb .bg.o span:nth-child(2){opacity:0}.knb .bg.o span:nth-child(3){transform:translateY(-8px) rotate(-45deg)}
-/* 共用 */
 .knb .mono{font-family:var(--mono);font-size:11.5px;letter-spacing:.18em;color:var(--bronze);text-transform:uppercase}
 .knb h2{font-family:var(--serif);font-weight:700;font-size:clamp(24px,3.2vw,36px);color:#f7f2e4;letter-spacing:.05em;line-height:1.45}
 .knb .lead{font-family:var(--serif);font-weight:400;font-size:clamp(15px,1.5vw,17px);line-height:2;color:#e4dcc6;letter-spacing:.02em}
-/* HERO：工程圖標題塊（非置中大浮水印） */
 .knb .hero2{padding:84px 0 70px;border-bottom:1px solid var(--line);background:radial-gradient(95% 130% at 22% -10%,rgba(34,80,45,.55),transparent 55%),radial-gradient(60% 90% at 88% 0%,rgba(210,172,96,.08),transparent 60%)}
 .knb .hero2 .grid{display:grid;grid-template-columns:1.25fr .75fr;gap:clamp(30px,5vw,64px);align-items:end}
 .knb .hero2 .corner{font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--muted);margin-bottom:22px}
 .knb .hero2 h1{font-family:var(--serif);font-weight:900;font-size:clamp(34px,6vw,68px);color:#f7f2e4;letter-spacing:.04em;line-height:1.2}
 .knb .hero2 .en{font-family:var(--disp);font-style:italic;font-size:clamp(19px,2.4vw,28px);color:var(--gold);margin-top:14px}
 .knb .hero2 .lead{margin-top:22px;max-width:520px}
-/* 標題塊 title-block */
 .knb .tblock{border:1px solid var(--line)}
 .knb .tblock .tr{display:flex;justify-content:space-between;align-items:baseline;padding:14px 18px;border-bottom:1px solid var(--line2);gap:16px}
 .knb .tblock .tr:last-child{border-bottom:none}
 .knb .tblock .tr .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;white-space:nowrap}
 .knb .tblock .tr .v{font-family:var(--serif);font-size:14.5px;color:#eee4cf;text-align:right;line-height:1.4}
 .knb .tblock .tr .v b{font-family:var(--num);font-size:22px;color:var(--gold);font-weight:400}
-/* 工程登錄角標 registration marks */
 .knb .mk{position:relative}
 .knb .mk::before,.knb .mk::after{content:"";position:absolute;width:11px;height:11px;border:1px solid var(--gold);opacity:.55;pointer-events:none}
 .knb .mk::before{top:-6px;left:-6px;border-right:none;border-bottom:none}
 .knb .mk::after{bottom:-6px;right:-6px;border-left:none;border-top:none}
-/* STORY 兩欄＋年份帳冊 */
 .knb .storygrid{display:grid;grid-template-columns:1.35fr .65fr;gap:clamp(30px,5vw,60px);align-items:start;margin-top:4px}
 .knb .storygrid .lead{margin:0;max-width:none}
 .knb .ledger{border-top:1px solid var(--line)}
@@ -50,13 +42,11 @@
 .knb .ledger .lr:last-child{border-bottom:none}
 .knb .ledger .y{font-family:var(--num);font-size:25px;color:var(--gold);line-height:1;flex:0 0 auto;min-width:52px}
 .knb .ledger .le{font-family:var(--serif);font-size:13px;color:#d4cbb0;line-height:1.55}
-/* SECTION 標頭（左對齊、編號式） */
 .knb .sec{padding:90px 0;overflow:hidden}
 .knb .well{background:#081308;box-shadow:inset 0 1px 0 rgba(0,0,0,.4),inset 0 -1px 0 rgba(0,0,0,.4)}
 .knb .shead{display:flex;align-items:baseline;gap:16px;margin-bottom:40px}
 .knb .shead .nm{font-family:var(--mono);font-size:12px;color:var(--bronze);letter-spacing:.1em;padding-top:4px}
 .knb .shead h2{flex:1}
-/* 製程橫向流程帶 FLOW */
 .knb .flow{position:relative;display:grid;grid-template-columns:repeat(6,1fr);margin-top:6px}
 .knb .flow::before{content:"";position:absolute;top:5px;left:9%;right:9%;height:1px;background:linear-gradient(90deg,transparent,var(--line) 12%,var(--line) 88%,transparent)}
 .knb .fstep{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 14px}
@@ -64,7 +54,6 @@
 .knb .fstep .no{font-family:var(--mono);font-size:11px;color:var(--bronze);letter-spacing:.14em;margin-top:18px}
 .knb .fstep h3{font-family:var(--serif);font-weight:700;font-size:16px;color:#f7f2e4;letter-spacing:.04em;margin:7px 0 7px}
 .knb .fstep p{font-family:var(--serif);font-size:12px;color:#cfc6ab;line-height:1.55}
-/* FOUNDER 工程師檔案 */
 .knb .eng{display:grid;grid-template-columns:.85fr 1.15fr;gap:clamp(28px,4vw,56px);align-items:center;border:1px solid var(--line);background:rgba(0,0,0,.2)}
 .knb .eng .left{padding:44px 40px;border-right:1px solid var(--line2)}
 .knb .eng .left .q{font-family:var(--serif);font-weight:400;font-size:clamp(19px,2.3vw,26px);color:#f4ecd9;line-height:1.7;letter-spacing:.03em}
@@ -76,12 +65,15 @@
 .knb .eng .er:last-child{border-bottom:none}
 .knb .eng .er .k{flex:0 0 110px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--gold);text-transform:uppercase;padding-top:3px}
 .knb .eng .er .v{font-family:var(--serif);font-size:15px;color:#eee4cf;line-height:1.6}
-/* CLIENTS 驗證牆 */
 .knb .cgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line2);border:1px solid var(--line)}
 .knb .cgrid .cc{background:var(--green);display:flex;align-items:center;justify-content:center;text-align:center;padding:28px 14px;font-family:var(--serif);font-size:clamp(15px,1.6vw,18px);color:#d4cbb0;letter-spacing:.04em;transition:.3s;min-height:92px}
 .knb .cgrid .cc:hover{background:rgba(210,172,96,.07);color:var(--gold)}
+.knb .lwall{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--line);border:1px solid var(--line)}
+.knb .lwall .lt{background:var(--green);display:flex;align-items:center;justify-content:center;padding:12px 10px;min-height:104px;transition:.3s}
+.knb .lwall .lt:hover{background:rgba(210,172,96,.07)}
+.knb .lwall .lt img{max-height:94px;max-width:168px;width:auto;object-fit:contain;opacity:1;transition:.3s}
+.knb .lwall .lt:hover img{opacity:1;transform:translateY(-2px)}
 .knb .cnote{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--muted);margin-top:18px;text-align:center}
-/* BRIDGE / CTA */
 .knb .cta{border:1px solid var(--line);background:linear-gradient(180deg,rgba(210,172,96,.06),transparent);padding:56px 40px;text-align:center}
 .knb .cta h2{margin-bottom:10px}
 .knb .cta .lead{max-width:560px;margin:0 auto 28px}
@@ -89,7 +81,6 @@
 .knb .btn-g{display:inline-block;font-size:13.5px;letter-spacing:.08em;padding:14px 34px;background:var(--gold);color:#241b08;font-weight:500;transition:.3s}.knb .btn-g:hover{background:var(--gold2)}
 .knb .btn-o{display:inline-block;font-size:13.5px;letter-spacing:.08em;padding:13px 32px;border:1px solid rgba(236,230,214,.4);color:var(--cream);transition:.3s}.knb .btn-o:hover{border-color:var(--gold);color:var(--gold)}
 .knb .warn{background:var(--warn);text-align:center;padding:26px}.knb .warn .a{color:#fff;font-size:13px;letter-spacing:.1em}.knb .warn .b{color:#e0a0a0;font-size:12px;margin-top:6px}
-/* FOOTER 全站統一 */
 .knb .ft{background:#081308;border-top:1px solid var(--line)}
 .knb .ftgrid{display:grid;grid-template-columns:1.4fr .8fr 1.2fr;gap:clamp(30px,5vw,60px);padding:64px 32px 52px;max-width:1140px;margin:0 auto}
 .knb .ft .logo{height:38px;width:auto;margin-bottom:18px}
@@ -107,7 +98,6 @@
 .knb .ft .ftbar .a{color:#e7dcc2;font-size:12px;letter-spacing:.08em}
 .knb .ft .ftbar .b{color:#9a8e70;font-size:11px;margin-top:5px}
 .knb .ft .ftbar .c{color:#6f6750;font-size:11px;margin-top:8px;letter-spacing:.04em}
-/* 手機常駐 CTA */
 .knb .sticky{display:none}
 @media(max-width:860px){
   .knb .sticky{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:997;border-top:1px solid var(--line);box-shadow:0 -8px 24px rgba(0,0,0,.45)}
@@ -117,12 +107,10 @@
   .knb .ft .ftgrid{grid-template-columns:1fr;gap:34px;padding:48px 32px 40px}
   body{padding-bottom:54px}
 }
-/* 動效 */
 html.js .knb .rv{opacity:0;transform:translateY(26px);transition:.9s cubic-bezier(.2,.7,.2,1)}
 html.js .knb .rv.on{opacity:1;transform:none}
 @keyframes knbUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:no-preference){.knb .hero2 .grid>*{animation:knbUp .9s cubic-bezier(.2,.7,.2,1) both}.knb .hero2 .grid>*:nth-child(2){animation-delay:.18s}}
-/* RWD */
 @media(max-width:860px){
   .knb .nl{display:none}.knb .bg{display:flex}
   .knb .sec{padding:60px 0}.knb .hero2{padding:56px 0 48px}
@@ -132,7 +120,7 @@ html.js .knb .rv.on{opacity:1;transform:none}
   .knb .flow::before{display:none}
   .knb .fstep .no{margin-top:14px}
   .knb .eng{grid-template-columns:1fr}.knb .eng .left{border-right:none;border-bottom:1px solid var(--line2)}.knb .eng .right{padding:14px 40px 28px}
-  .knb .cgrid{grid-template-columns:repeat(2,1fr)}
+  .knb .cgrid,.knb .lwall{grid-template-columns:repeat(2,1fr)}
   .knb .mnav{position:fixed;inset:0;z-index:998;background:rgba(8,20,11,.97);backdrop-filter:blur(6px);display:flex;flex-direction:column;justify-content:center;padding:40px;transform:translateX(100%);transition:.45s cubic-bezier(.4,0,.2,1)}
   .knb .mnav.open{transform:none}
   .knb .mnav a{font-family:var(--serif);font-size:23px;color:var(--cream);letter-spacing:.08em;padding:18px 4px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
@@ -151,7 +139,6 @@ html.js .knb .rv.on{opacity:1;transform:none}
     <a href="/products/">酒款<span>Products</span></a><a href="/where-to-buy/">購買據點<span>Where to buy</span></a><a href="/oem/">代工服務<span>OEM</span></a><a href="/news/">最新消息<span>News</span></a><a href="/cocktail-class/">調酒教室<span>Cocktail Class</span></a><a href="/about/">關於<span>About</span></a><a href="/contact/">聯絡<span>Contact</span></a>
   </nav>
 
-  <!-- HERO 工程圖標題塊 -->
   <header class="hero2 blueprint">
     <div class="wrap grid">
       <div>
@@ -169,7 +156,6 @@ html.js .knb .rv.on{opacity:1;transform:none}
     </div>
   </header>
 
-  <!-- STORY -->
   <section class="sec">
     <div class="wrap">
       <div class="shead"><span class="nm">§ 00</span><h2>用半導體的精密，<br>做一支調酒。</h2></div>
@@ -184,7 +170,6 @@ html.js .knb .rv.on{opacity:1;transform:none}
     </div>
   </section>
 
-  <!-- 製程脊線 -->
   <section class="sec blueprint rv">
     <div class="wrap">
       <div class="shead"><span class="nm">§ 01</span><h2>垂直整合製程<br><span style="font-family:var(--disp);font-style:italic;font-weight:400;font-size:.6em;color:var(--gold)">Vertically Integrated Process</span></h2></div>
@@ -199,7 +184,6 @@ html.js .knb .rv.on{opacity:1;transform:none}
     </div>
   </section>
 
-  <!-- 工程師檔案 -->
   <section class="sec well rv">
     <div class="wrap">
       <div class="shead"><span class="nm">§ 02</span><h2>設計這套製程的人。</h2></div>
@@ -219,20 +203,28 @@ html.js .knb .rv.on{opacity:1;transform:none}
     </div>
   </section>
 
-  <!-- 驗證牆 客戶 -->
   <section class="sec blueprint rv">
     <div class="wrap">
       <div class="shead"><span class="nm">§ 03</span><h2>市場驗證的配方。</h2></div>
       <p class="lead" style="max-width:760px;margin-bottom:32px">我們同時是 B2C 自有品牌酒廠，以市場實戰驗證配方品質——讓代工客戶直接站在贏家肩膀上出發。已服務 50+ 家品牌與企業客戶：</p>
-      <div class="cgrid">
-        <div class="cc">嘉佩樂</div><div class="cc">雲朗觀光</div><div class="cc">遠企</div><div class="cc">British Club</div>
-        <div class="cc">馬可波羅</div><div class="cc">安慰劑</div><div class="cc">72 Lane</div><div class="cc">Feeling Bar</div>
+      <div class="lwall mk">
+        <div class="lt"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-02.png" alt="CAPELLA 嘉佩樂" loading="lazy"></div>
+        <div class="lt"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-keg-04.png" alt="台北遠東香格里拉 SHANGRI-LA" loading="lazy"></div>
+        <div class="lt"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-01.png" alt="誠品書店" loading="lazy"></div>
+        <div class="lt"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-08.png" alt="Placebo 安慰劑" loading="lazy"></div>
+        <div class="lt"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-13.png" alt="拾山" loading="lazy"></div>
+        <div class="lt"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-keg-08.png" alt="Feeling Bar" loading="lazy"></div>
+        <div class="lt"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-11.png" alt="72 LANE" loading="lazy"></div>
+        <div class="lt"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-10.png" alt="VANDOME" loading="lazy"></div>
+        <div class="lt"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-03.png" alt="昇長 jp-sake" loading="lazy"></div>
+        <div class="lt"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-oem-06.png" alt="baby face" loading="lazy"></div>
+        <div class="lt"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-keg-03.png" alt="西江水坊" loading="lazy"></div>
+        <div class="lt"><img src="https://kevinnumber1-cocktail.com.tw/wp-content/uploads/2026/06/knb-client-keg-05.png" alt="mp lounge" loading="lazy"></div>
       </div>
       <div class="cnote">— 以及 50+ 家飯店、餐酒館與企業客戶（合作品牌 LOGO 牆完整版置於代工服務頁）—</div>
     </div>
   </section>
 
-  <!-- CTA 橋接 OEM -->
   <section class="sec" style="padding-top:0">
     <div class="wrap">
       <div class="cta rv">
@@ -244,7 +236,6 @@ html.js .knb .rv.on{opacity:1;transform:none}
     </div>
   </section>
 
-  <!-- FOOTER 全站統一（上線交 Code 設為 Elementor 全域 footer） -->
   <footer class="ft">
     <div class="ftgrid">
       <div>
@@ -275,7 +266,6 @@ html.js .knb .rv.on{opacity:1;transform:none}
     </div>
   </footer>
 
-  <!-- 手機常駐 CTA -->
   <div class="sticky">
     <a class="s-line" href="https://lin.ee/zrKvKz6" target="_blank" rel="noopener">LINE 諮詢</a>
     <a class="s-oem" href="/oem/">代工洽詢</a>
