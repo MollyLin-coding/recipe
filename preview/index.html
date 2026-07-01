@@ -1,0 +1,1953 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
+<title>南坡萬酒廠 酒譜系統</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f7f4ee;--card:#fff;--border:#e4ddd0;
+  --ink:#1e1710;--ink2:#6b5e4e;--ink3:#a8998a;
+  --gold:#a0722a;--gold-lt:#f5ead8;--gold-dk:#7a5420;
+  --red:#b83232;--green:#2e7d50;--blue:#2563a8;--yellow:#c17d00;
+  --r:12px;--r-sm:8px;--sh:0 2px 12px rgba(0,0,0,.08);
+  --nav-h:60px;--top-h:52px;--safe-b:env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.5;}
+#loginWrap{display:flex;align-items:center;justify-content:center;min-height:100vh;min-height:100dvh;padding:24px;}
+#loginBox{width:100%;max-width:380px;}
+.login-head{text-align:center;margin-bottom:32px;}
+.login-head .logo{font-family:'Noto Serif TC',serif;font-size:28px;font-weight:600;color:var(--gold-dk);}
+.login-head .sub{font-size:13px;color:var(--ink3);margin-top:4px;}
+.login-card{background:var(--card);border-radius:16px;box-shadow:var(--sh);padding:28px 24px;border:1px solid var(--border);}
+.inp{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:15px;font-family:'DM Sans',sans-serif;outline:none;background:#fff;color:var(--ink);transition:border-color .2s;margin-bottom:12px;}
+.inp:focus{border-color:var(--gold);}
+.inp[type=number]{-moz-appearance:textfield;}
+.inp[type=number]::-webkit-outer-spin-button,.inp[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;}
+select.inp{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%23a8998a' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:36px;cursor:pointer;}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 18px;border:none;border-radius:var(--r-sm);font-size:14px;font-family:'DM Sans',sans-serif;font-weight:500;cursor:pointer;transition:all .15s;touch-action:manipulation;white-space:nowrap;}
+.btn-primary{background:var(--gold-dk);color:#fff;}.btn-primary:hover{background:var(--gold);}
+.btn-sm{padding:7px 13px;font-size:13px;}
+.btn-ghost{background:transparent;color:var(--ink2);border:1.5px solid var(--border);}.btn-ghost:hover{background:var(--bg);}
+.btn-danger{background:var(--red);color:#fff;}
+.btn-success{background:var(--green);color:#fff;}
+.btn-full{width:100%;}
+#loginErr{color:var(--red);font-size:13px;text-align:center;min-height:18px;margin-top:8px;}
+
+/* APP layout */
+#app{display:none;flex-direction:column;height:100vh;height:100dvh;overflow:hidden;}
+#topbar{background:var(--gold-dk);color:#fff;padding:0 14px;height:var(--top-h);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:8px;}
+.topbar-title{font-family:'Noto Serif TC',serif;font-size:17px;font-weight:600;flex-shrink:0;}
+#topUserInfo{font-size:13px;display:flex;align-items:center;gap:8px;opacity:.9;flex-shrink:0;}
+#mainContent{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px;}
+#navbar{background:var(--card);border-top:1px solid var(--border);display:flex;flex-shrink:0;padding-bottom:var(--safe-b);}
+.nav-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:7px 2px;font-size:10px;cursor:pointer;color:var(--ink3);border-top:2px solid transparent;transition:.15s;gap:3px;touch-action:manipulation;min-height:var(--nav-h);}
+.nav-tab .ni{font-size:18px;line-height:1;}
+.nav-tab.active{color:var(--gold-dk);border-top-color:var(--gold-dk);background:var(--gold-lt);}
+
+/* cards / layout */
+.card{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:14px;margin-bottom:12px;border:1px solid var(--border);}
+.card-title{font-family:'Noto Serif TC',serif;font-size:15px;font-weight:600;color:var(--gold-dk);margin-bottom:10px;}
+.sec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.form-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.fg{display:flex;flex-direction:column;gap:4px;flex:1;min-width:100px;}
+.fg label{font-size:11px;color:var(--ink3);font-weight:500;}
+.fg .inp{margin-bottom:0;padding:9px 12px;font-size:14px;}
+.fg select{width:100%;padding:9px 28px 9px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:14px;background:#fff;outline:none;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%23a8998a' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;color:var(--ink);}
+.fg select:focus,.fg .inp:focus{border-color:var(--gold);}
+
+/* table */
+.tbl-wrap{overflow-x:hidden;border-radius:var(--r-sm);border:1px solid var(--border);}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);color:var(--ink3);font-weight:500;white-space:nowrap;background:#faf9f6;}
+td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tbody tr:hover td{background:#faf3e8;}
+.tr{text-align:right;}
+
+/* badges */
+.badge{display:inline-block;font-size:11px;padding:2px 7px;border-radius:99px;font-weight:500;}
+.bg-green{background:#e4f4eb;color:#1e6b3e;}.bg-red{background:#fde8e8;color:#9b2222;}
+.bg-yellow{background:#fef3d8;color:#8b5c00;}.bg-blue{background:#e4edf8;color:#1d4e96;}
+.bg-brown{background:#f0e8da;color:#6b4e1e;}
+
+/* loading / toast */
+#loadOverlay{position:fixed;inset:0;background:rgba(247,244,238,.8);display:none;align-items:center;justify-content:center;z-index:999;}
+.spinner{width:34px;height:34px;border:3px solid var(--border);border-top-color:var(--gold-dk);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+#toast{position:fixed;bottom:calc(var(--nav-h)+10px+var(--safe-b));left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 18px;border-radius:99px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:9999;max-width:88vw;text-align:center;}
+
+/* 酒譜原料表 */
+.recipe-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
+.rm{background:var(--gold-lt);border-radius:var(--r-sm);padding:9px 11px;border:1px solid #e8dcc8;}
+.rm .lb{font-size:10px;color:var(--ink3);}
+.rm .vl{font-size:16px;font-weight:500;color:var(--gold-dk);line-height:1.3;}
+.rm .vl.acc{color:var(--green);}
+.rm .vl.sm{font-size:13px;}
+/* 試算區 */
+.calc-area{background:#fdf8f0;border:1.5px solid #c9aa78;border-radius:var(--r);padding:12px;margin-top:10px;}
+.calc-title{font-size:12px;font-weight:600;color:var(--gold-dk);margin-bottom:8px;}
+.calc-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.calc-row label{font-size:12px;color:var(--ink3);white-space:nowrap;flex-shrink:0;}
+.calc-result{margin-top:10px;display:grid;grid-template-columns:repeat(2,1fr);gap:6px;}
+.cr-item{background:var(--card);border-radius:var(--r-sm);padding:8px 10px;}
+.cr-item .cl{font-size:10px;color:var(--ink3);}
+.cr-item .cv{font-size:14px;font-weight:500;color:var(--gold-dk);}
+.cr-item .cv.hi{color:var(--green);}
+
+/* 毛利 */
+.profit-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:10px;}
+.pc{background:var(--gold-lt);border-radius:var(--r);padding:12px;border:1px solid #e8dcc8;}
+.pc .pn{font-size:12px;color:var(--ink3);margin-bottom:2px;}
+.pc .pp{font-size:19px;font-weight:600;color:var(--gold-dk);}
+.pc .pm-row{display:flex;justify-content:space-between;font-size:12px;margin-top:4px;}
+.pc .pv{font-weight:600;color:var(--green);}
+.gonban-item{margin-bottom:18px;}
+.gonban-name{font-family:'Noto Serif TC',serif;font-size:14px;font-weight:600;margin-bottom:8px;}
+.bottle-row{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.bc{background:var(--card);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px;text-align:center;}
+.bc .bt{font-size:11px;color:var(--ink3);margin-bottom:3px;}
+.bc .bv{font-size:15px;font-weight:500;color:var(--gold-dk);}
+.bc .br{font-size:11px;color:var(--green);margin-top:2px;font-weight:500;}
+.bc .bt2{font-size:10px;color:var(--ink3);margin-top:1px;}
+.bc.best{border-color:var(--green);background:#f0faf4;}
+
+/* 研發試算 */
+.rd-sum{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.rs{background:var(--gold-lt);border-radius:var(--r-sm);padding:10px;border:1px solid #e8dcc8;}
+.rs .lb{font-size:10px;color:var(--ink3);}
+.rs .vl{font-size:15px;font-weight:500;color:var(--gold-dk);margin-top:2px;}
+.rs .vl.hi{color:var(--green);}
+.sbox{position:relative;}
+.sdrop{position:absolute;top:100%;left:0;right:0;background:var(--card);border:1.5px solid var(--border);border-top:none;border-radius:0 0 var(--r-sm) var(--r-sm);max-height:230px;overflow-y:auto;z-index:200;display:none;box-shadow:var(--sh);}
+.sdrop.open{display:block;}
+.sd-cat{padding:4px 10px;font-size:11px;font-weight:600;color:var(--ink3);background:#f9f7f3;border-bottom:1px solid var(--border);position:sticky;top:0;}
+.sd-item{padding:8px 10px;cursor:pointer;border-bottom:1px solid var(--border);}
+.sd-item:last-child{border-bottom:none;}
+.sd-item:hover{background:var(--gold-lt);}
+.sd-name{font-size:13px;font-weight:500;}
+.sd-sub{font-size:11px;color:var(--ink3);margin-top:1px;}
+.cpd-group{background:#fdf8f0;border:1.5px solid #c9aa78;border-radius:var(--r);padding:10px;margin-bottom:8px;}
+.cpd-hd{display:flex;align-items:center;gap:6px;margin-bottom:8px;padding-bottom:7px;border-bottom:1px dashed #c9aa78;}
+.cpd-ni{font-size:13px;color:var(--ink3);flex-shrink:0;}
+.cpd-name-i{border:none;border-bottom:1.5px solid #c9aa78;background:transparent;font-size:13px;font-weight:600;color:var(--gold-dk);outline:none;flex:1;min-width:0;}
+.cpd-loss{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--ink2);cursor:pointer;padding:3px 7px;border-radius:99px;border:1px solid var(--border);background:#fff;white-space:nowrap;flex-shrink:0;}
+.cpd-loss.on{background:#fde8e8;border-color:var(--red);color:var(--red);}
+.ing-row{background:var(--bg);border-radius:var(--r-sm);padding:9px;margin-bottom:7px;}
+.ing-hd{display:flex;align-items:flex-start;justify-content:space-between;gap:6px;margin-bottom:6px;}
+.ing-name{font-weight:500;font-size:13px;}
+.ing-name-i{border:none;border-bottom:1.5px solid var(--gold);background:transparent;font-size:13px;outline:none;width:100%;}
+.ing-brand{font-size:11px;color:var(--ink3);}
+.ing-fields{display:flex;gap:5px;flex-wrap:wrap;}
+.if{display:flex;flex-direction:column;gap:3px;flex:1;min-width:58px;}
+.if label{font-size:10px;color:var(--ink3);}
+.if input{padding:6px 7px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif;outline:none;background:#fff;width:100%;}
+.if input:focus{border-color:var(--gold);}
+.ing-cost{font-size:13px;font-weight:600;color:var(--gold-dk);white-space:nowrap;}
+
+/* modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:500;}
+@media(min-width:600px){.modal-bg{align-items:center;}}
+.modal-box{background:var(--card);border-radius:20px 20px 0 0;padding:20px;width:100%;max-height:92vh;overflow-y:auto;}
+@media(min-width:600px){.modal-box{border-radius:var(--r);max-width:560px;max-height:85vh;}}
+.modal-title{font-family:'Noto Serif TC',serif;font-size:16px;font-weight:600;margin-bottom:14px;color:var(--gold-dk);}
+.mhandle{width:38px;height:4px;background:var(--border);border-radius:99px;margin:0 auto 14px;}
+
+/* checkbox row */
+.ck-row{display:flex;align-items:center;gap:6px;padding:8px 0;border-bottom:1px solid var(--border);}
+.ck-row:last-child{border-bottom:none;}
+.ck-row input[type=checkbox]{width:18px;height:18px;cursor:pointer;accent-color:var(--gold-dk);}
+.ck-row label{font-size:14px;cursor:pointer;flex:1;}
+
+/* misc */
+.fe{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap;}
+.fb{display:flex;justify-content:space-between;align-items:center;}
+.mt8{margin-top:8px;}.mt10{margin-top:10px;}
+.warn{color:var(--red);font-size:12px;}.ok{color:var(--green);font-size:12px;}
+.warn-row{border-color:var(--red)!important;background:rgba(220,38,38,.06)!important;}
+#apiLoadBar{position:fixed;top:0;left:0;height:3px;width:0;background:var(--gold-dk);z-index:9999;opacity:0;pointer-events:none;}
+#apiLoadBar.on{width:92%;opacity:1;transition:width 8s cubic-bezier(.1,.7,.1,1),opacity .2s;}
+#offlineBanner{position:fixed;bottom:0;left:0;right:0;background:#92400e;color:#fff;font-size:12px;text-align:center;padding:6px 10px;z-index:9998;}
+.sub{color:var(--ink3);font-size:12px;}
+@keyframes shimmer{0%{background-position:-400px 0}100%{background-position:400px 0}}
+.skeleton{height:56px;border-radius:var(--r-sm);background:linear-gradient(90deg,var(--border) 25%,#f5f0e8 50%,var(--border) 75%);background-size:800px;animation:shimmer 1.4s infinite;}
+.divider{height:1px;background:var(--border);margin:8px 0;}
+@media(min-width:768px){body{font-size:14px;}#mainContent{padding:18px;max-width:1000px;margin:0 auto;width:100%;}#navbar{justify-content:center;}.nav-tab{max-width:100px;}.profit-grid{grid-template-columns:repeat(auto-fill,minmax(220px,1fr));}}
+
+/* ── 原料雙行版面 ── */
+.ing-row{padding:8px 0;border-bottom:1px solid var(--border);}
+.ing-row:last-child{border-bottom:none;}
+.ing-r1{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+.ing-name{font-weight:500;font-size:13px;color:var(--ink);}
+.ing-cost{font-size:13px;color:var(--gold-dk);font-weight:500;}
+.ing-r2{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.ing-lbl{font-size:11px;color:var(--ink3);white-space:nowrap;}
+.ing-inp{width:64px;padding:4px 6px;border:1.5px solid var(--border);border-radius:5px;font-size:12px;text-align:right;}
+.ing-inp:focus{border-color:var(--gold);outline:none;}
+.ing-unit{font-size:11px;color:var(--ink3);}
+.ing-sep{font-size:12px;color:var(--ink3);}
+.ing-abv{font-size:11px;color:var(--ink3);margin-left:auto;}
+/* ── 複合原料展開（酒譜頁，Batch 1）── */
+.ing-compound{background:#fdf8f0;border-left:3px solid var(--gold);padding-left:7px;border-radius:5px;}
+.cpd-badge{display:inline-block;font-size:10px;font-weight:600;color:#fff;background:var(--gold-dk);padding:1px 6px;border-radius:99px;margin-left:4px;vertical-align:middle;}
+.cpd-expand{margin-top:7px;padding:7px 8px;background:rgba(201,170,120,.1);border-radius:6px;}
+.cpd-sub-hd{font-size:11px;color:var(--ink3);font-weight:600;margin-bottom:5px;}
+.cpd-loss-tag{color:var(--red);font-weight:600;font-size:10px;background:#fde8e8;padding:1px 5px;border-radius:99px;}
+.cpd-sub-row{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;}
+.cpd-sub-name{flex:1;min-width:0;color:var(--ink2);}
+.cpd-sub-inp{width:52px;padding:3px 5px;border:1.5px solid var(--border);border-radius:5px;font-size:12px;text-align:right;}
+.cpd-sub-inp:focus{border-color:var(--gold);outline:none;}
+.cpd-sub-unit{font-size:10px;color:var(--ink3);white-space:nowrap;}
+.cpd-sub-contrib{font-size:11px;color:var(--gold-dk);font-weight:600;white-space:nowrap;min-width:54px;text-align:right;}
+.total-bar{font-size:12px;color:var(--ink2);padding:6px 0;border-top:1px solid var(--border);}
+.ing-list{margin:8px 0;}
+/* ── 資材費用 ── */
+.mat-list{font-size:13px;}
+.mat-row{display:flex;gap:0;padding:5px 0;border-bottom:1px solid var(--border);}
+.mat-row:last-child{border-bottom:none;}
+.mat-row>span{flex:1;min-width:0;}.mat-row>span:first-child{flex:2;}
+.mat-row.hd{font-size:11px;color:var(--ink3);font-weight:600;}
+.mat-row.tot>span:first-child{font-weight:600;color:var(--gold-dk);}
+/* ── 研發試算 ── */
+.ing-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;}
+.ic-r1{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
+.ic-r2{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.if{display:flex;flex-direction:column;gap:2px;}
+.if label{font-size:10px;color:var(--ink3);}
+.if input{width:70px;padding:4px 6px;border:1.5px solid var(--border);border-radius:5px;font-size:12px;}
+.del-btn{background:none;border:none;color:var(--ink3);cursor:pointer;font-size:14px;padding:2px 4px;flex-shrink:0;}
+.del-btn:hover{color:var(--red);}
+.cpd-box{border:1.5px dashed var(--border);border-radius:8px;padding:8px;margin-bottom:6px;}
+.cpd-head{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+.cpd-loss{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--ink3);padding:3px 6px;border-radius:4px;border:1px solid var(--border);}
+.cpd-loss.on{background:var(--gold-lt);border-color:var(--gold);color:var(--gold-dk);}
+.cpd-name-i{flex:1;border:none;border-bottom:1px solid var(--border);font-size:13px;font-weight:500;outline:none;background:transparent;}
+.sub-row{display:flex;align-items:center;gap:6px;padding:4px 0;font-size:12px;}
+.sdrop,.sub-drop{position:absolute;background:var(--card);border:1px solid var(--border);border-radius:8px;z-index:200;max-height:200px;overflow-y:auto;box-shadow:var(--sh);display:none;min-width:220px;}
+.sdrop.open,.sub-drop.open{display:block;}
+.sbox{position:relative;}
+.sd-item{padding:8px 12px;cursor:pointer;}
+.sd-item:hover{background:var(--gold-lt);}
+.sd-name{font-size:13px;font-weight:500;}
+.sd-sub{font-size:11px;color:var(--ink3);}
+.rs{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);}
+.rs:last-child{border-bottom:none;}
+.rs .lb{font-size:13px;color:var(--ink2);}
+.rs .vl{font-size:13px;font-weight:500;}
+.rs .vl.hi{color:var(--gold-dk);font-weight:600;}
+.rd-rec-item{padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;}
+.rd-rec-item:hover{background:var(--gold-lt);}
+/* ── 包裝配件 ── */
+.ck-row{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;}
+.ck-row input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--gold);}
+</style>
+</head>
+<body>
+
+<div id="loginWrap">
+  <div id="loginBox">
+    <div class="login-head">
+      <div class="logo">🍶 南坡萬酒廠</div>
+      <div class="sub">酒譜管理系統</div>
+    </div>
+    <div class="login-card">
+      <select class="inp" id="loginUser"><option value="">選擇帳號</option><option>Kevin</option><option>Molly</option><option>阿軒</option><option>小捲</option><option>Vic</option></select>
+      <input class="inp" id="loginPass" type="password" placeholder="密碼" inputmode="numeric">
+      <button class="btn btn-primary btn-full" id="loginBtn" onclick="doLogin()">登入</button>
+      <div id="loginErr"></div>
+    </div>
+  </div>
+</div>
+
+<div id="app">
+  <div id="topbar">
+    <span class="topbar-title">🍶 南坡萬</span>
+    <div id="topUserInfo">
+      <span id="topUsername" style="font-size:12px;"></span>
+      <button class="btn btn-sm" style="color:#fff;border:1px solid rgba(255,255,255,.4);background:transparent;padding:5px 10px;" onclick="doRefresh()" title="重新整理">↻</button>
+      <button class="btn btn-sm" style="color:#fff;border:1px solid rgba(255,255,255,.4);background:transparent;padding:5px 10px;" onclick="doLogout()">登出</button>
+    </div>
+  </div>
+  <div id="mainContent"></div>
+  <div id="navbar">
+    <div class="nav-tab active" data-tab="recipe"    onclick="switchTab('recipe')">   <span class="ni">📋</span><span>酒譜</span></div>
+    <div class="nav-tab"        data-tab="profit"    onclick="switchTab('profit')">   <span class="ni">📊</span><span>毛利分析</span></div>
+    <div class="nav-tab"        data-tab="inventory" onclick="switchTab('inventory')"><span class="ni">🧪</span><span>原料庫</span></div>
+    <div class="nav-tab"        data-tab="rd"        onclick="switchTab('rd')">       <span class="ni">🔬</span><span>研發試算</span></div>
+    <div class="nav-tab"        data-tab="batch"     onclick="switchTab('batch')">    <span class="ni">📦</span><span>製作記錄</span></div>
+    <div class="nav-tab"        data-tab="stock"     onclick="switchTab('stock')">    <span class="ni">🗄️</span><span>成品庫存</span></div>
+    <div class="nav-tab admin-only" data-tab="apply" onclick="switchTab('apply')">   <span class="ni">✏️</span><span>審核</span></div>
+  </div>
+</div>
+<div id="loadOverlay"><div class="spinner"></div></div>
+<div id="toast"></div>
+
+<script>
+// v10 修正：
+// 1. pct 已是百分比（GAS 已×100），前端直接用
+// 2. ABV 計算：用原料 abv 欄位（代表該原料本身 ABV），recalcRecipe 重算
+// 3. 占比↔體積雙向即時換算
+// 4. 原料雙行版面（名稱+成本第一行，占比+體積第二行）
+// 5. PM 預設登入帳號
+// 6. 製作記錄：移除代工費/食材報價顯示，改標籤，依瓶型動態配件
+// 7. 研發試算：結果只顯示 ABV/酒稅/食材成本/食材報價/資材成本/總成本
+// 8. 研發試算加入客戶，儲存帶 client
+// 9. 毛利分析：動態客戶清單（从 GAS 讀）
+// 10. 資材費用區塊（原料庫下方，研發試算內）
+// ============================================================
+
+// ── API ──────────────────────────────────────────────────────
+// ⚠️ 預覽環境專用：此值須指向「測試部署 /exec」（其 Script Property SHEET_ID=沙盒副本）。
+// 第二個 Web App 部署建好後，把下面字串換成測試 /exec 網址；在那之前預覽站無法連後端。
+const API='__TEST_EXEC_URL__';
+if (API === '__TEST_EXEC_URL__') {
+  window.addEventListener('DOMContentLoaded', function () {
+    var b = document.createElement('div');
+    b.textContent = '⚠ 預覽環境：測試後端尚未設定（待第二部署），功能暫無法連線';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:var(--red,#c0392b);color:#fff;font-size:12px;text-align:center;padding:5px;';
+    document.body.appendChild(b);
+  });
+}
+
+async function api(params, silent) {
+  const url = API + '?' + Object.entries(params).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
+  if (!silent) apiLoadStart();
+  try {
+    const res = await fetch(url);
+    return await res.json();
+  } catch(e) {
+    if (!silent) toast('網路錯誤');
+    return { ok: false, error: e.message, _offline: true };
+  } finally {
+    if (!silent) apiLoadEnd();
+  }
+}
+// ── 讀取 loading 提示（頂部進度條，多筆併發以計數管理）──
+let _apiLoadN = 0;
+function _loadBar() { let b=document.getElementById('apiLoadBar'); if(!b){ b=document.createElement('div'); b.id='apiLoadBar'; document.body.appendChild(b);} return b; }
+function apiLoadStart() { _apiLoadN++; _loadBar().classList.add('on'); }
+function apiLoadEnd() { _apiLoadN=Math.max(0,_apiLoadN-1); if(_apiLoadN===0){ const b=document.getElementById('apiLoadBar'); if(b){ b.classList.remove('on'); b.style.width='100%'; setTimeout(()=>{ if(_apiLoadN===0) b.style.width='0'; },200);} } }
+// ── 離線/弱網快取（localStorage 存酒譜，斷網可看）──
+function lsSet(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+function lsGet(k){ try{ const s=localStorage.getItem(k); return s?JSON.parse(s):null; }catch(e){ return null; } }
+function setOffline(on){
+  window._offline = on;
+  const el = document.getElementById('offlineBanner');
+  if (on && !el) { const d=document.createElement('div'); d.id='offlineBanner'; d.textContent='⚠ 離線模式：顯示最後一次快取的酒譜，無法編輯或送出'; document.body.appendChild(d); }
+  else if (!on && el) { el.remove(); }
+}
+
+// ── 狀態 ─────────────────────────────────────────────────────
+let curUser = null, curClient = '', curSheet = '', rdata = null, curTab = 'recipe';
+let recipeList = [], clientList = [];
+const C = { inv: null, profit: {}, recipes: {}, batch: null };
+let rdState = { ings: [], tv: 4000, bt: '4L桶', title: '', client: '', matSel: {} };
+
+// ── 瓶型規格（volFill=實際裝填，volLabel=報價顯示）───────────
+const BSPEC = {
+  '江小白': { vol:108, volFill:108, volLabel:100, cont:15, lab:3, labor:5  },
+  '伏特加': { vol:500, volFill:500, volLabel:500, cont:46, lab:3, labor:15 },
+  '波士頓': { vol:500, volFill:500, volLabel:500, cont:15, lab:1, labor:10 },
+  '4L桶':   { vol:4000,volFill:4000,volLabel:4000,cont:0,  lab:1, labor:3  },
+  '山形瓶': { vol:100, volFill:100, volLabel:100, cont:25, lab:3, labor:5  },
+  '雷神瓶': { vol:500, volFill:500, volLabel:500, cont:60, lab:3, labor:15 },
+};
+
+// 瓶型對應配件（onchange 動態顯示）
+const BOTTLE_ACCESSORIES = {
+  '江小白': [
+    { id:'cap',   label:'瓶蓋',                  price:0,   alwaysOn:true  },
+    { id:'front', label:'前標貼（NT$1.5/瓶）',    price:1.5, alwaysOn:false },
+    { id:'back',  label:'後標貼（NT$1.5/瓶）',    price:1.5, alwaysOn:false },
+  ],
+  '伏特加': [
+    { id:'cap',   label:'瓶蓋',                  price:0,   alwaysOn:true  },
+    { id:'front', label:'前標貼（NT$1.5/瓶）',    price:1.5, alwaysOn:false },
+    { id:'back',  label:'後標貼（NT$1.5/瓶）',    price:1.5, alwaysOn:false },
+  ],
+  '波士頓': [
+    { id:'cap',   label:'瓶蓋',                  price:0,   alwaysOn:true  },
+    { id:'label', label:'標籤（NT$1/瓶，自行打印）',price:1, alwaysOn:true  },
+  ],
+  '4L桶': [
+    { id:'cap',   label:'桶蓋',                  price:0,   alwaysOn:true  },
+    { id:'label', label:'標籤（NT$1/瓶，自行打印）',price:1, alwaysOn:true  },
+  ],
+  '山形瓶': [
+    { id:'cap',   label:'瓶蓋',                  price:0,   alwaysOn:true  },
+    { id:'front', label:'前標貼（NT$1.5/瓶）',    price:1.5, alwaysOn:false },
+    { id:'back',  label:'後標貼（NT$1.5/瓶）',    price:1.5, alwaysOn:false },
+  ],
+  '雷神瓶': [
+    { id:'cap',   label:'瓶蓋',                  price:0,   alwaysOn:true  },
+    { id:'front', label:'前標貼（NT$1.5/瓶）',    price:1.5, alwaysOn:false },
+    { id:'back',  label:'後標貼（NT$1.5/瓶）',    price:1.5, alwaysOn:false },
+  ],
+};
+
+function calcTax(abv, vol) {
+  return (abv <= 20 ? abv * 7 / 1000 : 185 / 1000) * vol;
+}
+function fm(v){ return 'NT$' + (Math.round((+v||0)*100)/100).toLocaleString('zh-TW',{minimumFractionDigits:0,maximumFractionDigits:2}); }
+function nt(v, d=0){ return Number(v||0).toFixed(d); }
+function fm0(v){ return 'NT$' + Math.round(+v||0).toLocaleString('zh-TW'); }
+// 原料完整顯示名稱：品牌 品名 類別（彙整價格表把三者分欄存，選入酒譜後須組回完整名稱，
+// 與酒譜頁原有原料的單一完整名稱顯示格式一致；空欄自動略過）。Bug：研發試算選入材料只顯示「品牌｜品名」，名稱不完整。
+function fullIngName(o){ return [o&&o.brand, o&&o.name, o&&o.category].filter(x=>x&&String(x).trim()).join(' '); }
+// 每ml成本：優先用原料庫 unitCost（GAS算好），無則 price/vol 補算
+function invUC(item){ const uc=+(item.unitCost!==undefined?item.unitCost:item.unit)||0; if(uc>0) return uc; return (item.price>0&&item.vol>0)?item.price/item.vol:0; }
+// 試算每ml成本：選料原料用 unitCost；手動輸入用 單價/容量
+function rdCpm(ing){ if (+ing.unitCost > 0) return +ing.unitCost; return (ing.unitVol && ing.price) ? ing.price / ing.unitVol : 0; }
+// 寫入按鈕防連點：執行期間 disable + 顯示處理中
+async function lockRun(btn, fn){
+  if (!btn || btn.disabled) return;
+  const t = btn.textContent;
+  btn.disabled = true; btn.textContent = '處理中…';
+  try { await fn(); } finally { try { btn.disabled = false; btn.textContent = t; } catch(e){} }
+}
+
+// ── Toast ────────────────────────────────────────────────────
+function toast(msg, dur=2200) {
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.classList.add('show'), 10);
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, dur);
+}
+
+// ── Modal ────────────────────────────────────────────────────
+function makeModal(inner) {
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg';
+  bg.innerHTML = `<div class="modal-box">${inner}</div>`;
+  bg.addEventListener('click', e => { if(e.target===bg) bg.remove(); });
+  document.body.appendChild(bg);
+  return bg;
+}
+
+// ── 登入 ─────────────────────────────────────────────────────
+async function doLogin() {
+  const username = document.getElementById('loginUser').value;
+  const password = document.getElementById('loginPass').value;
+  if (!username || !password) { document.getElementById('loginErr').textContent = '請選擇帳號並輸入密碼'; return; }
+  document.getElementById('loginBtn').disabled = true;
+  document.getElementById('loginErr').textContent = '';
+  // 並行發 login + getInventory + getRecipeList
+  const [res, invRes, lr] = await Promise.all([
+    api({ action: 'login', username, password }),
+    api({ action: 'getInventory' }, true),
+    api({ action: 'getRecipeList' }, true),
+  ]);
+  document.getElementById('loginBtn').disabled = false;
+  if (!res.ok) { document.getElementById('loginErr').textContent = res.error || '登入失敗'; return; }
+  curUser = { username, role: res.role };
+  if (invRes.ok) C.inv = invRes.items || [];
+  if (lr.ok) {
+    recipeList = lr.list || [];
+    // 從酒譜清單推導客戶清單（不需要獨立 getClientList API）
+    clientList = [...new Set(recipeList.map(i => i.client))].map(n => ({ name: n }));
+    lsSet('np_recipeList', recipeList); setOffline(false);
+  } else if (lr._offline) {
+    const cached = lsGet('np_recipeList');
+    if (cached && cached.length) {
+      recipeList = cached;
+      clientList = [...new Set(recipeList.map(i => i.client))].map(n => ({ name: n }));
+      setOffline(true);
+    }
+  }
+  // 設定初始客戶
+  curClient = clientList[0]?.name || 'Feeling Bar';
+  document.getElementById('loginWrap').style.display = 'none';
+  const app = document.getElementById('app');
+  app.style.display = 'flex';
+  // admin 才顯示審核
+  document.querySelectorAll('.admin-only').forEach(el => el.style.display = res.role === 'admin' ? '' : 'none');
+  switchTab('recipe');
+}
+function doLogout() {
+  curUser = null; rdata = null; curSheet = '';
+  Object.assign(C, { inv:null, profit:{}, recipes:{}, batch:null });
+  recipeList = []; rdState = { ings:[], tv:4000, bt:'4L桶', title:'', client:'', matSel:{} };
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginWrap').style.display = 'flex';
+  document.getElementById('loginPass').value = '';
+  document.getElementById('loginErr').textContent = '';
+}
+
+// ── 重整 ─────────────────────────────────────────────────────
+function doRefresh() {
+  Object.assign(C, { inv:null, profit:{}, recipes:{}, batch:null });
+  api({ action:'getInventory' }, true).then(r => { if(r.ok) C.inv = r.items||[]; });
+  api({ action:'getRecipeList' }, true).then(lr => {
+    if(lr.ok) {
+      recipeList = lr.list||[];
+      clientList = [...new Set(recipeList.map(i => i.client))].map(n => ({ name: n }));
+      lsSet('np_recipeList', recipeList); setOffline(false);
+      switchTab(curTab);
+    } else if (lr._offline) {
+      const cached = lsGet('np_recipeList');
+      if (cached && cached.length) {
+        recipeList = cached;
+        clientList = [...new Set(recipeList.map(i => i.client))].map(n => ({ name: n }));
+        setOffline(true); switchTab(curTab);
+      }
+    }
+  });
+  toast('已重新整理');
+}
+
+// ── 導覽 ─────────────────────────────────────────────────────
+function switchTab(tab) {
+  curTab = tab;
+  document.querySelectorAll('.nav-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
+  const mc = document.getElementById('mainContent'); mc.scrollTop = 0;
+  ({ recipe:renderRecipePage, profit:renderProfitPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderBatchPage, order:renderOrderPage, stock:renderStockPage, apply:renderApplyPage })[tab]?.(mc);
+}
+
+// ════════════════════════════════════════════════
+// ① 酒譜頁（v10：雙行版面、占比↔體積即時換算）
+// ════════════════════════════════════════════════
+function renderRecipePage(mc) {
+  const clients = [...new Set(recipeList.map(i => i.client))];
+  if (!clients.length) { mc.innerHTML = '<div class="card"><div style="text-align:center;color:var(--ink3);padding:20px;">載入中…請稍候</div></div>'; return; }
+  if (!clients.includes(curClient)) curClient = clients[0];
+  const cOpts = clients.map(c => `<option${c===curClient?' selected':''}>${c}</option>`).join('');
+  mc.innerHTML = `
+  <div class="card">
+    <div class="form-row">
+      <div class="fg" style="flex:0 0 150px"><label>客戶</label><select id="selClient" onchange="onClientChange()">${cOpts}</select></div>
+      <div class="fg"><label>酒款</label><select id="selRecipe" onchange="loadRecipe()"></select></div>
+    </div>
+    <div id="recipeArea"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">請選擇酒款</div></div>
+  </div>`;
+  onClientChange();
+}
+function onClientChange() {
+  curClient = document.getElementById('selClient')?.value || curClient;
+  const sel = document.getElementById('selRecipe'); if (!sel) return;
+  const list = recipeList.filter(i => i.client === curClient);
+  sel.innerHTML = list.map(i => `<option value="${i.sheet}" data-name="${i.recipeName}">${i.recipeName}</option>`).join('');
+  if (list.length) loadRecipe();
+  else document.getElementById('recipeArea').innerHTML = '<div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">無酒款</div>';
+}
+async function loadRecipe() {
+  const sel = document.getElementById('selRecipe'); if (!sel?.value) return;
+  curSheet = sel.value;
+  const rn = sel.options[sel.selectedIndex]?.dataset.name || curSheet;
+  const key = curClient + '::' + curSheet;
+  const area = document.getElementById('recipeArea'); if (!area) return;
+  area.innerHTML = '<div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">載入中…</div>';
+  if (!C.recipes[key]) {
+    const res = await api({ action:'getRecipe', client:curClient, sheet:curSheet });
+    if (!res.ok) {
+      if (res._offline) {
+        const cached = lsGet('np_recipe_' + key);
+        if (cached) { C.recipes[key] = cached; setOffline(true); }
+        else { area.innerHTML = '<div class="warn" style="padding:12px;">離線中，且此酒譜尚無快取，請連線後再開啟一次</div>'; return; }
+      } else { area.innerHTML = `<div class="warn" style="padding:12px;">${res.error}</div>`; return; }
+    } else {
+      C.recipes[key] = res; lsSet('np_recipe_' + key, res); setOffline(false);
+    }
+  }
+  rdata = C.recipes[key]; rdata._dn = rn;
+  renderRecipeDetail(area);
+}
+function renderRecipeDetail(area) {
+  if (!rdata) return;
+  // 前端自行計算 ABV（GAS回傳的 rdata.abv 有bug），公式：Σ(ing.abv × ing.pct) / 100
+  const abv = Math.round(
+    (rdata.ingredients || []).reduce(function(s,ing){ return s + (ing.abv||0)*(ing.pct||0)/100; }, 0)
+    * 10) / 10;
+  const cost = rdata.ingredientCost || 0, tax = rdata.tax || 0;
+  const quote = Math.round(cost * 1.15 * 100) / 100, tv = rdata.totalVol || 0;
+
+  // ── 雙行版面原料列 ──────────────────────────────
+  // 第一行：原料名稱（複合原料加標記）+ 成本
+  // 第二行：占比輸入 ↔ 體積輸入（互算）
+  // 複合原料：第二行下方展開子料明細（子料用量可調，即時重算成本，占比不動）
+  const rows = (rdata.ingredients || []).map((ing, idx) => {
+    // 複合原料子料展開區（直接展開，無 toggle）
+    let subHtml = '';
+    if (ing.isCompound && (ing.subMaterials || []).length) {
+      const subRows = ing.subMaterials.map((s, si) => `
+        <div class="cpd-sub-row">
+          <span class="cpd-sub-name">${s.name}</span>
+          <input type="number" class="cpd-sub-inp" id="cs_${idx}_${si}"
+            value="${nt(s.coef, 2)}" min="0" step="0.1"
+            oninput="recalcCompound(${idx})" title="配方比例係數">
+          <span class="cpd-sub-unit">× $${nt(s.unitCost, 3)}/ml</span>
+          <span class="cpd-sub-contrib" id="csc_${idx}_${si}">= $${nt(s.coef * s.unitCost, 2)}</span>
+        </div>`).join('');
+      subHtml = `
+        <div class="cpd-expand" id="cpdx_${idx}">
+          <div class="cpd-sub-hd">複合原料子料${ing.hasLoss ? '　<span class="cpd-loss-tag">÷0.8 耗損</span>' : ''}</div>
+          ${subRows}
+        </div>`;
+    }
+    return `
+    <div class="ing-row${ing.isCompound ? ' ing-compound' : ''}" id="ingrow_${idx}">
+      <div class="ing-r1">
+        <div class="ing-name">${ing.name}${ing.isCompound ? ' <span class="cpd-badge">複合</span>' : ''}</div>
+        <div class="ing-cost" id="rc_${idx}">${fm(ing.cost)}</div>
+      </div>
+      <div class="ing-r2">
+        <label class="ing-lbl">占比</label>
+        <input type="number" class="ing-inp" id="rp_${idx}" value="${nt(ing.pct,1)}"
+          min="0" max="100" step="0.1"
+          oninput="recalcFromPct(${idx})" data-origpct="${ing.pct}">
+        <span class="ing-unit">%</span>
+        <span class="ing-sep">↔</span>
+        <label class="ing-lbl">體積</label>
+        <input type="number" class="ing-inp" id="rv_${idx}" value="${nt(ing.vol,0)}"
+          min="0" step="1"
+          oninput="recalcFromVol(${idx})">
+        <span class="ing-unit">ml</span>
+        <span class="ing-abv">ABV ${nt(ing.abv,1)}%</span>
+      </div>
+      ${subHtml}
+    </div>`;
+  }).join('');
+
+  area.innerHTML = `
+    <div class="recipe-meta">
+      <div class="rm"><div class="lb">預估酒精濃度</div><div class="vl" id="rmAbv">${nt(abv,1)}%</div></div>
+      <div class="rm">
+        <div class="lb">總體積</div>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <input type="number" id="rmTv" value="${tv}" min="1" step="100"
+            style="width:80px;padding:3px 6px;font-size:13px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--ink1);text-align:right;"
+            oninput="recalcFromTv()"> <span style="font-size:12px;color:var(--ink3);">ml</span>
+        </div>
+      </div>
+      <div class="rm"><div class="lb">食材成本（批）</div><div class="vl" id="rmCost">${fm(cost)}</div></div>
+      <div class="rm"><div class="lb">食材報價（批）</div><div class="vl acc" id="rmQuote">${fm(quote)}</div></div>
+      <div class="rm"><div class="lb">酒稅（批）</div><div class="vl" id="rmTax">${fm(tax)}</div></div>
+      <div class="rm"><div class="lb">食材總成本(含稅)</div><div class="vl sm" id="rmTotal">${fm((cost*1.15+tax)*1.05)}</div></div>
+    </div>
+    <div class="ing-list" style="margin-bottom:10px;">${rows}</div>
+    <div class="total-bar">總計：<span id="totalPct"></span> · 成本 <span id="totalCostBar">${fm(cost)}</span></div>
+    <div class="fe" style="gap:6px;margin-bottom:10px;">
+      <button class="btn btn-ghost btn-sm" onclick="recalcRecipe(true)">↺ 還原比例</button>
+      <button class="btn btn-ghost btn-sm" onclick="toRd()">→ 帶入研發試算</button>
+      <button class="btn btn-ghost btn-sm" onclick="showApplyModal()">✏️ 申請更改</button>
+    </div>
+    <div class="sub" style="margin-bottom:5px;">製程備註</div>
+    <textarea id="pnInput" class="inp" style="height:70px;resize:vertical;font-size:13px;">${rdata.processNote || ''}</textarea>
+    <div class="fe mt8"><button class="btn btn-primary btn-sm" onclick="lockRun(this, saveNote)">儲存備註</button></div>`;
+
+  rdata._origTv = rdata.totalVol; // 記錄原始總體積供還原用
+  (rdata.ingredients || []).forEach((ing, idx) => {
+    ing._origPct  = ing.pct;
+    ing._origVol  = ing.vol || 0;   // 原始體積（ml）
+    ing._origCost = ing.cost || 0;  // 原始成本（已是該原料批次成本）
+    // ing.abv = GAS 回傳的原料本身 ABV（如 40%酒精 → 40）
+    // 整體ABV = Σ(ing.abv × 占比/100)
+    ing._abvActual = ing.abv || 0;  // ing.abv = 原料本身ABV，直接使用
+
+
+  });
+  updateTotalPct();
+}
+
+// 改占比 → 重算體積
+function recalcFromPct(idx) {
+  const ing = rdata?.ingredients?.[idx]; if (!ing) return;
+  const pct = parseFloat(document.getElementById('rp_'+idx)?.value) || 0;
+  const tv = rdata.totalVol || 0;
+  const vol = tv * pct / 100;
+  const ve = document.getElementById('rv_'+idx); if (ve) ve.value = nt(vol, 0);
+  recalcIngCost(idx, pct, vol);
+  recalcSummary();
+}
+// 改體積 → 重算占比
+function recalcFromVol(idx) {
+  const ing = rdata?.ingredients?.[idx]; if (!ing) return;
+  const tv = rdata.totalVol || 0; if (!tv) return;
+  const vol = parseFloat(document.getElementById('rv_'+idx)?.value) || 0;
+  const pct = vol / tv * 100;
+  const pe = document.getElementById('rp_'+idx); if (pe) pe.value = nt(pct, 1);
+  recalcIngCost(idx, pct, vol);
+  recalcSummary();
+}
+// 重算單一原料成本
+function recalcIngCost(idx, pct, vol) {
+  const ing = rdata?.ingredients?.[idx]; if (!ing) return;
+  // 原始單位成本 = 原始批次成本 / 原始體積
+  const origVol  = ing._origVol  !== undefined ? ing._origVol  : (ing.vol  || 0);
+  const origCost = ing._origCost !== undefined ? ing._origCost : (ing.cost || 0);
+  const unitCost = origVol > 0 ? origCost / origVol : 0;
+  const cost = unitCost * vol;
+  ing._curCost = cost;
+  const cc = document.getElementById('rc_'+idx); if (cc) cc.textContent = fm(cost);
+}
+// 複合原料子料調整 → 重算複合料成本（占比不動，僅成本連動）
+// 複合料成本 = (Σ 子料係數 × 子料每ml成本) / (hasLoss ? 0.8 : 1) × 該複合料體積
+// 註：subMaterials[].contrib = 係數 × unitCost = 每 1ml 成品的子料成本貢獻
+function recalcCompound(idx) {
+  const ing = rdata?.ingredients?.[idx];
+  if (!ing || !ing.isCompound) return;
+  // 讀子料當前係數，重算每 ml 成品成本
+  let perMl = 0;
+  (ing.subMaterials || []).forEach((s, si) => {
+    const coef = parseFloat(document.getElementById('cs_'+idx+'_'+si)?.value) || 0;
+    s.coef = coef;
+    s.contrib = coef * (s.unitCost || 0);
+    perMl += s.contrib;
+    const ce = document.getElementById('csc_'+idx+'_'+si);
+    if (ce) ce.textContent = '= $' + nt(s.contrib, 2);
+  });
+  if (ing.hasLoss) perMl = perMl / 0.8;
+  // 複合料每ml成本 = perMl / batchVol（G欄批次容量；batchVol=1 代表 createRecipeSheet 建的新酒譜）
+  // 根因(Bug Issue 4)：少此除法導致成本放大 batchVol 倍（實機驗算：103×/60×）
+  const batchVol = ing.batchVol || 1;
+  const vol = parseFloat(document.getElementById('rv_'+idx)?.value) || ing.vol || 0;
+  const cost = (perMl / batchVol) * vol;
+  ing._curCost = cost;
+  const cc = document.getElementById('rc_'+idx); if (cc) cc.textContent = fm(cost);
+  recalcSummary(); // 更新總成本/報價/含稅（占比總和不變）
+}
+// 重算所有匯總
+function recalcSummary() {
+  if (!rdata?.ingredients) return;
+  let totalCost = 0, totalAbv = 0, totalPct = 0;
+  rdata.ingredients.forEach((ing, idx) => {
+    const pct = parseFloat(document.getElementById('rp_'+idx)?.value) || 0;
+    const vol = parseFloat(document.getElementById('rv_'+idx)?.value) || 0;
+    const cost = ing._curCost !== undefined ? ing._curCost : ing.cost;
+    totalCost += cost;
+    totalAbv += (ing._abvActual !== undefined ? ing._abvActual : (ing.abv||0)) * (pct / 100);
+    totalPct += pct;
+  });
+  const abv = Math.round(totalAbv * 10) / 10;
+  const tax = calcTax(abv, rdata.totalVol || 0);
+  const quote = totalCost * 1.15;
+  const e = id => document.getElementById(id);
+  if (e('rmAbv'))   e('rmAbv').textContent   = nt(abv,1) + '%';
+  if (e('rmCost'))  e('rmCost').textContent  = fm(totalCost);
+  if (e('rmQuote')) e('rmQuote').textContent = fm(quote);
+  if (e('rmTax'))   e('rmTax').textContent   = fm(tax);
+  const totalWithTax = Math.round((totalCost * 1.15 + tax) * 1.05 * 100) / 100;
+  if (e('rmTotal')) e('rmTotal').textContent = fm(totalWithTax);
+  if (e('totalCostBar')) e('totalCostBar').textContent = fm(totalCost);
+  updateTotalPct();
+}
+function updateTotalPct() {
+  const el = document.getElementById('totalPct'); if (!el) return;
+  let total = 0;
+  (rdata?.ingredients || []).forEach((ing, idx) => {
+    total += parseFloat(document.getElementById('rp_'+idx)?.value) || 0;
+  });
+  const diff = (100 - total).toFixed(1);
+  el.innerHTML = Math.abs(parseFloat(diff)) < 0.1
+    ? '<span class="ok">✓ 100%</span>'
+    : `<span class="warn">⚠ ${total.toFixed(1)}%（差${diff}%）</span>`;
+}
+// 改總體積 → 依現有占比重算所有體積 + 成本
+function recalcFromTv() {
+  const newTv = parseFloat(document.getElementById('rmTv')?.value) || 0;
+  if (!newTv || !rdata?.ingredients) return;
+  rdata.totalVol = newTv;   // 更新 rdata，讓後續所有計算都用新值
+  rdata.ingredients.forEach((ing, idx) => {
+    const pct  = parseFloat(document.getElementById('rp_'+idx)?.value) || 0;
+    const vol  = newTv * pct / 100;
+    const ve   = document.getElementById('rv_'+idx); if (ve) ve.value = nt(vol, 0);
+    const origVol  = ing._origVol  !== undefined ? ing._origVol  : (ing.vol  || 0);
+    const origCost = ing._origCost !== undefined ? ing._origCost : (ing.cost || 0);
+    const unitCost = origVol > 0 ? origCost / origVol : 0;
+    ing._curCost = unitCost * vol;
+    const cc = document.getElementById('rc_'+idx); if (cc) cc.textContent = fm(ing._curCost);
+  });
+  recalcSummary();
+}
+
+
+// 還原全部 → 重算
+function recalcRecipe(restore) {
+  if (!rdata?.ingredients?.length) return;
+  // 還原時重設 totalVol 回原始值（_origTv）
+  if (restore && rdata._origTv) {
+    rdata.totalVol = rdata._origTv;
+    const tve = document.getElementById('rmTv'); if (tve) tve.value = rdata._origTv;
+  }
+  const tv = rdata.totalVol || 0;
+  rdata.ingredients.forEach((ing, idx) => {
+    const pct = restore ? ing._origPct : (parseFloat(document.getElementById('rp_'+idx)?.value) || 0);
+    if (restore) {
+      const pe = document.getElementById('rp_'+idx); if (pe) pe.value = nt(pct, 1);
+      const ve = document.getElementById('rv_'+idx); if (ve) ve.value = nt(tv*pct/100, 0);
+    }
+    const vol = tv * pct / 100;
+    const _oV = ing._origVol  !== undefined ? ing._origVol  : (ing.vol  || 0);
+    const _oC = ing._origCost !== undefined ? ing._origCost : (ing.cost || 0);
+    const unitCost = _oV > 0 ? _oC / _oV : 0;
+    ing._curCost = unitCost * vol;
+    const cc = document.getElementById('rc_'+idx); if (cc) cc.textContent = fm(ing._curCost);
+  });
+  recalcSummary();
+}
+function toRd() {
+  if (!rdata?.ingredients?.length) { toast('無原料資料'); return; }
+  rdState = { ings:[], tv:rdata.totalVol||4000, bt:'4L桶', title:rdata.recipeName||rdata._dn||'', client:curClient };
+  rdata.ingredients.forEach((ing, idx) => {
+    const pct = parseFloat(document.getElementById('rp_'+idx)?.value) || ing.pct;
+    rdState.ings.push({ type:'single', name:ing.name, brand:'', abv:ing.abv||0, price:0, unitVol:0, ratio:pct, volume:rdata.totalVol*pct/100, hasLoss:false, isManual:false, _cost:ing.cost, _vol:ing.vol });
+  });
+  switchTab('rd');
+  toast('已帶入研發試算');
+}
+async function saveNote() {
+  const note = document.getElementById('pnInput')?.value || '';
+  const res = await api({ action:'saveProcessNote', client:curClient, sheet:curSheet, note });
+  if (res.ok) { toast('備註已儲存'); C.recipes[curClient+'::'+curSheet] = null; }
+  else toast('儲存失敗:' + res.error);
+}
+function showApplyModal() {
+  if (!rdata?.ingredients?.length) { toast('請先載入酒譜'); return; }
+  const rows = rdata.ingredients.map((ing, i) => `<tr>
+    <td style="font-size:13px;">${ing.name}</td>
+    <td class="tr" style="font-size:13px;">${nt(ing.pct,1)}%</td>
+    <td><input type="number" id="nr_${i}" placeholder="新%" style="width:62px;padding:5px;border:1.5px solid var(--border);border-radius:5px;font-size:12px;"></td>
+    <td><input type="text" id="rs_${i}" placeholder="原因（必填）" style="width:100%;padding:5px;border:1.5px solid var(--border);border-radius:5px;font-size:12px;"></td>
+  </tr>`).join('');
+  const modal = makeModal(`<div class="modal-title">✏️ 更改申請 — ${rdata.recipeName||rdata._dn}</div>
+    <div class="tbl-wrap" style="margin-bottom:12px;"><table><thead><tr><th>原料</th><th>現在%</th><th>新%</th><th>原因</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="fe"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="apSub">送出</button></div>`);
+  const apBtn = modal.querySelector('#apSub');
+  apBtn.onclick = () => lockRun(apBtn, async () => {
+    const items = rdata.ingredients.map((ing,i) => {
+      const nr = document.getElementById('nr_'+i)?.value;
+      return nr ? { name:ing.name, oldVal:ing.pct, newVal:parseFloat(nr), reason:(document.getElementById('rs_'+i)?.value||'').trim() } : null;
+    }).filter(Boolean);
+    if (!items.length) { toast('請至少填一筆'); return; }
+    // 原因必填：有填新%的原料一律須填原因，否則不可送出（Molly 決議 2026-06-20）
+    const noReason = items.filter(it => !it.reason);
+    if (noReason.length) {
+      toast(`「${noReason.map(it=>it.name).join('、')}」尚未填寫更改原因`);
+      // 聚焦第一個缺原因的欄位
+      const firstIdx = rdata.ingredients.findIndex(ing => ing.name === noReason[0].name);
+      const el = document.getElementById('rs_'+firstIdx);
+      if (el) { el.style.borderColor = 'var(--red)'; el.focus(); }
+      return;
+    }
+    // 占比總和檢查（B）：套用後總和 = 有填新值用新值，其餘維持原 pct
+    const chg = {}; items.forEach(it => { chg[it.name] = it.newVal; });
+    const sumPct = rdata.ingredients.reduce((s,ing) => s + (chg[ing.name] !== undefined ? chg[ing.name] : (ing.pct||0)), 0);
+    if (Math.abs(sumPct - 100) >= 0.1 && !confirm(`套用後占比總和為 ${sumPct.toFixed(1)}%（與 100% 不符），體積與 ABV 會失真。確定仍要送出申請？`)) return;
+    const res = await api({ action:'submitApply', creator:curUser.username, client:curClient, sheet:curSheet, recipe:rdata.recipeName||rdata._dn, items:JSON.stringify(items) });
+    if (res.ok) { toast('申請已送出'); modal.remove(); } else toast('送出失敗:' + res.error);
+  });
+}
+
+// ════════════════════════════════════════════════
+// ② 毛利分析（v10：動態客戶清單）
+// ════════════════════════════════════════════════
+async function renderProfitPage(mc) {
+  const clients = clientList.length ? clientList.map(c=>c.name) : ['Feeling Bar','南坡萬公版','Feeling Bar Cafe'];
+  const cOpts = clients.map(c => `<option>${c}</option>`).join('');
+  mc.innerHTML = `<div class="card">
+    <div class="sec-hd"><div class="card-title" style="margin:0">毛利分析</div><button class="btn btn-ghost btn-sm" onclick="loadProfit(true)">↻ 刷新</button></div>
+    <div class="form-row" style="margin-bottom:12px;">
+      <div class="fg" style="flex:0 0 155px"><label>客戶</label><select id="profitClient" onchange="loadProfit()">${cOpts}</select></div>
+    </div>
+    <div id="profitArea"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">載入中…</div></div>
+  </div>`;
+  await loadProfit();
+}
+async function loadProfit(force) {
+  const el = document.getElementById('profitClient');
+  const client = el ? el.value : (clientList[0]?.name||'Feeling Bar');
+  if (force) C.profit[client] = null;
+  if (!C.profit[client]) {
+    const res = await api({ action:'getProfitData', client });
+    if (!res.ok) { const a=document.getElementById('profitArea'); if(a) a.innerHTML=`<div class="warn" style="padding:12px;">${res.error}</div>`; return; }
+    C.profit[client] = res;
+  }
+  renderProfitData(C.profit[client]);
+}
+function renderProfitData(res) {
+  const area = document.getElementById('profitArea'); if (!area||!res) return;
+  const data = res.list || [];
+  if (!data.length) { area.innerHTML='<div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">無資料</div>'; return; }
+
+  // 用 client 名稱判斷 FB 系（Feeling Bar Cafe/FBM）vs 南坡萬多瓶型
+  // 不依賴 GAS 是否回傳 bottle 欄位
+  const hasFB = /feeling|^fb/i.test(res.client || '') || data.every(d => (d.bottle || '4L桶') === '4L桶');
+  if (hasFB) {
+    const sorted = [...data].sort((a,b) => b.profitRate - a.profitRate);
+    area.innerHTML = '<div class="profit-grid">' + sorted.map(d => {
+      const nm = d.recipeName || d.name || '';
+      const pr = d.price !== undefined ? d.price : (d.sellingPrice || 0);
+      const rate = d.profitRate || 0;
+      return `<div class="pc${d.warn?' warn-row':''}">
+      <div class="pn">${nm}${d.warn?' <span title="售價或成本讀取為 0，疑似毛利分頁欄位跑掉，請檢查 Sheet" style="cursor:help;">⚠️</span>':''}</div>
+      <div style="font-size:11px;color:var(--ink3);margin-bottom:2px;">售價</div>
+      <div class="pp">${fm(pr)}</div>
+      <div class="pm-row"><span>總成本</span><span>NT$${Math.round(d.totalCostTax)}</span></div>
+      <div class="pm-row"><span>毛利</span><span class="pv">NT$${Math.round(d.profit)}</span></div>
+      <div class="pm-row"><span>毛利率</span><span style="font-weight:600;">${nt(rate,1)}%</span></div>
+    </div>`;
+    }).join('') + '</div>';
+  } else {
+    // 多瓶型：group by name
+    const byName = {}; data.forEach(d => { const nm = d.recipeName||d.name||''; if(!byName[nm]) byName[nm]={}; byName[nm][d.bottle]=d; });
+    const allBottles = [...new Set(data.map(d=>d.bottle))];
+    area.innerHTML = Object.keys(byName).map(name => {
+      const bottles = byName[name];
+      const maxRate = Math.max(...Object.values(bottles).map(b => b.profitRate||0));
+      return `<div class="gonban-item">
+        <div class="gonban-name">${name}</div>
+        <div class="bottle-row">${allBottles.map(bt => {
+          const d = bottles[bt];
+          if (!d) return `<div class="bc"><div class="bt">${bt}</div><div class="bv sub">—</div></div>`;
+          const best = (d.profitRate||0) === maxRate && maxRate > 0;
+          const fallback = d.priceSource === 'fallback';
+          const rate = d.profitRate || 0;
+          const pr = d.price !== undefined ? d.price : (d.sellingPrice || 0);
+          return `<div class="bc${best?' best':''}${d.warn?' warn-row':''}">
+            <div class="bt">${bt}${best?' ⭐':''}${d.warn?' <span title="售價或成本讀取為 0，疑似毛利分頁欄位跑掉，請檢查 Sheet" style="cursor:help;">⚠️</span>':''}${fallback?' <span class="badge bg-yellow" title="套用伏特加報價">待更新</span>':''}</div>
+            <div style="font-size:10px;color:var(--ink3);margin-bottom:1px;">售價</div>
+            <div class="bv">${fm(pr)}</div>
+            <div class="br">毛利率 ${nt(rate,1)}%</div>
+            <div class="bt2">毛利 ${fm(d.profit)}</div>
+            <div class="bt2">總成本 NT$${Math.round(d.totalCostTax)}</div>
+          </div>`;
+        }).join('')}</div>
+      </div>`;
+    }).join('');
+  }
+}
+
+// ════════════════════════════════════════════════
+// ③ 原料庫 + 資材費用
+// ════════════════════════════════════════════════
+async function renderInventoryPage(mc) {
+  mc.innerHTML = `<div class="card">
+    <div class="sec-hd"><div class="card-title" style="margin:0">原料庫</div><button class="btn btn-ghost btn-sm" onclick="loadInv(true)">↻ 刷新</button></div>
+    <div class="form-row" style="margin-bottom:8px;">
+      <div class="fg" style="flex:0 0 145px"><label>大分類</label><select id="invCat" onchange="filterInv()"><option value="">全部</option></select></div>
+      <div class="fg"><label>搜尋品名</label><input class="inp" id="invKw" placeholder="關鍵字…" oninput="filterInv()" style="margin:0;padding:9px 12px;font-size:13px;"></div>
+    </div>
+    <div id="invArea"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">載入中…</div></div>
+  </div>
+
+  <div class="card" style="margin-top:10px;">
+    <div class="card-title">資材費用</div>
+    <div class="form-row" style="margin-bottom:10px;">
+      <div class="fg" style="flex:0 0 120px"><label>瓶型</label>
+        <select id="matBottle" onchange="renderMaterialCost()">${Object.keys(BSPEC).map(b=>`<option>${b}</option>`).join('')}</select>
+      </div>
+    </div>
+    <div id="matArea"></div>
+  </div>`;
+  await loadInv();
+  renderMaterialCost();
+}
+async function loadInv(force) {
+  if (force) C.inv = null;
+  if (!C.inv) {
+    const res = await api({ action:'getInventory' });
+    if (!res.ok) { const a=document.getElementById('invArea'); if(a) a.innerHTML=`<div class="warn" style="padding:12px;">${res.error}</div>`; return; }
+    C.inv = res.items || [];
+  }
+  const cats = [...new Set(C.inv.map(i => i.category))];
+  const ce = document.getElementById('invCat');
+  if (ce) ce.innerHTML = '<option value="">全部</option>' + cats.map(c=>`<option>${c}</option>`).join('');
+  filterInv();
+}
+function filterInv() {
+  const cat = document.getElementById('invCat')?.value || '';
+  const kw = (document.getElementById('invKw')?.value || '').trim().toLowerCase();
+  const list = (C.inv||[]).filter(i => (!cat||i.category===cat) && (!kw||i.name.toLowerCase().includes(kw)||(i.brand||'').toLowerCase().includes(kw)));
+  const el = document.getElementById('invArea'); if (!el) return;
+  if (!list.length) { el.innerHTML='<div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">無符合結果</div>'; return; }
+  el.innerHTML = `<div class="tbl-wrap"><table>
+    <thead><tr><th>品名 / 品牌</th><th class="tr">單價 / 容量 / ABV</th></tr></thead>
+    <tbody>${list.map(i=>`<tr>
+      <td><div style="font-weight:500;font-size:13px;">${i.name}</div><div class="sub">${i.brand||'—'} · ${i.category}${i.isSolid?' <span class="badge bg-yellow">固</span>':''}</div></td>
+      <td class="tr"><div style="font-size:13px;font-weight:500;">${fm0(i.price)}</div><div class="sub">${i.vol?nt(i.vol,0)+'ml':'—'}${invUC(i)>0?' · '+invUC(i).toFixed(2)+'/ml':''} · ABV ${i.abv||0}%</div></td>
+    </tr>`).join('')}</tbody></table></div>`;
+}
+function renderMaterialCost() {
+  const bt = document.getElementById('matBottle')?.value || '江小白';
+  const accs = BOTTLE_ACCESSORIES[bt] || [];
+  const spec = BSPEC[bt];
+  const el = document.getElementById('matArea'); if (!el) return;
+  el.innerHTML = `
+    <div class="mat-list">
+      <div class="mat-row hd"><span>配件</span><span>單價/瓶</span><span>必選</span></div>
+      <div class="mat-row"><span>瓶身（容器）</span><span>${fm(spec.cont)}</span><span>✓</span></div>
+      ${accs.map(a=>`<div class="mat-row">
+        <span>${a.label}</span>
+        <span>${a.price>0?fm(a.price):'—'}</span>
+        <span>${a.alwaysOn?'✓':'—'}</span>
+      </div>`).join('')}
+      <div class="mat-row"><span>代工費</span><span>${fm(spec.labor)}</span><span>✓</span></div>
+    </div>
+    <div class="sub" style="margin-top:6px;font-size:11px;">最小資材/瓶 = ${fm(spec.cont + spec.lab + spec.labor)}（不含選配標籤）</div>`;
+}
+
+// ════════════════════════════════════════════════
+// ④ 研發試算（v10：精簡結果、加客戶、資材費）
+// ════════════════════════════════════════════════
+async function renderRdPage(mc) {
+  if (!C.inv) { const res=await api({action:'getInventory'}); if(res.ok) C.inv=res.items||[]; }
+  const { ings, tv, bt, title, client } = rdState;
+  const botOpts = Object.keys(BSPEC).map(b=>`<option${b===bt?' selected':''}>${b}</option>`).join('');
+  const cats = [...new Set((C.inv||[]).map(i=>i.category))];
+  const catOpts = cats.map(c=>`<option>${c}</option>`).join('');
+  const cliOpts = (clientList.length?clientList.map(c=>c.name):['Feeling Bar','南坡萬公版','Feeling Bar Cafe']).map(c=>`<option${c===client?' selected':''}>${c}</option>`).join('');
+  mc.innerHTML = `
+  <div class="card" style="margin-bottom:10px;">
+    <div class="card-title">研發試算</div>
+    <div class="form-row">
+      <div class="fg"><label>試算名稱</label><input class="inp" id="rd_title" value="${title}" placeholder="名稱（儲存用）" style="margin:0;font-size:13px;" oninput="rdState.title=this.value"></div>
+      <div class="fg" style="flex:0 0 130px"><label>客戶</label><select id="rd_client" onchange="rdState.client=this.value">${cliOpts}</select></div>
+    </div>
+    <div class="form-row">
+      <div class="fg" style="flex:0 0 110px"><label>製作總體積 ml</label><input class="inp" type="number" id="rd_tv" value="${tv}" oninput="rdTvChange(this.value)" style="margin:0;font-size:13px;"></div>
+      <div class="fg" style="flex:0 0 105px"><label>瓶型</label><select id="rd_bt" onchange="rdState.bt=this.value;rdState.matSel={};rdUpdateMat()">${botOpts}</select></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:10px;">
+    <div style="font-weight:500;font-size:13px;margin-bottom:8px;">加入原料</div>
+    <div class="form-row" style="margin-bottom:6px;">
+      <div class="fg" style="flex:0 0 135px"><label>大分類</label>
+        <select id="rd_cat" onchange="rdCatChange()"><option value="">全部分類</option>${catOpts}</select>
+      </div>
+      <div class="fg"><label>搜尋品名</label>
+        <div class="sbox">
+          <input class="inp" id="rd_kw" placeholder="品名/品牌…" oninput="rdDrop()" onfocus="rdDrop()" autocomplete="off" style="margin:0;font-size:13px;">
+          <div class="sdrop" id="rd_drop"></div>
+        </div>
+      </div>
+    </div>
+    <div class="fe" style="gap:6px;">
+      <button class="btn btn-ghost btn-sm" onclick="rdAddManual()">+ 手動輸入</button>
+      <button class="btn btn-ghost btn-sm" onclick="rdAddCompound()">+ 複合原料</button>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:10px;" id="rd_ingCard">
+    <div class="card-title">原料列表</div>
+    <div id="rd_ings"></div>
+    <div id="rd_pctw" style="font-size:12px;margin-top:6px;"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:10px;">
+    <div class="card-title">資材費用</div>
+    <div id="rd_mat_list"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:10px;">
+    <div class="card-title">試算結果</div>
+    <div id="rd_sum"></div>
+  </div>
+
+  <div class="fe" style="gap:6px;margin-bottom:80px;">
+    <button class="btn btn-ghost btn-sm" onclick="lockRun(this, rdSave)">💾 儲存</button>
+    <button class="btn btn-ghost btn-sm" onclick="rdLoadList()">📋 載入</button>
+    <button class="btn btn-ghost btn-sm" onclick="rdExportCSV()">⬇ CSV</button>
+    <button class="btn btn-primary btn-sm" onclick="lockRun(this, rdSubmitApply)">📤 送出申請</button>
+  </div>`;
+
+  rdRender(); rdUpdateMat(); rdCalc();
+}
+function rdUpdateMat() {
+  const bt = rdState.bt || '4L桶';
+  const accs = BOTTLE_ACCESSORIES[bt] || [];
+  const spec = BSPEC[bt];
+  const el = document.getElementById('rd_mat_list'); if (!el) return;
+  const btls = Math.floor((rdState.tv || 4000) / spec.volFill);
+  // 初始化 matSel：必選自動 true，選配若未設定預設 false
+  accs.forEach(a => {
+    const k = bt + '_' + a.id;
+    if (a.alwaysOn) rdState.matSel[k] = true;
+    else if (rdState.matSel[k] === undefined) rdState.matSel[k] = false;
+  });
+  const rows = accs.map(a => {
+    const k = bt + '_' + a.id;
+    const chk = rdState.matSel[k];
+    const amt = chk && a.price > 0 ? fm(a.price * btls) : '—';
+    if (a.alwaysOn) {
+      return `<div class="mat-row">
+        <span>${a.label}</span><span>${a.price > 0 ? fm(a.price) : '含'}</span>
+        <span style="color:var(--gold-dk);">✓</span><span>${a.price > 0 ? fm(a.price * btls) : '—'}</span>
+      </div>`;
+    }
+    return `<div class="mat-row">
+      <span>${a.label}</span><span>${fm(a.price)}</span>
+      <span><label style="display:flex;align-items:center;gap:3px;cursor:pointer;">
+        <input type="checkbox" ${chk ? 'checked' : ''}
+          style="width:14px;height:14px;accent-color:var(--gold-dk);cursor:pointer;"
+          onchange="rdState.matSel['${k}']=this.checked;rdUpdateMat()">勾選
+      </label></span>
+      <span id="rma_${a.id}">${amt}</span>
+    </div>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="mat-list">
+      <div class="mat-row hd"><span>配件</span><span>單價/瓶</span><span>選配</span><span>批次合計</span></div>
+      <div class="mat-row">
+        <span>瓶身</span><span>${fm(spec.cont)}</span>
+        <span style="color:var(--gold-dk);">✓</span><span>${fm(spec.cont * btls)}</span>
+      </div>
+      ${rows}
+      <div class="mat-row">
+        <span>代工費</span><span>${fm(spec.labor)}</span>
+        <span style="color:var(--gold-dk);">✓</span><span>${fm(spec.labor * btls)}</span>
+      </div>
+      <div class="mat-row tot">
+        <span>資材小計（×1.05）</span><span></span><span></span>
+        <span id="rd_mat_tot">—</span>
+      </div>
+    </div>
+    <div class="sub" style="margin-top:4px;font-size:11px;">裝瓶數：${btls}瓶</div>`;
+  rdCalc();
+}
+// P1(v9.5):占比為準 — 改總體積時單一原料用量依占比自動縮放(複合子原料維持絕對ml,其占比由rdCalc自動重算)
+function rdTvChange(v) {
+  rdState.tv = parseFloat(v) || 4000;
+  rdState.ings.forEach(ing => {
+    if (ing.type !== 'compound' && (ing.ratio || 0) > 0) ing.volume = rdState.tv * ing.ratio / 100;
+  });
+  rdRender(); rdCalc();
+}
+function rdCatChange() {
+  document.getElementById('rd_kw').value = '';
+  rdDrop();
+}
+function rdDrop() {
+  const cat = document.getElementById('rd_cat')?.value || '';
+  const kw = (document.getElementById('rd_kw')?.value || '').trim().toLowerCase();
+  const drop = document.getElementById('rd_drop'); if (!drop) return;
+  const inv = C.inv || [];
+  const list = inv.filter(i => (!cat||i.category===cat) && (!kw||i.name.toLowerCase().includes(kw)||(i.brand||'').toLowerCase().includes(kw)));
+  if (!list.length) { drop.classList.remove('open'); return; }
+  drop.classList.add('open');
+  drop.innerHTML = list.slice(0,30).map(item =>
+    `<div class="sd-item" onclick="rdPick(${JSON.stringify(item).replace(/"/g,'&quot;')})">
+      <div class="sd-name">${fullIngName(item)}</div>
+      <div class="sd-sub">${item.category||''} · ${fm0(item.price)}/${item.vol?nt(item.vol,0)+'ml':'—'} · ABV ${item.abv||0}%</div>
+    </div>`).join('');
+}
+function rdPick(item) {
+  const solid = item.isSolid;
+  rdState.ings.push({ type:'single', name:item.name, brand:item.brand||'', category:item.category||'', abv:item.abv||0, price:item.price||0, unitVol:item.vol||0, unitCost:invUC(item), ratio:0, volume:0, hasLoss:solid, isManual:false });
+  document.getElementById('rd_kw').value = '';
+  document.getElementById('rd_drop')?.classList.remove('open');
+  rdRender(); rdCalc();
+  // P3(v9.5):加入後自動捲動並聚焦占比輸入框(手機免捲動找卡片)
+  const _ni = rdState.ings.length - 1;
+  setTimeout(() => { const _inp = document.getElementById('rdr_'+_ni);
+    if (_inp) { _inp.scrollIntoView({behavior:'smooth', block:'center'}); _inp.focus(); } }, 80);
+}
+function rdAddManual() {
+  rdState.ings.push({ type:'single', name:'', brand:'', abv:0, price:0, unitVol:0, ratio:0, volume:0, hasLoss:false, isManual:true });
+  rdRender(); rdCalc();
+  setTimeout(() => { const _ins = document.querySelectorAll('.ing-name-i'); const _l = _ins[_ins.length-1];
+    if (_l) { _l.scrollIntoView({behavior:'smooth', block:'center'}); _l.focus(); } }, 80);
+}
+function rdAddCompound() {
+  rdState.ings.push({ type:'compound', name:'複合原料', subs:[], hasLoss:false });
+  rdRender(); rdCalc();
+}
+function rdDel(i) { rdState.ings.splice(i,1); rdRender(); rdCalc(); }
+function rdRender() {
+  const el = document.getElementById('rd_ings'); if (!el) return;
+  if (!rdState.ings.length) { el.innerHTML='<div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">尚未加入原料</div>'; rdCalc(); return; }
+  el.innerHTML = rdState.ings.map((ing,i) => {
+    const ref = `rdState.ings[${i}]`;
+    if (ing.type === 'compound') {
+      const lossOn = ing.hasLoss;
+      // Issue 2: 計算複合料子料總體積（用於顯示各子料占比%）
+      const _csvTot = (ing.subs||[]).reduce((t,s)=>t+(s.volume||0),0);
+      const subsHtml = (ing.subs||[]).map((s,pi) => {
+        const sr = `rdState.ings[${i}].subs[${pi}]`;
+        const _pct = _csvTot>0 ? (_csvTot>0?(s.volume||0)/_csvTot*100:0).toFixed(1) : '0.0';
+        return `<div class="sub-row">
+          <div class="sd-name" style="font-size:12px;">${fullIngName(s)}</div>
+          <div class="if"><label>占比%</label><input type="number" value="${_pct}" id="rsr_${i}_${pi}"
+            oninput="rdSubRatio(${i},${pi},parseFloat(this.value)||0)" placeholder="%" style="width:55px;"></div>
+          <div class="if"><label>用量ml</label><input type="number" value="${s.volume||''}" id="rsv_${i}_${pi}"
+            oninput="${sr}.volume=parseFloat(this.value)||0;rdSubVolUpdate(${i});rdCalc()" placeholder="ml" style="width:65px;"></div>
+          <div style="font-size:11px;color:var(--ink3);" id="rsvc_${i}_${pi}">${fm(rdCpm(s)*(s.volume||0))}</div>
+          <button class="del-btn" onclick="${sr}=null;rdState.ings[${i}].subs=rdState.ings[${i}].subs.filter(Boolean);rdRender();rdCalc()">✕</button>
+        </div>`;
+      }).join('');
+      return `<div class="cpd-box">
+        <div class="cpd-head">
+          <div class="cpd-loss${lossOn?' on':''}">
+            <input type="checkbox" ${lossOn?'checked':''} onchange="${ref}.hasLoss=this.checked;this.closest('.cpd-loss').classList.toggle('on',this.checked);rdCalc()">計耗損÷0.8
+          </div>
+          <input class="cpd-name-i" value="${ing.name}" onchange="${ref}.name=this.value;rdCalc()">
+          <button class="del-btn" onclick="rdDel(${i})">✕</button>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><div id="rc_${i}" style="font-size:12px;color:var(--gold-dk);"></div><div id="rcp_${i}" style="font-size:11px;color:var(--ink3);"></div></div>
+        ${subsHtml}
+        <button class="btn btn-ghost btn-sm" style="margin-top:4px;font-size:11px;" onclick="rdAddSubDrop(${i})">+ 加入子原料</button>
+        <div class="sdrop sub-drop" id="sdrop_${i}"></div>
+      </div>`;
+    } else {
+      return `<div class="ing-card">
+        <div class="ic-r1">
+          <div class="ing-name">${ing.isManual?`<input class="ing-name-i" value="${ing.name}" onchange="${ref}.name=this.value;rdCalc()" placeholder="原料名稱">`:fullIngName(ing)}</div>
+          <div id="rc_${i}" class="ing-cost"></div>
+          <button class="del-btn" onclick="rdDel(${i})">✕</button>
+        </div>
+        ${ing.isManual?`
+        <div class="ic-r2">
+          <div class="if"><label>ABV%</label><input type="number" value="${ing.abv}" oninput="${ref}.abv=parseFloat(this.value)||0;rdCalc()" style="width:55px;"></div>
+          <div class="if"><label>單價NT$</label><input type="number" value="${ing.price}" oninput="${ref}.price=parseFloat(this.value)||0;rdCalc()" style="width:70px;"></div>
+          <div class="if"><label>容量ml</label><input type="number" value="${ing.unitVol}" oninput="${ref}.unitVol=parseFloat(this.value)||0;rdCalc()" style="width:65px;"></div>
+        </div>`:''}
+        <div class="ic-r2">
+          <div class="if"><label>占比%</label><input type="number" id="rdr_${i}" value="${nt(ing.ratio)}" oninput="${ref}.ratio=parseFloat(this.value)||0;${ref}.volume=rdState.tv*(parseFloat(this.value)||0)/100;document.getElementById('rdv_${i}').value=nt(${ref}.volume,0);rdCalc()" style="width:65px;"></div>
+          <span style="font-size:11px;color:var(--ink3);">↔</span>
+          <div class="if"><label>用量ml</label><input type="number" value="${nt(ing.volume,0)}" id="rdv_${i}" oninput="${ref}.volume=parseFloat(this.value)||0;${ref}.ratio=rdState.tv>0?(parseFloat(this.value)||0)/rdState.tv*100:0;rdCalc()" style="width:65px;"></div>
+          ${!ing.isManual?`<label style="display:flex;align-items:center;gap:3px;font-size:11px;"><input type="checkbox" ${ing.hasLoss?'checked':''} onchange="${ref}.hasLoss=this.checked;rdCalc()">耗損</label>`:''}
+        </div>
+      </div>`;
+    }
+  }).join('');
+}
+function rdAddSubDrop(pi) {
+  const drop = document.getElementById('sdrop_'+pi); if (!drop) return;
+  drop.classList.toggle('open');
+  if (!drop.classList.contains('open')) return;
+  // P2(v9.5):子原料可搜尋全部原料庫(原本只列前30筆且無搜尋,254筆大多選不到)
+  drop.innerHTML = `<div style="padding:6px;position:sticky;top:0;background:var(--card,#fff);z-index:1;">
+      <input class="inp" id="sdkw_${pi}" placeholder="搜尋品名/品牌…" autocomplete="off" style="margin:0;font-size:13px;" oninput="rdSubDropList(${pi})" onclick="event.stopPropagation()">
+    </div><div id="sdlist_${pi}"></div>`;
+  rdSubDropList(pi);
+  setTimeout(() => document.getElementById('sdkw_'+pi)?.focus(), 60);
+}
+function rdSubDropList(pi) {
+  const el = document.getElementById('sdlist_'+pi); if (!el) return;
+  const kw = (document.getElementById('sdkw_'+pi)?.value || '').trim().toLowerCase();
+  const list = (C.inv || []).filter(i => !kw || i.name.toLowerCase().includes(kw) || (i.brand||'').toLowerCase().includes(kw));
+  el.innerHTML = list.slice(0,30).map(item =>
+    `<div class="sd-item" onclick="rdPickSub(${pi},${JSON.stringify(item).replace(/"/g,'&quot;')})">
+      <div class="sd-name">${fullIngName(item)}</div>
+      <div class="sd-sub">${item.category||''} · ${fm0(item.price)}/${item.vol?nt(item.vol,0)+'ml':'—'}</div>
+    </div>`).join('') || '<div style="padding:10px;font-size:12px;color:var(--ink3);text-align:center;">無符合原料</div>';
+}
+function rdPickSub(pi, item) {
+  rdState.ings[pi].subs.push({ type:'single', name:item.name, brand:item.brand||'', category:item.category||'', abv:item.abv||0, price:item.price||0, unitVol:item.vol||0, unitCost:invUC(item), volume:0, hasLoss:false, isManual:false });
+  document.getElementById('sdrop_'+pi)?.classList.remove('open');
+  rdRender(); rdCalc();
+}
+// Issue 2: 子料占比% 輸入 → 重算該子料的 ml，並更新所有子料的占比顯示
+// 策略：保持其他子料 ml 不變，此子料 ml = ratio/(100-ratio) * otherVol
+function rdSubRatio(ii, pi, ratio) {
+  const subs = rdState.ings[ii]?.subs; if (!subs) return;
+  const otherVol = subs.reduce((t,s,i)=>t+(i!==pi?(s.volume||0):0),0);
+  let newVol = 0;
+  if (ratio <= 0) newVol = 0;
+  else if (ratio >= 100) newVol = otherVol * 99; // 避免 /0
+  else newVol = ratio / (100 - ratio) * otherVol;
+  newVol = Math.round(newVol);
+  if (subs[pi]) subs[pi].volume = newVol;
+  const ve = document.getElementById('rsv_'+ii+'_'+pi);
+  if (ve) ve.value = newVol;
+  rdSubVolUpdate(ii); rdCalc();
+}
+// 當任一子料 ml 改動後，重算並更新所有占比%顯示
+function rdSubVolUpdate(ii) {
+  const subs = rdState.ings[ii]?.subs; if (!subs) return;
+  const tot = subs.reduce((t,s)=>t+(s.volume||0),0);
+  subs.forEach((s,pi)=>{
+    const re = document.getElementById('rsr_'+ii+'_'+pi);
+    if (re) re.value = tot>0 ? ((s.volume||0)/tot*100).toFixed(1) : '0.0';
+  });
+}
+function rdCalc() {
+  let totalCost=0, totalAbv=0, totalPct=0;
+  const cpm = rdCpm;
+  function sCost(ing,vol){ const c=cpm(ing)*vol; return ing.hasLoss ? c/0.8 : c; }
+  rdState.ings.forEach((ing,i) => {
+    const vol=ing.volume||0, ratio=ing.ratio||0;
+    let ingCost = 0;
+    if (ing.type === 'compound') {
+      // 複合原料：子原料用量加總 = 它在整批中的體積，自動納入占比與ABV
+      let sub = 0, subVol = 0;
+      (ing.subs||[]).forEach((s,spi) => {
+        sub += cpm(s)*(s.volume||0); subVol += (s.volume||0); totalAbv += (s.abv||0)*((s.volume||0)/(rdState.tv||1));
+        // Issue 2: 即時更新子料成本顯示
+        const svc = document.getElementById('rsvc_'+i+'_'+spi);
+        if (svc) svc.textContent = fm(cpm(s)*(s.volume||0));
+      });
+      const cRatio = rdState.tv>0 ? subVol/rdState.tv*100 : 0;
+      totalPct += cRatio;
+      const rp = document.getElementById('rcp_'+i); if (rp) rp.textContent = subVol>0 ? '占比 '+cRatio.toFixed(1)+'%（'+nt(subVol,0)+'ml）' : '';
+      ingCost = ing.hasLoss ? sub/0.8 : sub;
+    } else {
+      totalPct += ratio;
+      ingCost = sCost(ing, vol);
+      totalAbv += (ing.abv||0) * (ratio/100);
+    }
+    totalCost += ingCost;
+    const cel = document.getElementById('rc_'+i); if (cel) cel.textContent = ingCost>0 ? fm(ingCost) : '—';
+  });
+  const pw = document.getElementById('rd_pctw');
+  window._rdPctSum = totalPct;
+  if (pw) { const diff=(100-totalPct).toFixed(1); pw.innerHTML=Math.abs(parseFloat(diff))<0.1?'<span class="ok">✓ 100%</span>':`<span class="warn">⚠ ${totalPct.toFixed(1)}%（差${diff}%）</span>`; }
+  const abv = Math.round(totalAbv*10)/10;
+  const tax = calcTax(abv, rdState.tv);
+  const quote = totalCost * 1.15;
+  const spec = BSPEC[rdState.bt] || BSPEC['4L桶'];
+  const btls = Math.floor(rdState.tv / spec.volFill);
+  // 資材：瓶身 + 必選/勾選配件 + 代工費，×1.05
+  const _rbt = rdState.bt || '4L桶';
+  const _raccs = BOTTLE_ACCESSORIES[_rbt] || [];
+  let _perBottle = spec.cont + spec.labor;
+  _raccs.forEach(a => {
+    const _k = _rbt + '_' + a.id;
+    if ((a.alwaysOn || rdState.matSel[_k]) && a.price > 0) _perBottle += a.price;
+  });
+  const matCost = _perBottle * btls * 1.05;
+  const totalAll = totalCost + tax + matCost;
+  const _tot = document.getElementById('rd_mat_tot');
+  if (_tot) _tot.textContent = fm(matCost);
+  const sum = document.getElementById('rd_sum');
+  if (sum) sum.innerHTML = [
+    { lb:'預估酒精濃度', vl:nt(abv,1)+'%' },
+    { lb:'酒稅（批）',   vl:fm(tax) },
+    { lb:'食材成本（批）',vl:fm(totalCost) },
+    { lb:'食材報價（批）',vl:fm(quote), hi:true },
+    { lb:'資材成本（批）',vl:fm(matCost) },
+    { lb:'總成本',       vl:fm(totalAll), hi:true },
+  ].map(({lb,vl,hi}) => `<div class="rs"><div class="lb">${lb}</div><div class="vl${hi?' hi':''}">${vl}</div></div>`).join('');
+  window._rdRes = { abv, tax, totalCost, quote, matCost, totalAll, btls };
+  // 防重入鎖：rdUpdateMat 結尾會回呼 rdCalc，無鎖會無限遞迴爆栈（v9.3 既有bug）
+  if (!window._inMatSync) { window._inMatSync = true; try { rdUpdateMat(); } finally { window._inMatSync = false; } }
+}
+async function rdSave() {
+  if (!rdState.ings.length) { toast('請先加入原料'); return; }
+  const sp = window._rdPctSum;
+  if (sp !== undefined && Math.abs(sp - 100) >= 0.1 && !confirm(`目前占比總和 ${sp.toFixed(1)}%（與 100% 不符），確定仍要儲存？`)) return;
+  const res = await api({ action:'saveRdRecord', creator:curUser.username, client:rdState.client||'', name:rdState.title||'未命名', volume:rdState.tv, bottle:rdState.bt, ingredients:JSON.stringify(rdState.ings), results:JSON.stringify(window._rdRes||{}) });
+  if (res.ok) toast('試算已儲存！'); else toast('儲存失敗:'+res.error);
+}
+async function rdLoadList() {
+  const res = await api({ action:'getRdRecords' });
+  if (!res.ok) { toast('載入失敗'); return; }
+  const records = res.records || [];
+  if (!records.length) { toast('無儲存記錄'); return; }
+  const modal = makeModal(`<div class="modal-title">試算記錄</div>
+    <div style="max-height:300px;overflow-y:auto;">${records.map((r,i)=>`<div class="rd-rec-item" style="display:flex;align-items:center;gap:6px;cursor:default;padding-right:6px;">
+      <div style="flex:1;cursor:pointer;" onclick="rdLoadOne(${i},this.closest('.modal-bg'))">
+        <div style="font-weight:500;font-size:13px;">${r.name||'未命名'}</div>
+        <div class="sub">${r.client||'—'} · ${r.creator} · ${String(r.createdAt).substring(0,10)}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" style="flex-shrink:0;font-size:12px;padding:5px 8px;" title="送出申請" onclick="rdApplyFromRecord(this.closest('.modal-bg')._records[${i}])">📤</button>
+    </div>`).join('')}</div>
+    <div class="fe" style="margin-top:10px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button></div>`);
+  modal._records = records;
+}
+function rdLoadOne(i, modalBg) {
+  const r = modalBg?._records?.[i]; if (!r) return;
+  // Bug fix：ingredients 從 GAS 回傳是 JSON string，需先 parse 才能當 array 使用
+  let ings = r.ingredients || [];
+  if (typeof ings === 'string') { try { ings = JSON.parse(ings); } catch(e) { ings = []; } }
+  rdState = { ings, tv:r.volume||4000, bt:r.bottle||'4L桶', title:r.name||'', client:r.client||'' };
+  if (!rdState.matSel) rdState.matSel = {};
+  modalBg.remove();
+  switchTab('rd');
+  toast('已載入：'+r.name);
+}
+function rdExportCSV() {
+  const r = window._rdRes || {};
+  const lines = ['原料,品牌,ABV%,單價,容量ml,占比%,用量ml,耗損,成本'];
+  rdState.ings.forEach(ing => {
+    if (ing.type === 'compound') {
+      lines.push([ing.name,'複合','','','','','',(ing.hasLoss?'÷0.8':''),''].join(','));
+      (ing.subs||[]).forEach(s => { const c=rdCpm(s)*(s.volume||0); lines.push(['  '+s.name,s.brand,s.abv,s.price,s.unitVol,'',nt(s.volume),'',nt(c,2)].join(',')); });
+    } else {
+      lines.push([ing.name,ing.brand,ing.abv,ing.price,ing.unitVol,nt(ing.ratio),nt(ing.volume),ing.hasLoss?'÷0.8':'',''].join(','));
+    }
+  });
+  lines.push('','===試算結果===','ABV,酒稅,食材成本,食材報價,資材成本,總成本');
+  lines.push([nt(r.abv,1)+'%',nt(r.tax,2),nt(r.totalCost,2),nt(r.quote,2),nt(r.matCost,2),nt(r.totalAll,2)].join(','));
+  const blob = new Blob(['\uFEFF'+lines.join('\n')], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (rdState.title||'試算')+'.csv'; a.click();
+}
+
+// 研發申請送審表單 modal（name/client 可預填；任一為空時強制填寫）
+function showRdApplyModal(defaults, onSubmit) {
+  const clients = clientList.length ? clientList.map(c=>c.name) : ['Feeling Bar','南坡萬公版','Feeling Bar Cafe','南坡萬v.2'];
+  const clientOpts = clients.map(c=>`<option value="${c}"${defaults.client===c?' selected':''}>${c}</option>`).join('');
+  const modal = makeModal(`
+    <div class="modal-title">📤 送出研發申請</div>
+    <div class="fg" style="margin-bottom:10px;"><label class="lb">酒款名稱</label>
+      <input class="inp" id="_rdaName" value="${(defaults.name||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}" placeholder="請填寫酒款名稱" style="margin-top:4px;"></div>
+    <div class="fg"><label class="lb">客戶</label>
+      <select class="inp" id="_rdaClient" style="margin-top:4px;">${clientOpts}</select></div>
+    <div class="fe mt8" style="gap:6px;margin-top:16px;">
+      <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button>
+      <button class="btn btn-primary btn-sm" id="_rdaOk">確認送出</button>
+    </div>`);
+  const btn = document.getElementById('_rdaOk');
+  btn.addEventListener('click', () => lockRun(btn, async () => {
+    const n = document.getElementById('_rdaName')?.value.trim();
+    const c = document.getElementById('_rdaClient')?.value;
+    if (!n) { toast('請填寫酒款名稱'); return; }
+    if (!c) { toast('請選擇客戶'); return; }
+    modal.remove();
+    await onSubmit(n, c);
+  }));
+}
+
+// 試算頁「📤 送出申請」
+async function rdSubmitApply() {
+  if (!rdState.ings.length) { toast('請先加入原料'); return; }
+  showRdApplyModal({ name: rdState.title||'', client: rdState.client||'' }, async (name, client) => {
+    const res = await api({ action:'submitRdApply', creator:curUser.username, client, name,
+      volume:rdState.tv, bottle:rdState.bt, abv:(window._rdRes?.abv||0),
+      ingredients:JSON.stringify(rdState.ings), results:JSON.stringify(window._rdRes||{}) });
+    if (res.ok) toast('研發申請已送出！');
+    else toast('送出失敗：'+(res.error||''));
+  });
+}
+
+// 記錄列表「📤」— 直接用儲存記錄的資料送審
+async function rdApplyFromRecord(r) {
+  if (!r) return;
+  // QC-2：關閉 rdLoadList modal，避免雙 modal 堆疊
+  document.querySelector('.modal-bg')?.remove();
+  let parsedResults = {};
+  try { parsedResults = JSON.parse(r.results||'{}'); } catch(e) {}
+  showRdApplyModal({ name: r.name||'', client: r.client||'' }, async (name, client) => {
+    const res = await api({ action:'submitRdApply', creator:curUser.username, client, name,
+      volume:r.volume||0, bottle:r.bottle||'', abv:parsedResults.abv||0,
+      ingredients:r.ingredients||'[]', results:r.results||'{}' });
+    if (res.ok) toast('研發申請已送出！');
+    else toast('送出失敗：'+(res.error||''));
+  });
+}
+
+// ════════════════════════════════════════════════
+// ⑤ 製作記錄（v10：移除代工費/食材報價欄、改標籤、動態配件）
+// ════════════════════════════════════════════════
+let batchRecs = [];
+let _bf = { client:'', from:'', to:'' };
+async function renderBatchPage(mc) {
+  if (C.batch) { batchRecs = C.batch; renderBatchList(mc); return; }
+  mc.innerHTML = '<div class="card"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">載入中…</div></div>';
+  const res = await api({ action:'getBatchRecords' });
+  if (!res.ok) { mc.innerHTML=`<div class="card"><div class="warn" style="padding:12px;">${res.error}</div></div>`; return; }
+  batchRecs = C.batch = res.records || [];
+  renderBatchList(mc);
+}
+function renderBatchList(mc) {
+  mc = mc || document.getElementById('mainContent');
+  // 篩選（日期區間 + 客戶）：batchRecs 為完整資料,僅顯示層過濾,編輯用原始索引
+  const clients = [...new Set(batchRecs.map(r=>r.client).filter(Boolean))];
+  const cOpts = '<option value="">全部客戶</option>' + clients.map(c=>`<option${_bf.client===c?' selected':''}>${c}</option>`).join('');
+  const filtered = batchRecs.filter(r => {
+    if (_bf.client && r.client !== _bf.client) return false;
+    if (_bf.from && (r.date||'') < _bf.from) return false;
+    if (_bf.to   && (r.date||'') > _bf.to)   return false;
+    return true;
+  });
+  const rows = filtered.map(r => { const oi = batchRecs.indexOf(r); return `<tr onclick="showBatchModal(${oi})">
+    <td><div style="font-weight:500;font-size:13px;">${r.recipe||'—'}</div><div class="sub">${r.client||''} · ${r.date||''}</div></td>
+    <td class="tr"><div style="font-size:12px;">${r.bottle||'—'} × ${r.bottleCount||0}</div><div class="sub">${r.pm||''}</div></td>
+    ${curUser?.role==='admin'?`<td style="width:36px;padding:4px;"><button class="del-btn" title="刪除" style="font-size:14px;" onclick="event.stopPropagation();batchDel('${r.id}')">🗑</button></td>`:'<td></td>'}
+  </tr>`; }).join('');
+  mc.innerHTML = `<div class="card">
+    <div class="sec-hd">
+      <div class="card-title" style="margin:0">製作記錄</div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-ghost btn-sm" onclick="C.batch=null;renderBatchPage()">↻</button>
+        <button class="btn btn-primary btn-sm" onclick="showBatchModal()">＋ 新增</button>
+      </div>
+    </div>
+    <div class="form-row" style="margin-bottom:8px;gap:6px;flex-wrap:wrap;">
+      <div class="fg" style="flex:0 0 130px"><label>客戶</label><select class="inp" style="margin:0;font-size:13px;padding:8px 10px;" onchange="_bf.client=this.value;renderBatchList()">${cOpts}</select></div>
+      <div class="fg" style="flex:0 0 130px"><label>日期起</label><input type="date" class="inp" value="${_bf.from}" style="margin:0;font-size:13px;padding:7px 10px;" onchange="_bf.from=this.value;renderBatchList()"></div>
+      <div class="fg" style="flex:0 0 130px"><label>日期迄</label><input type="date" class="inp" value="${_bf.to}" style="margin:0;font-size:13px;padding:7px 10px;" onchange="_bf.to=this.value;renderBatchList()"></div>
+      ${(_bf.client||_bf.from||_bf.to)?`<div class="fg" style="flex:0 0 auto;display:flex;align-items:flex-end;"><button class="btn btn-ghost btn-sm" onclick="_bf={client:'',from:'',to:''};renderBatchList()">清除</button></div>`:''}
+    </div>
+    <div class="sub" style="margin-bottom:5px;">共 ${filtered.length} 筆${(_bf.client||_bf.from||_bf.to)?`（全部 ${batchRecs.length} 筆）`:''}</div>
+    <div class="tbl-wrap"><table><thead><tr><th>酒款 / 日期</th><th class="tr">瓶型 / PM</th>${curUser?.role==='admin'?'<th></th>':''}</tr></thead>
+    <tbody>${rows||'<tr><td colspan="2" style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">尚無記錄</td></tr>'}</tbody></table></div>
+  </div>`;
+}
+function showBatchModal(editIdx) {
+  const r = editIdx !== undefined ? batchRecs[editIdx] : {};
+  const clients = clientList.length ? clientList.map(c=>c.name) : ['Feeling Bar','南坡萬公版','Feeling Bar Cafe'];
+  const cOpts = clients.map(c=>`<option${r.client===c?' selected':''}>${c}</option>`).join('');
+  const botOpts = Object.keys(BSPEC).map(b=>`<option${r.bottle===b?' selected':''}>${b}</option>`).join('');
+  const initClient = r.client || clients[0] || 'Feeling Bar';
+  const recOpts = recipeList.filter(i=>i.client===initClient).map(i=>`<option${r.recipe===i.recipeName?' selected':''}>${i.recipeName}</option>`).join('');
+  // PM 預設登入帳號
+  const pmDefault = r.pm || curUser?.username || '';
+  const initBt = r.bottle || '江小白';
+  const modal = makeModal(`
+    <div class="modal-title">${editIdx!==undefined?'編輯':'新增'}製作記錄</div>
+    <div class="form-row">
+      <div class="fg"><label>客戶</label><select id="mb_c" onchange="updMbRecipe(this.value)">${cOpts}</select></div>
+      <div class="fg"><label>PM</label><input class="inp" id="mb_pm" value="${pmDefault}" style="margin:0;font-size:13px;padding:9px 10px;"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>酒款</label><select id="mb_rec">${recOpts||`<option>${r.recipe||''}</option>`}</select></div>
+      <div class="fg" style="flex:0 0 110px"><label>訂單編號</label><input class="inp" id="mb_oid" value="${r.orderId||''}" style="margin:0;font-size:13px;padding:9px 10px;"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>製作日期</label><input class="inp" type="date" id="mb_dt" value="${r.date||''}" style="margin:0;font-size:13px;padding:9px 10px;"></div>
+      <div class="fg"><label>交貨日</label><input class="inp" type="date" id="mb_dl" value="${r.deliveryDate||''}" style="margin:0;font-size:13px;padding:9px 10px;"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>製作總體積 ml</label><input class="inp" type="number" id="mb_vol" value="${r.volume||4000}" style="margin:0;font-size:13px;padding:9px 10px;" oninput="calcBatchSuggest()"></div>
+      <div class="fg"><label>瓶型</label><select id="mb_bt" onchange="calcBatchSuggest()">${botOpts}</select></div>
+    </div>
+    <div class="card" style="margin-bottom:10px;padding:10px;">
+      <div style="font-size:12px;font-weight:600;color:var(--ink3);margin-bottom:6px;">包裝配件</div>
+      <div id="mb_acc_area"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>裝瓶數</label><input class="inp" type="number" id="mb_cnt" value="${r.bottleCount||''}" style="margin:0;font-size:13px;padding:9px 10px;"></div>
+    </div>
+    <div class="fg" style="margin-bottom:12px;"><label>備註</label><input class="inp" id="mb_note" value="${r.note||''}" style="margin:0;font-size:13px;padding:9px 10px;"></div>
+    <div class="fe"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="mb_sub">儲存</button></div>`);
+
+  // 初始化配件
+  renderBatchAccessories(initBt, r);
+  document.getElementById('mb_bt').addEventListener('change', function(){ renderBatchAccessories(this.value, {}); calcBatchSuggest(); });
+
+  const mbBtn = modal.querySelector('#mb_sub');
+  mbBtn.onclick = () => lockRun(mbBtn, async () => {
+    const bt = document.getElementById('mb_bt').value;
+    const accs = BOTTLE_ACCESSORIES[bt] || [];
+    const accVals = {};
+    accs.forEach(a => { accVals[a.id] = document.getElementById('mbacc_'+a.id)?.checked ? '✓' : ''; });
+    const p = {
+      creator:curUser.username,
+      client:document.getElementById('mb_c').value,
+      pm:document.getElementById('mb_pm').value,
+      orderId:document.getElementById('mb_oid').value,
+      recipe:document.getElementById('mb_rec').value,
+      date:document.getElementById('mb_dt').value,
+      deliveryDate:document.getElementById('mb_dl').value,
+      volume:document.getElementById('mb_vol').value,
+      bottle:bt,
+      cap:accVals.cap||'',
+      frontLabel:accVals.front||'',
+      backLabel:accVals.back||'',
+      bottleCount:document.getElementById('mb_cnt').value,
+      note:document.getElementById('mb_note').value,
+    };
+    const res = editIdx!==undefined
+      ? await api({ action:'updateBatchRecord', id:batchRecs[editIdx].id, ...p })
+      : await api({ action:'addBatchRecord', ...p });
+    if (res.ok) { toast('已儲存'); modal.remove(); C.batch=null; renderBatchPage(); }
+    else toast('儲存失敗:'+res.error);
+  });
+}
+function renderBatchAccessories(bt, existing) {
+  const accs = BOTTLE_ACCESSORIES[bt] || [];
+  const el = document.getElementById('mb_acc_area'); if (!el) return;
+  el.innerHTML = accs.map(a => {
+    const chk = a.alwaysOn || existing[a.id]==='✓' || (a.id==='cap'&&(existing.cap==='✓'||existing.cap===true)) || (a.id==='front'&&(existing.frontLabel==='✓'||existing.frontLabel===true)) || (a.id==='back'&&(existing.backLabel==='✓'||existing.backLabel===true));
+    return `<div class="ck-row"><input type="checkbox" id="mbacc_${a.id}" ${chk?'checked':''} ${a.alwaysOn?'disabled':''} onchange="calcBatchSuggest()"><label for="mbacc_${a.id}">${a.label}</label></div>`;
+  }).join('');
+}
+function calcBatchSuggest() {
+  const bt = document.getElementById('mb_bt')?.value || '4L桶';
+  const vol = parseFloat(document.getElementById('mb_vol')?.value) || 4000;
+  const spec = BSPEC[bt] || BSPEC['4L桶'];
+  const btls = Math.floor(vol / spec.volFill);
+  const cntEl = document.getElementById('mb_cnt');
+  if (cntEl && !cntEl.value) cntEl.value = btls;
+}
+// Issue 3: 刪除製作記錄（admin only，二次確認防誤刪）
+async function batchDel(id) {
+  if (!confirm('確定要刪除這筆製作記錄？此動作無法復原。')) return;
+  const res = await api({ action:'deleteBatchRecord', id });
+  if (res.ok) { toast('已刪除'); C.batch=null; renderBatchPage(); }
+  else toast('刪除失敗：'+(res.error||''));
+}
+function updMbRecipe(client) {
+  const sel = document.getElementById('mb_rec'); if (!sel) return;
+  sel.innerHTML = recipeList.filter(i=>i.client===client).map(i=>`<option>${i.recipeName}</option>`).join('');
+}
+
+// ════════════════════════════════════════════════
+// 🍸 製作任務（Phase C 訂單系統 — 調酒師端）
+// ════════════════════════════════════════════════
+function daysToShip(s){ if(!s) return null; const d=new Date(s+'T00:00:00'); if(isNaN(d)) return null; const t=new Date(); t.setHours(0,0,0,0); return Math.round((d-t)/86400000); }
+
+async function renderOrderPage(mc){
+  mc.innerHTML = `<div class="card" style="margin-bottom:10px;">
+    <div class="sec-hd"><div class="card-title" style="margin:0">🍸 我的製作任務</div>
+      <button class="btn btn-ghost btn-sm" onclick="renderOrderPage(document.getElementById('mainContent'))">↻</button></div>
+    <div id="orderTaskArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div>
+  </div>`;
+  loadOrderTasks();
+}
+
+async function loadOrderTasks(){
+  const res = await api({ action:'getOrders', view:'bartender' });
+  const area = document.getElementById('orderTaskArea'); if(!area) return;
+  if(!res.ok){ area.innerHTML=`<div class="warn" style="padding:10px;">${res.error||'讀取失敗'}</div>`; return; }
+  const orders = res.orders || [];
+  window._orderTasks = orders;
+  if(!orders.length){ area.innerHTML=`<div style="text-align:center;color:var(--ink3);padding:24px;font-size:13px;">目前沒有待製作的訂單 🎉</div>`; return; }
+  area.innerHTML = orders.map((o,oi)=>{
+    const d = daysToShip(o.deliveryDate);
+    const dbadge = d===null ? '' : d<0 ? `<span class="badge bg-red">逾期${-d}天</span>`
+      : d<=7 ? `<span class="badge bg-red">剩${d}天</span>` : `<span class="badge bg-brown">${d}天後出貨</span>`;
+    const items = (o.items||[]).map((it,ii)=>{
+      const done = it.status==='完成';
+      const bound = !!it.sheet;
+      const click = (done||!bound) ? '' : `onclick="openTaskRecipe(${oi},${ii})"`;
+      return `<div ${click} style="display:flex;align-items:center;gap:8px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;${done?'opacity:.55;':'cursor:pointer;'}background:${done?'var(--bg)':'var(--card)'};">
+        <div style="flex:1;">
+          <div style="font-weight:600;font-size:14px;">${it.product||'（未綁定酒譜）'}</div>
+          <div style="font-size:12px;color:var(--ink3);">${it.volume} × ${it.qty} 瓶${it.bottleType?(' · '+it.bottleType):''}</div>
+        </div>
+        ${done ? '<span class="badge bg-green">已完成</span>'
+          : bound ? '<span class="badge bg-brown">待製作 ›</span>'
+          : '<span class="badge bg-yellow">未綁酒譜</span>'}
+      </div>`;
+    }).join('');
+    return `<div class="card" style="margin-bottom:10px;padding:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div><b>${o.orderNo}</b> <span style="color:var(--ink3);font-size:12px;">${o.client}</span></div>${dbadge}
+      </div>
+      <div style="font-size:11px;color:var(--ink3);margin:4px 0 2px;">出貨日 ${o.deliveryDate||'—'}${o.orderType?(' · '+o.orderType):''}</div>
+      ${items}
+    </div>`;
+  }).join('');
+}
+
+async function openTaskRecipe(oi,ii){
+  const o = window._orderTasks[oi]; if(!o) return;
+  const it = o.items[ii]; if(!it) return;
+  if(!it.sheet){ toast('此酒款尚未綁定酒譜，請洽管理員'); return; }
+  const area = document.getElementById('orderTaskArea');
+  area.innerHTML = `<div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入酒譜中…</div>`;
+  const r = await api({ action:'getRecipeForProduction', client:o.client, sheet:it.sheet, volume:it.volume, qty:it.qty });
+  if(!r.ok){ area.innerHTML=`<div class="warn" style="padding:10px;">${r.error}</div><button class="btn btn-ghost btn-sm" onclick="loadOrderTasks()" style="margin-top:8px;">‹ 返回</button>`; return; }
+  const rows = (r.ingredients||[]).map(ing=>{
+    let sub='';
+    if(ing.isCompound && ing.subMaterials && ing.subMaterials.length){
+      sub = `<tr><td colspan="2" style="padding:2px 8px 4px 18px;border:0;font-size:11px;color:var(--ink3);">↳ 子料比例：${ing.subMaterials.map(s=>s.name+'×'+s.ratio).join(' · ')}${ing.hasLoss?'（有耗損）':''}</td></tr>`;
+    }
+    return `<tr><td>${ing.isCompound?'<span class="badge bg-blue" style="font-size:9px;">複合</span> ':''}${ing.name}</td><td class="tr">${ing.orderVol} ml</td></tr>${sub}`;
+  }).join('');
+  const bt = it.bottleType || Object.keys(BSPEC)[0];
+  area.innerHTML = `
+    <button class="btn btn-ghost btn-sm" onclick="loadOrderTasks()" style="margin-bottom:10px;">‹ 返回任務</button>
+    <div class="card" style="padding:12px;">
+      <div class="card-title">${r.recipeName}</div>
+      <div style="font-size:12px;color:var(--ink3);margin-bottom:8px;">${o.orderNo} · ${o.client} · ${it.volume}×${it.qty}瓶 ｜ 整單放大 ${r.scaleFactor}×（批次 ${r.batchTotalVol}ml → ${r.orderTotalMl}ml）</div>
+      <div class="tbl-wrap"><table><thead><tr><th>食材</th><th class="tr">整單用量</th></tr></thead><tbody>${rows}</tbody></table></div>
+      ${r.processNote?`<div style="font-size:12px;color:var(--ink2);margin-top:8px;background:var(--bg);padding:8px;border-radius:6px;">📝 ${r.processNote}</div>`:''}
+      <div style="font-size:11px;color:var(--ink3);margin-top:6px;">ABV ${r.abv}%</div>
+    </div>
+    <div class="card" style="padding:12px;">
+      <div class="card-title">✓ 完成回報</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <div class="fg"><label>實際裝瓶數</label><input class="inp" type="number" id="ot_cnt" value="${it.qty}" style="margin:0;"></div>
+        <div class="fg"><label>瓶型</label><select id="ot_bt">${Object.keys(BSPEC).map(b=>`<option${b===bt?' selected':''}>${b}</option>`).join('')}</select></div>
+      </div>
+      <div style="display:flex;gap:16px;margin:8px 0;">
+        <label style="display:flex;gap:6px;align-items:center;font-size:13px;"><input type="checkbox" id="ot_front" checked style="width:auto;"> 前標</label>
+        <label style="display:flex;gap:6px;align-items:center;font-size:13px;"><input type="checkbox" id="ot_back" checked style="width:auto;"> 後標</label>
+      </div>
+      <div class="fg" style="margin-bottom:10px;"><label>備註</label><input class="inp" id="ot_note" placeholder="選填" style="margin:0;"></div>
+      <button class="btn btn-success btn-full" onclick="lockRun(this,()=>doCompleteTask(${oi},${ii}))">標記完成並建立製作記錄</button>
+    </div>`;
+}
+
+async function doCompleteTask(oi,ii){
+  const o = window._orderTasks[oi]; const it = o.items[ii];
+  const count = parseInt(document.getElementById('ot_cnt').value,10) || it.qty;
+  const bt = document.getElementById('ot_bt').value;
+  const front = document.getElementById('ot_front').checked;
+  const back = document.getElementById('ot_back').checked;
+  const note = document.getElementById('ot_note').value;
+  const spec = BSPEC[bt] || {};
+  const labor = count * ((spec.labor||0) + (front?1.5:0) + (back?1.5:0)); // 代工費=每瓶代工+選配標籤
+  const res = await api({ action:'completeOrderItem', orderNo:o.orderNo, itemIndex:ii,
+    bottleCount:count, bottle:bt, cap:'✓', frontLabel:front?'✓':'', backLabel:back?'✓':'',
+    laborCost:labor, pm:(curUser&&curUser.username)||'', creator:(curUser&&curUser.username)||'', note });
+  if(res.ok){ toast(`已完成：${it.product}（訂單${res.orderStatus}）`); loadOrderTasks(); }
+  else toast('回報失敗：'+(res.error||''));
+}
+
+// ════════════════════════════════════════════════
+// ⑤-b 成品庫存（南坡萬v2）
+// ════════════════════════════════════════════════
+const STOCK_CLIENT = '南坡萬v.2';
+let stockOverview = [];   // [{item,inQty,outQty,stock}]
+let stockFilter = '';     // 異動歷史酒款篩選
+
+// 本地日期 YYYY-MM-DD（避免 toISOString 的 UTC 位移）
+function _localDate() {
+  const d = new Date();
+  return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+}
+
+function renderStockPage(mc) {
+  mc.innerHTML = `
+  <div class="card" style="margin-bottom:10px;">
+    <div class="sec-hd"><div class="card-title" style="margin:0">🗄️ ${STOCK_CLIENT} 成品庫存</div>
+      <button class="btn btn-ghost btn-sm" onclick="renderStockPage(document.getElementById('mainContent'))">↻</button></div>
+    <div id="stockWaterArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:10px;">
+    <div class="card-title">➕ 手動入庫</div>
+    <div class="form-row">
+      <div class="fg" style="flex:2 1 160px"><label>酒款</label><select class="inp" id="siItem" style="margin:0;"></select></div>
+      <div class="fg" style="flex:1 1 90px"><label>數量(瓶)</label><input class="inp" id="siQty" type="number" min="1" step="1" style="margin:0;"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg" style="flex:1 1 120px"><label>Lot 編號</label><input class="inp" id="siLot" placeholder="選填" style="margin:0;"></div>
+      <div class="fg" style="flex:1 1 120px"><label>日期</label><input class="inp" id="siDate" type="date" style="margin:0;"></div>
+    </div>
+    <div class="fe mt8"><button class="btn btn-primary btn-sm" id="siBtn">入庫</button></div>
+  </div>
+
+  <div class="card" style="margin-bottom:10px;">
+    <div class="card-title">➖ 手動出庫</div>
+    <div class="form-row">
+      <div class="fg" style="flex:2 1 160px"><label>酒款</label><select class="inp" id="soItem" style="margin:0;"></select></div>
+      <div class="fg" style="flex:1 1 90px"><label>數量(瓶)</label><input class="inp" id="soQty" type="number" min="1" step="1" style="margin:0;"></div>
+      <div class="fg" style="flex:1 1 120px"><label>日期</label><input class="inp" id="soDate" type="date" style="margin:0;"></div>
+    </div>
+    <div class="fe mt8"><button class="btn btn-danger btn-sm" id="soBtn">出庫</button></div>
+  </div>
+
+  <div class="card">
+    <div class="sec-hd"><div class="card-title" style="margin:0">📜 異動歷史</div>
+      <select class="inp" id="slFilter" style="margin:0;width:auto;max-width:160px;padding:6px 28px 6px 10px;font-size:13px;" onchange="stockFilter=this.value;loadStockLedger();"></select></div>
+    <div id="stockLedgerArea"><div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">載入中…</div></div>
+  </div>`;
+
+  const d = _localDate();
+  document.getElementById('siDate').value = d;
+  document.getElementById('soDate').value = d;
+  document.getElementById('siBtn').onclick = () => lockRun(document.getElementById('siBtn'), doStockIn);
+  document.getElementById('soBtn').onclick = () => lockRun(document.getElementById('soBtn'), doStockOut);
+  loadStockOverview();
+  loadStockLedger();
+}
+
+async function loadStockOverview() {
+  const res = await api({ action: 'getStockOverview', client: STOCK_CLIENT });
+  const area = document.getElementById('stockWaterArea');
+  if (!area) return;
+  if (!res.ok) { area.innerHTML = `<div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${res.error || ''}</div>`; return; }
+  stockOverview = res.list || [];
+  if (!stockOverview.length) {
+    area.innerHTML = '<div style="text-align:center;color:var(--ink3);padding:16px;font-size:13px;">尚無酒款</div>';
+  } else {
+    area.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>酒款</th><th class="tr">目前庫存(瓶)</th></tr></thead><tbody>'
+      + stockOverview.map(x =>
+          `<tr><td>${x.item}<div style="font-size:11px;color:var(--ink3);">累計入 ${x.inQty} / 出 ${x.outQty}</div></td>`
+          + `<td class="tr" style="font-weight:600;font-size:16px;${x.stock <= 0 ? 'color:var(--ink3);' : ''}">${x.stock}</td></tr>`
+        ).join('')
+      + '</tbody></table></div>';
+  }
+  // 下拉：入/出庫 選單 + 歷史篩選（全款清單，含 0 庫存款）
+  const opts = stockOverview.map(x => `<option value="${x.item}">${x.item}</option>`).join('');
+  const si = document.getElementById('siItem'); if (si) si.innerHTML = opts;
+  const so = document.getElementById('soItem'); if (so) so.innerHTML = opts;
+  const fl = document.getElementById('slFilter');
+  if (fl) { fl.innerHTML = '<option value="">全部酒款</option>' + opts; fl.value = stockFilter; }
+}
+
+async function loadStockLedger() {
+  const area = document.getElementById('stockLedgerArea');
+  if (!area) return;
+  const params = { action: 'getStockLedger', client: STOCK_CLIENT };
+  if (stockFilter) params.item = stockFilter;
+  const res = await api(params);
+  if (!res.ok) { area.innerHTML = `<div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${res.error || ''}</div>`; return; }
+  const rows = res.list || [];
+  if (!rows.length) { area.innerHTML = '<div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">尚無異動</div>'; return; }
+  area.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>日期</th><th>類型</th><th class="tr">數量</th><th>Lot/訂單</th><th>操作人</th></tr></thead><tbody>'
+    + rows.map(r => {
+        const tag = r.type === '入庫'
+          ? '<span style="color:var(--gold-dk);">入庫</span>'
+          : '<span style="color:var(--red);">出庫</span>';
+        const ref = r.lot || r.orderNo || '';
+        return `<tr><td style="font-size:12px;">${r.date}</td><td>${tag}</td><td class="tr">${r.qty}</td><td style="font-size:12px;">${ref}</td><td style="font-size:12px;">${r.operator}</td></tr>`;
+      }).join('')
+    + '</tbody></table></div>';
+}
+
+async function doStockIn() {
+  const item = document.getElementById('siItem').value;
+  const qty = parseInt(document.getElementById('siQty').value, 10);
+  if (!item) { toast('請選酒款'); return; }
+  if (!(qty > 0)) { toast('數量需為正整數'); return; }
+  const res = await api({
+    action: 'stockIn', client: STOCK_CLIENT, item, qty,
+    lot: document.getElementById('siLot').value || '',
+    date: document.getElementById('siDate').value || '',
+    operator: (curUser && curUser.username) || ''
+  });
+  if (res.ok) {
+    toast(`已入庫，${item} 現有 ${res.stock} 瓶`);
+    document.getElementById('siQty').value = ''; document.getElementById('siLot').value = '';
+    loadStockOverview(); loadStockLedger();
+  } else toast('入庫失敗：' + (res.error || ''));
+}
+
+async function doStockOut() {
+  const item = document.getElementById('soItem').value;
+  const qty = parseInt(document.getElementById('soQty').value, 10);
+  if (!item) { toast('請選酒款'); return; }
+  if (!(qty > 0)) { toast('數量需為正整數'); return; }
+  const res = await api({
+    action: 'stockOut', client: STOCK_CLIENT, item, qty,
+    date: document.getElementById('soDate').value || '',
+    operator: (curUser && curUser.username) || ''
+  });
+  if (res.ok) {
+    toast(`已出庫，${item} 剩 ${res.stock} 瓶`);
+    document.getElementById('soQty').value = '';
+    loadStockOverview(); loadStockLedger();
+  } else toast(res.error || '出庫失敗'); // 出庫不足時後端回明確訊息（含目前庫存）
+}
+
+// ════════════════════════════════════════════════
+// ⑥ 審核
+// ════════════════════════════════════════════════
+async function renderApplyPage(mc) {
+  mc.innerHTML = `
+  <div class="card" style="margin-bottom:10px;">
+    <div class="sec-hd"><div class="card-title" style="margin:0">待審核申請</div><button class="btn btn-ghost btn-sm" onclick="renderApplyPage(document.getElementById('mainContent'))">↻</button></div>
+    <div id="applyArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div>
+  </div>
+  <div class="card" style="margin-bottom:10px;"><div class="card-title">審核歷史</div><div id="histArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div></div>
+  <div class="card" style="margin-bottom:10px;">
+    <div class="sec-hd"><div class="card-title" style="margin:0">🔬 研發申請 — 待審核</div></div>
+    <div id="rdApplyArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div>
+  </div>
+  <div class="card"><div class="card-title">🔬 研發申請 — 歷史</div><div id="rdHistArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div></div>`;
+  loadApplies(); loadHistory(); loadRdApplies(); loadRdHistory();
+}
+async function loadApplies() {
+  const res = await api({ action:'getApplies' }); const area = document.getElementById('applyArea'); if (!area) return;
+  if (!res.ok) { area.innerHTML=`<div class="warn" style="padding:10px;">${res.error}</div>`; return; }
+  const list = res.list || [];
+  if (!list.length) { area.innerHTML='<div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">目前無待審核</div>'; return; }
+  area.innerHTML = list.map(a => `<div class="card" style="margin-bottom:8px;border-color:var(--yellow);">
+    <div class="fb"><div><span style="font-weight:600;font-size:13px;">${a.recipe}</span><span class="badge bg-brown" style="margin-left:5px;">${a.client}</span></div>
+    <div class="sub">${a.creator} · ${String(a.createdAt).substring(0,10)}</div></div>
+    <div style="margin-top:7px;">${(a.items||[]).map(it=>{ const ov=it.oldVal||0, nv=it.newVal||0, big=Math.abs(nv-ov)>=10; return `<div style="font-size:12px;margin-bottom:3px;"><span style="font-weight:500;">${it.name}</span>：${nt(ov,1)}% → <span style="color:${big?'var(--red)':'var(--gold-dk)'};font-weight:600;">${nt(nv,1)}%</span>${big?` <span class="badge bg-red">差${nt(nv-ov,1)}%</span>`:''}${it.reason?`<span class="sub"> （${it.reason}）</span>`:''}</div>`; }).join('')}</div>
+    ${curUser?.role==='admin'?`<div class="fe mt8" style="gap:6px;"><button class="btn btn-success btn-sm" onclick="lockRun(this,()=>doReview('${a.id}',true))">✓ 核准</button><button class="btn btn-danger btn-sm" onclick="lockRun(this,()=>doReview('${a.id}',false))">✕ 拒絕</button></div>`:''}
+  </div>`).join('');
+}
+async function loadHistory() {
+  const res = await api({ action:'getHistory' }); const area = document.getElementById('histArea'); if (!area) return;
+  if (!res.ok) { area.innerHTML=`<div class="warn" style="padding:10px;">${res.error}</div>`; return; }
+  const list = res.list || [];
+  if (!list.length) { area.innerHTML='<div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">尚無歷史</div>'; return; }
+  area.innerHTML = list.map(r => {
+    // 申請記錄 G 欄 items（JSON）含每筆原料 name/oldVal/newVal/reason，歷史頁需展開顯示改動原因
+    let items = [];
+    try { items = JSON.parse(r.items || '[]'); } catch(e) {}
+    const itemsHtml = items.length ? `<div style="margin-top:6px;">${items.map(it=>{
+      const ov=it.oldVal||0, nv=it.newVal||0, big=Math.abs(nv-ov)>=10;
+      return `<div style="font-size:12px;margin-bottom:3px;"><span style="font-weight:500;">${it.name}</span>：${nt(ov,1)}% → <span style="color:${big?'var(--red)':'var(--gold-dk)'};font-weight:600;">${nt(nv,1)}%</span>${big?` <span class="badge bg-red">差${nt(nv-ov,1)}%</span>`:''}${it.reason?`<span class="sub"> （${it.reason}）</span>`:'<span class="sub" style="color:var(--red);"> （未填原因）</span>'}</div>`;
+    }).join('')}</div>` : '';
+    const approved = String(r.status).indexOf('核准') >= 0; // 值為「已核准」/「已拒絕」
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
+    <div class="fb"><div><span style="font-weight:500;font-size:13px;">${r.recipe}</span><span class="badge ${approved?'bg-green':'bg-red'}" style="margin-left:5px;">${r.status}</span><span class="badge bg-brown" style="margin-left:3px;">${r.client}</span></div>
+    <div class="sub">${r.reviewer} · ${String(r.createdAt).substring(0,10)}</div></div>
+    ${itemsHtml}
+    ${r.note?`<div class="sub" style="margin-top:3px;">${r.note}</div>`:''}
+  </div>`;
+  }).join('');
+}
+async function doReview(id, approved) {
+  if (!confirm(`確認${approved?'核准並寫入酒譜':'拒絕'}？`)) return;
+  const res = await api({ action:'reviewApply', id, approve:String(approved), reviewer:curUser.username });
+  if (res.ok) { toast(approved?'已核准':'已拒絕'); renderApplyPage(document.getElementById('mainContent')); }
+  else toast('操作失敗:'+res.error);
+}
+
+// ── 研發申請審核 ─────────────────────────────────────────────
+async function loadRdApplies() {
+  const res = await api({ action:'getRdApplies' });
+  const area = document.getElementById('rdApplyArea'); if (!area) return;
+  if (!res.ok) { area.innerHTML=`<div class="warn" style="padding:10px;">${res.error}</div>`; return; }
+  const list = res.list || [];
+  if (!list.length) { area.innerHTML='<div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">目前無待審核</div>'; return; }
+  area.innerHTML = list.map(a => {
+    let ings=[]; try { ings=JSON.parse(a.ingredients||'[]'); } catch(e){}
+    let rr={}; try { rr=JSON.parse(a.results||'{}'); } catch(e){}
+    const ingPreview = ings.slice(0,4).map(g=>`<span style="margin-right:5px;">• ${g.name||''}${(g.type==='compound'||g.isCompound)?'<span class="cpd-badge" style="vertical-align:middle;margin-left:2px;">複合</span>':''}</span>`).join('') + (ings.length>4?`<span class="sub">…共${ings.length}項</span>`:'');
+    return `<div class="card" style="margin-bottom:8px;border-color:var(--yellow);">
+      <div class="fb">
+        <div><span style="font-weight:600;font-size:13px;">${a.name}</span><span class="badge bg-brown" style="margin-left:5px;">${a.client}</span></div>
+        <div class="sub">${a.creator} · ${String(a.createdAt).substring(0,10)}</div>
+      </div>
+      <div style="margin-top:6px;font-size:12px;color:var(--ink2);">
+        ABV ${nt(rr.abv||0,1)}% · 食材成本 ${fm(rr.totalCost||0)} · 總成本 ${fm(rr.totalAll||0)}
+      </div>
+      <div style="margin-top:5px;font-size:12px;line-height:1.8;">${ingPreview}</div>
+      ${curUser?.role==='admin'?`<div class="fe mt8" style="gap:6px;">
+        <button class="btn btn-success btn-sm" onclick="lockRun(this,()=>doRdReview('${a.id}',true))">✓ 核准</button>
+        <button class="btn btn-danger btn-sm" onclick="lockRun(this,()=>doRdReview('${a.id}',false))">✕ 拒絕</button>
+      </div>`:''}
+    </div>`;
+  }).join('');
+}
+
+async function loadRdHistory() {
+  const res = await api({ action:'getRdHistory' });
+  const area = document.getElementById('rdHistArea'); if (!area) return;
+  if (!res.ok) { area.innerHTML=`<div class="warn" style="padding:10px;">${res.error}</div>`; return; }
+  const list = res.list || [];
+  if (!list.length) { area.innerHTML='<div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">尚無歷史</div>'; return; }
+  area.innerHTML = list.map(r => `<div style="padding:8px 0;border-bottom:1px solid var(--border);">
+    <div class="fb">
+      <div>
+        <span style="font-weight:500;font-size:13px;">${r.name}</span>
+        <span class="badge ${r.status==='已核准'?'bg-green':'bg-red'}" style="margin-left:5px;">${r.status}</span>
+        <span class="badge bg-brown" style="margin-left:3px;">${r.client}</span>
+      </div>
+      <div class="sub">${r.reviewer||''} · ${String(r.reviewedAt||'').substring(0,10)}</div>
+    </div>
+    ${r.newSheet?`<div class="sub" style="margin-top:3px;">📄 已建分頁：${r.newSheet}</div>`:r.status==='已核准'?`<div class="sub" style="margin-top:3px;color:var(--ink3);">分頁待建（Batch 3）</div>`:''}
+  </div>`).join('');
+}
+
+async function doRdReview(id, approved) {
+  // QC-4：更新確認文字（Batch 3 已上線，核准後自動建立分頁）
+  if (!confirm(`確認${approved?'核准此研發申請？核准後將自動建立新酒譜分頁。':'拒絕此研發申請？'}？`)) return;
+  const res = await api({ action:'reviewRdApply', id, approve:String(approved), reviewer:curUser.username });
+  if (res.ok) {
+    // QC-1：顯示 warn（createRecipeSheet 失敗時 GAS 回傳 ok:true + warn）
+    if (res.warn) toast('⚠️ 已核准，但建立分頁失敗：' + res.warn);
+    else toast(approved ? '已核准，新分頁已建立' : '已拒絕');
+    renderApplyPage(document.getElementById('mainContent'));
+    // QC-5：核准後重新整理酒譜清單（GAS cache 已清，前端需同步更新）
+    if (approved && !res.warn) doRefresh();
+  } else toast('操作失敗：'+res.error);
+}
+
+// ── 全域事件 ──
+document.addEventListener('click', e => {
+  if (!e.target.closest('.sbox') && !e.target.closest('.sdrop'))
+    document.querySelectorAll('.sdrop').forEach(d => d.classList.remove('open'));
+});
+document.getElementById('loginPass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+document.getElementById('loginUser').addEventListener('change', () => setTimeout(()=>document.getElementById('loginPass').focus(), 50));
+</script>
+</body>
+</html>
+
+
+
