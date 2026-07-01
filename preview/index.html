@@ -300,14 +300,14 @@ tbody tr:hover td{background:#faf3e8;}
 // ============================================================
 
 // ── API ──────────────────────────────────────────────────────
-// ⚠️ 預覽環境專用：此值須指向「測試部署 /exec」（其 Script Property SHEET_ID=沙盒副本）。
-// 第二個 Web App 部署建好後，把下面字串換成測試 /exec 網址；在那之前預覽站無法連後端。
-const API='__TEST_EXEC_URL__';
-if (API === '__TEST_EXEC_URL__') {
+// 預覽環境：後端指向「測試部署 /exec」（沙盒資料），與正式站完全隔離。
+// promote.sh 升正式時會把此行 sed 換回正式 /exec，下方橫幅條件即自動失效（不出現在正式站）。
+const API='https://script.google.com/macros/s/AKfycbxfztod7KrsKBHW_5XZLrAhFEdw3qoNmaId6-TbsW8TM9w3mz3MlaZhq7t6I7ytkfOctw/exec';
+if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5N4uT9RBaqAHiqWBPseCrSvKV3QnC9NK9S2MGnHQvJg/exec') {
   window.addEventListener('DOMContentLoaded', function () {
     var b = document.createElement('div');
-    b.textContent = '⚠ 預覽環境：測試後端尚未設定（待第二部署），功能暫無法連線';
-    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:var(--red,#c0392b);color:#fff;font-size:12px;text-align:center;padding:5px;';
+    b.textContent = '🧪 預覽／測試環境（沙盒資料，非正式站）';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#2d7d46;color:#fff;font-size:12px;text-align:center;padding:5px;';
     document.body.appendChild(b);
   });
 }

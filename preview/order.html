@@ -310,8 +310,8 @@
 ===================================================================== */
 
 /* ===== v1.2：串接後端 GAS（取代 localStorage Demo）===== */
-/* ⚠️ 預覽環境：應指向測試部署 /exec（沙盒），第二部署建好後替換 __TEST_EXEC_URL__ */
-const API='__TEST_EXEC_URL__';
+/* 預覽環境：後端指向測試部署 /exec（沙盒），與正式站隔離；promote.sh 升正式時 sed 換回正式 /exec */
+const API='https://script.google.com/macros/s/AKfycbxfztod7KrsKBHW_5XZLrAhFEdw3qoNmaId6-TbsW8TM9w3mz3MlaZhq7t6I7ytkfOctw/exec';
 async function api(params){
   const url=API+'?'+Object.entries(params).map(([k,v])=>k+'='+encodeURIComponent(v)).join('&');
   try{ const r=await fetch(url); return await r.json(); }
