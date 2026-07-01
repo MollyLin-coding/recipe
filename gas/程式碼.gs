@@ -90,6 +90,7 @@ function doGet(e) {
   let result;
   try {
     switch(action) {
+      case 'getEnvInfo':     result = getEnvInfo(); break;                        // 環境探針(確認打到哪份主表)
       case 'login':          result = login(p); break;
       case 'changePassword': result = changePassword(p); break;
       case 'getRecipeList':  result = getRecipeList(); break;
@@ -1430,4 +1431,14 @@ function shipOrder(p) {
     });
     return { ok: true, orderNo: orderNo, client: client, shippedItems: shipped };
   } finally { lock.releaseLock(); }
+}
+
+// ── 環境探針：確認此部署解析到的主表是正式還是沙盒（不回完整 id，只回尾碼）──
+function getEnvInfo() {
+  var prod = '1rXmA0ACRwy4jo3XEkXHZzNjJw8uZzX1jzVle-6k0V40';
+  var id = MAIN_SHEET_ID;
+  var hasProp = false;
+  try { hasProp = !!PropertiesService.getScriptProperties().getProperty('SHEET_ID'); } catch (e) {}
+  return { ok: true, env: (id === prod ? 'PROD' : 'NON-PROD'),
+    sheetIdTail: String(id).slice(-6), hasProp: hasProp };
 }
