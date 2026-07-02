@@ -254,7 +254,7 @@ tbody tr:hover td{background:#faf3e8;}
       <div class="sub">酒譜管理系統</div>
     </div>
     <div class="login-card">
-      <select class="inp" id="loginUser"><option value="">選擇帳號</option><option>Kevin</option><option>Molly</option><option>阿軒</option><option>小捲</option><option>Vic</option></select>
+      <select class="inp" id="loginUser"><option value="">選擇帳號</option><option>Kevin</option><option>Molly</option><option>阿軒</option><option>小捲</option><option>Vic</option><option>小李</option></select>
       <input class="inp" id="loginPass" type="password" placeholder="密碼" inputmode="numeric">
       <button class="btn btn-primary btn-full" id="loginBtn" onclick="doLogin()">登入</button>
       <div id="loginErr"></div>
@@ -465,7 +465,20 @@ async function doLogin() {
   app.style.display = 'flex';
   // admin 才顯示審核
   document.querySelectorAll('.admin-only').forEach(el => el.style.display = res.role === 'admin' ? '' : 'none');
-  switchTab('recipe');
+  // 角色分頁分流：倉管只看「製作記錄」+「成品庫存」；其餘角色維持原本可見範圍
+  const ROLE_TABS = { '倉管': ['batch', 'stock'] };
+  const allowed = ROLE_TABS[res.role];
+  if (allowed) {
+    document.querySelectorAll('#navbar .nav-tab').forEach(el =>
+      el.style.display = allowed.includes(el.dataset.tab) ? '' : 'none');
+    switchTab(allowed.includes(curTab) ? curTab : allowed[0]);
+  } else {
+    // 一般/admin：還原非 admin-only 分頁（防同頁切換帳號後殘留隱藏）
+    document.querySelectorAll('#navbar .nav-tab').forEach(el => {
+      if (!el.classList.contains('admin-only')) el.style.display = '';
+    });
+    switchTab('recipe');
+  }
 }
 function doLogout() {
   curUser = null; rdata = null; curSheet = '';
