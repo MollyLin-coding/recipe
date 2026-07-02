@@ -33,7 +33,15 @@ const CLIENTS = {
     profitSheet: 'NO1.V2_報價', profitFmt: 'two-bottle',
   },
 };
-const MAIN_SHEET_ID = '1rXmA0ACRwy4jo3XEkXHZzNjJw8uZzX1jzVle-6k0V40';
+// 主表 ID：優先讀 Script Property 'SHEET_ID'（測試部署指向沙盒副本用），
+// 找不到時 fallback 正式硬編碼 ID（向後相容：正式部署不設此屬性，行為與改版前完全一致）。
+const MAIN_SHEET_ID = (function () {
+  try {
+    var pid = PropertiesService.getScriptProperties().getProperty('SHEET_ID');
+    if (pid) return pid;
+  } catch (e) {}
+  return '1rXmA0ACRwy4jo3XEkXHZzNjJw8uZzX1jzVle-6k0V40';
+})();
 
 // 毛利欄位映射集中（實機確認值，v9.6 第十六節 / v9.9 第八節）
 // 4L：B欄=售價、D欄=總成本；two-bottle：D欄=含稅單價、E欄=成本、兩列式
@@ -82,6 +90,7 @@ function doGet(e) {
   let result;
   try {
     switch(action) {
+      case 'getEnvInfo':     result = getEnvInfo(); break;                        // 環境探針(確認打到哪份主表)
       case 'login':          result = login(p); break;
       case 'changePassword': result = changePassword(p); break;
       case 'getRecipeList':  result = getRecipeList(); break;
@@ -91,6 +100,11 @@ function doGet(e) {
       case 'createOrder':            result = createOrder(p); break;             // Phase C 訂單系統
       case 'getOrders':              result = getOrders(p); break;               // Phase C 訂單系統
       case 'completeOrderItem':      result = completeOrderItem(p); break;       // Phase C 訂單系統
+      case 'getStockOverview':       result = getStockOverview(p); break;        // 成品庫存
+      case 'stockIn':                result = stockIn(p); break;                 // 成品庫存
+      case 'stockOut':               result = stockOut(p); break;                // 成品庫存
+      case 'getStockLedger':         result = getStockLedger(p); break;          // 成品庫存
+      case 'shipOrder':              result = shipOrder(p); break;               // 成品庫存(出貨連動 hook)
       case 'saveProcessNote':result = saveProcessNote(p); break;
       case 'getInventory':   result = getInventory(); break;
       case 'addBatchRecord': result = addBatchRecord(p); break;
@@ -1217,3 +1231,214 @@ function runSelfTest() {
 }
 
 
+
+// ============================================================
+// 成品庫存模組（南坡萬v2 起步；ledger 不可變流水帳）
+//   分頁：成品庫存異動（於 MAIN_SHEET_ID）
+//   欄位 A異動ID B日期 C客戶 D酒款 E異動類型 F數量 G Lot編號 H關聯訂單編號 I操作人 J建立時間 K備註
+//   庫存 = Σ入庫 − Σ出庫（依 客戶＋酒款）。日期一律 Utilities.formatDate 台北時區。
+// ============================================================
+const STOCK_SHEET_NAME = '成品庫存異動';
+const STOCK_HEADERS = ['異動ID', '日期', '客戶', '酒款', '異動類型', '數量',
+  'Lot編號', '關聯訂單編號', '操作人', '建立時間', '備註'];
+// 欄索引（0-based）
+const SK = { id: 0, date: 1, client: 2, item: 3, type: 4, qty: 5,
+  lot: 6, orderNo: 7, operator: 8, createdAt: 9, note: 10 };
+
+function _stockNow_() {
+  return Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy/MM/dd HH:mm:ss');
+}
+function _stockToday_() {
+  return Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy/MM/dd');
+}
+function _stockGenId_() {
+  return 'M' + (new Date()).getTime();
+}
+
+// 取得（或建立）成品庫存異動分頁，並保證表頭存在
+function _stockSheet_() {
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  let ws = ss.getSheetByName(STOCK_SHEET_NAME);
+  if (!ws) {
+    ws = ss.insertSheet(STOCK_SHEET_NAME);
+    ws.getRange(1, 1, 1, STOCK_HEADERS.length).setValues([STOCK_HEADERS]);
+    ws.setFrozenRows(1);
+  } else if (ws.getLastRow() === 0) {
+    ws.getRange(1, 1, 1, STOCK_HEADERS.length).setValues([STOCK_HEADERS]);
+    ws.setFrozenRows(1);
+  }
+  return ws;
+}
+
+// 讀 ledger 資料列（去表頭）
+function _stockRows_() {
+  const ws = _stockSheet_();
+  if (ws.getLastRow() < 2) return [];
+  return ws.getRange(2, 1, ws.getLastRow() - 1, STOCK_HEADERS.length).getValues();
+}
+
+// 某客戶＋酒款目前庫存 = Σ入庫 − Σ出庫
+function _stockOf_(rows, client, item) {
+  let n = 0;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (String(r[SK.client]) !== String(client)) continue;
+    if (String(r[SK.item]) !== String(item)) continue;
+    const q = Number(r[SK.qty]) || 0;
+    if (String(r[SK.type]) === '入庫') n += q;
+    else if (String(r[SK.type]) === '出庫') n -= q;
+  }
+  return n;
+}
+
+// 取某客戶全款酒款名稱（不硬編碼；來源 getClientRecipeList）
+function _stockClientItems_(client) {
+  try {
+    const res = getClientRecipeList({ client: client });
+    if (res && res.ok) {
+      return (res.list || []).map(function (r) { return r.recipeName; })
+        .filter(function (n) { return !!n; });
+    }
+  } catch (e) {}
+  return [];
+}
+
+// ── 庫存總覽：全款 + ledger 出現過的酒款，各自 入/出/庫存 ──
+function getStockOverview(p) {
+  const client = p && p.client;
+  if (!client) return { ok: false, error: '缺少 client' };
+  try { getClientCfg(client); } catch (e) { return { ok: false, error: e.message }; }
+  const rows = _stockRows_();
+  // 酒款宇集 = 全款清單 ∪ ledger 中該客戶出現過的酒款
+  const names = {};
+  _stockClientItems_(client).forEach(function (n) { names[n] = true; });
+  rows.forEach(function (r) {
+    if (String(r[SK.client]) === String(client) && r[SK.item]) names[String(r[SK.item])] = true;
+  });
+  const list = Object.keys(names).map(function (item) {
+    let inQty = 0, outQty = 0;
+    rows.forEach(function (r) {
+      if (String(r[SK.client]) !== String(client) || String(r[SK.item]) !== item) return;
+      const q = Number(r[SK.qty]) || 0;
+      if (String(r[SK.type]) === '入庫') inQty += q;
+      else if (String(r[SK.type]) === '出庫') outQty += q;
+    });
+    return { item: item, inQty: inQty, outQty: outQty, stock: inQty - outQty };
+  });
+  list.sort(function (a, b) { return a.item.localeCompare(b.item); });
+  return { ok: true, client: client, list: list };
+}
+
+// ── 手動入庫 ──
+function stockIn(p) {
+  const client = p && p.client, item = p && p.item;
+  const qty = Math.floor(Number(p && p.qty));
+  if (!client || !item) return { ok: false, error: '缺少客戶或酒款' };
+  if (!(qty > 0)) return { ok: false, error: '數量需為正整數' };
+  try { getClientCfg(client); } catch (e) { return { ok: false, error: e.message }; }
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const ws = _stockSheet_();
+    ws.appendRow([_stockGenId_(), p.date || _stockToday_(), client, item, '入庫', qty,
+      p.lot || '', '', p.operator || '', _stockNow_(), p.note || '']);
+    const stock = _stockOf_(_stockRows_(), client, item);
+    return { ok: true, item: item, stock: stock };
+  } finally { lock.releaseLock(); }
+}
+
+// ── 手動出庫（不足擋下，回目前庫存）──
+function stockOut(p) {
+  const client = p && p.client, item = p && p.item;
+  const qty = Math.floor(Number(p && p.qty));
+  if (!client || !item) return { ok: false, error: '缺少客戶或酒款' };
+  if (!(qty > 0)) return { ok: false, error: '數量需為正整數' };
+  try { getClientCfg(client); } catch (e) { return { ok: false, error: e.message }; }
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const cur = _stockOf_(_stockRows_(), client, item);
+    if (qty > cur) {
+      return { ok: false, error: '庫存不足：「' + item + '」目前 ' + cur + ' 瓶，無法出庫 ' + qty + ' 瓶', stock: cur };
+    }
+    const ws = _stockSheet_();
+    ws.appendRow([_stockGenId_(), p.date || _stockToday_(), client, item, '出庫', qty,
+      '', p.orderNo || '', p.operator || '', _stockNow_(), p.note || '']);
+    return { ok: true, item: item, stock: cur - qty };
+  } finally { lock.releaseLock(); }
+}
+
+// ── 異動歷史（新到舊，可依酒款篩選）──
+function getStockLedger(p) {
+  const client = p && p.client;
+  if (!client) return { ok: false, error: '缺少 client' };
+  const item = p && p.item;
+  const rows = _stockRows_();
+  const out = [];
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const r = rows[i];
+    if (String(r[SK.client]) !== String(client)) continue;
+    if (item && String(r[SK.item]) !== String(item)) continue;
+    out.push({
+      id: String(r[SK.id]), date: String(r[SK.date]), client: String(r[SK.client]),
+      item: String(r[SK.item]), type: String(r[SK.type]), qty: Number(r[SK.qty]) || 0,
+      lot: String(r[SK.lot] || ''), orderNo: String(r[SK.orderNo] || ''),
+      operator: String(r[SK.operator] || ''), createdAt: String(r[SK.createdAt] || ''),
+      note: String(r[SK.note] || '')
+    });
+  }
+  return { ok: true, client: client, list: out };
+}
+
+// ── 出貨連動 hook：依訂單編號，對每款各寫一筆出庫；防重複出貨 ──
+function shipOrder(p) {
+  const orderNo = p && p.orderNo;
+  if (!orderNo) return { ok: false, error: '缺少 orderNo' };
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ows = ss.getSheetByName('訂單主表');
+  if (!ows) return { ok: false, error: '找不到訂單主表分頁' };
+  const data = ows.getDataRange().getValues();
+  let row = null;
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(orderNo)) { row = data[i]; break; }
+  }
+  if (!row) return { ok: false, error: '找不到訂單：' + orderNo };
+  const client = String(row[1]);
+  let items = [];
+  try { items = row[4] ? JSON.parse(row[4]) : []; } catch (e) { return { ok: false, error: '訂單酒款明細 JSON 解析失敗' }; }
+  if (!items.length) return { ok: false, error: '訂單無酒款明細' };
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    // 防重複出貨：ledger 已存在此 orderNo 的出庫列 → 擋
+    const rows = _stockRows_();
+    for (let i = 0; i < rows.length; i++) {
+      if (String(rows[i][SK.type]) === '出庫' && String(rows[i][SK.orderNo]) === String(orderNo)) {
+        return { ok: false, error: '此訂單已出貨（' + orderNo + '），不重複扣庫存' };
+      }
+    }
+    const ws = _stockSheet_();
+    const now = _stockNow_();
+    const today = _stockToday_();
+    let shipped = 0;
+    items.forEach(function (it) {
+      const qty = Math.floor(Number(it.qty)) || 0;
+      if (qty <= 0) return;
+      ws.appendRow([_stockGenId_(), today, client, it.product || '', '出庫', qty,
+        '', orderNo, p.operator || '', now, '訂單出貨']);
+      shipped++;
+    });
+    return { ok: true, orderNo: orderNo, client: client, shippedItems: shipped };
+  } finally { lock.releaseLock(); }
+}
+
+// ── 環境探針：確認此部署解析到的主表是正式還是沙盒（不回完整 id，只回尾碼）──
+function getEnvInfo() {
+  var prod = '1rXmA0ACRwy4jo3XEkXHZzNjJw8uZzX1jzVle-6k0V40';
+  var id = MAIN_SHEET_ID;
+  var hasProp = false;
+  try { hasProp = !!PropertiesService.getScriptProperties().getProperty('SHEET_ID'); } catch (e) {}
+  return { ok: true, env: (id === prod ? 'PROD' : 'NON-PROD'),
+    sheetIdTail: String(id).slice(-6), hasProp: hasProp };
+}
