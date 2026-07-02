@@ -105,6 +105,10 @@ function doGet(e) {
       case 'stockOut':               result = stockOut(p); break;                // 成品庫存
       case 'getStockLedger':         result = getStockLedger(p); break;          // 成品庫存
       case 'shipOrder':              result = shipOrder(p); break;               // 成品庫存(出貨連動 hook)
+      case 'getBottleOverview':      result = getBottleOverview(); break;        // 玻璃瓶庫存
+      case 'bottleIn':               result = bottleIn(p); break;                // 玻璃瓶庫存
+      case 'bottleOut':              result = bottleOut(p); break;               // 玻璃瓶庫存
+      case 'getBottleLedger':        result = getBottleLedger(p); break;         // 玻璃瓶庫存
       case 'saveProcessNote':result = saveProcessNote(p); break;
       case 'getInventory':   result = getInventory(); break;
       case 'addBatchRecord': result = addBatchRecord(p); break;
@@ -1441,4 +1445,121 @@ function getEnvInfo() {
   try { hasProp = !!PropertiesService.getScriptProperties().getProperty('SHEET_ID'); } catch (e) {}
   return { ok: true, env: (id === prod ? 'PROD' : 'NON-PROD'),
     sheetIdTail: String(id).slice(-6), hasProp: hasProp };
+}
+
+// ============================================================
+// 玻璃瓶庫存模組（數量統計邏輯同成品庫存；不可變流水帳）
+//   分頁：玻璃瓶庫存異動（於 MAIN_SHEET_ID）
+//   欄位 A異動ID B日期 C瓶品名 D異動類型 E數量 F操作人 G建立時間 H備註
+//   庫存 = Σ入庫 − Σ出庫（依 瓶品名）。日期沿用 _stockNow_/_stockToday_ 台北時區。
+// ============================================================
+const BOTTLE_SHEET_NAME = '玻璃瓶庫存異動';
+const BOTTLE_TYPES = ['100ml江小白', '100ml山形香水瓶', '100ml平底香水瓶', '500ml伏特加瓶', '500ml大香水瓶'];
+const BOTTLE_HEADERS = ['異動ID', '日期', '瓶品名', '異動類型', '數量', '操作人', '建立時間', '備註'];
+const BK = { id: 0, date: 1, item: 2, type: 3, qty: 4, operator: 5, createdAt: 6, note: 7 };
+
+function _bottleSheet_() {
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  let ws = ss.getSheetByName(BOTTLE_SHEET_NAME);
+  if (!ws) {
+    ws = ss.insertSheet(BOTTLE_SHEET_NAME);
+    ws.getRange(1, 1, 1, BOTTLE_HEADERS.length).setValues([BOTTLE_HEADERS]);
+    ws.setFrozenRows(1);
+  } else if (ws.getLastRow() === 0) {
+    ws.getRange(1, 1, 1, BOTTLE_HEADERS.length).setValues([BOTTLE_HEADERS]);
+    ws.setFrozenRows(1);
+  }
+  return ws;
+}
+
+function _bottleRows_() {
+  const ws = _bottleSheet_();
+  if (ws.getLastRow() < 2) return [];
+  return ws.getRange(2, 1, ws.getLastRow() - 1, BOTTLE_HEADERS.length).getValues();
+}
+
+function _bottleStockOf_(rows, item) {
+  let n = 0;
+  for (let i = 0; i < rows.length; i++) {
+    if (String(rows[i][BK.item]) !== String(item)) continue;
+    const q = Number(rows[i][BK.qty]) || 0;
+    if (String(rows[i][BK.type]) === '入庫') n += q;
+    else if (String(rows[i][BK.type]) === '出庫') n -= q;
+  }
+  return n;
+}
+
+// ── 玻璃瓶庫存總覽：固定 5 款 ∪ ledger 出現過的瓶型 ──
+function getBottleOverview() {
+  const rows = _bottleRows_();
+  const names = {};
+  BOTTLE_TYPES.forEach(function (n) { names[n] = true; });
+  rows.forEach(function (r) { if (r[BK.item]) names[String(r[BK.item])] = true; });
+  const ordered = BOTTLE_TYPES.slice();
+  Object.keys(names).forEach(function (n) { if (ordered.indexOf(n) < 0) ordered.push(n); });
+  const list = ordered.map(function (item) {
+    let inQty = 0, outQty = 0;
+    rows.forEach(function (r) {
+      if (String(r[BK.item]) !== item) return;
+      const q = Number(r[BK.qty]) || 0;
+      if (String(r[BK.type]) === '入庫') inQty += q;
+      else if (String(r[BK.type]) === '出庫') outQty += q;
+    });
+    return { item: item, inQty: inQty, outQty: outQty, stock: inQty - outQty };
+  });
+  return { ok: true, list: list };
+}
+
+// ── 入庫 ──
+function bottleIn(p) {
+  const item = p && p.item;
+  const qty = Math.floor(Number(p && p.qty));
+  if (!item) return { ok: false, error: '缺少瓶品名' };
+  if (!(qty > 0)) return { ok: false, error: '數量需為正整數' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const ws = _bottleSheet_();
+    ws.appendRow([_stockGenId_(), p.date || _stockToday_(), item, '入庫', qty,
+      p.operator || '', _stockNow_(), p.note || '']);
+    return { ok: true, item: item, stock: _bottleStockOf_(_bottleRows_(), item) };
+  } finally { lock.releaseLock(); }
+}
+
+// ── 出庫（不足擋下，回目前庫存）──
+function bottleOut(p) {
+  const item = p && p.item;
+  const qty = Math.floor(Number(p && p.qty));
+  if (!item) return { ok: false, error: '缺少瓶品名' };
+  if (!(qty > 0)) return { ok: false, error: '數量需為正整數' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const cur = _bottleStockOf_(_bottleRows_(), item);
+    if (qty > cur) {
+      return { ok: false, error: '庫存不足：「' + item + '」目前 ' + cur + ' 個，無法出庫 ' + qty + ' 個', stock: cur };
+    }
+    const ws = _bottleSheet_();
+    ws.appendRow([_stockGenId_(), p.date || _stockToday_(), item, '出庫', qty,
+      p.operator || '', _stockNow_(), p.note || '']);
+    return { ok: true, item: item, stock: cur - qty };
+  } finally { lock.releaseLock(); }
+}
+
+// ── 異動歷史（新到舊，可依瓶型篩選）──
+function getBottleLedger(p) {
+  const item = p && p.item;
+  const rows = _bottleRows_();
+  const out = [];
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const r = rows[i];
+    if (item && String(r[BK.item]) !== String(item)) continue;
+    out.push({
+      id: String(r[BK.id]), date: String(r[BK.date]), item: String(r[BK.item]),
+      type: String(r[BK.type]), qty: Number(r[BK.qty]) || 0,
+      operator: String(r[BK.operator] || ''), createdAt: String(r[BK.createdAt] || ''),
+      note: String(r[BK.note] || '')
+    });
+  }
+  return { ok: true, list: out };
 }
