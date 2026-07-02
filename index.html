@@ -275,7 +275,7 @@ tbody tr:hover td{background:#faf3e8;}
   <div id="navbar">
     <div class="nav-tab active" data-tab="recipe"    onclick="switchTab('recipe')">   <span class="ni">📋</span><span>酒譜</span></div>
     <div class="nav-tab"        data-tab="profit"    onclick="switchTab('profit')">   <span class="ni">📊</span><span>毛利分析</span></div>
-    <div class="nav-tab"        data-tab="inventory" onclick="switchTab('inventory')"><span class="ni">🧪</span><span>原料庫</span></div>
+    <div class="nav-tab"        data-tab="inventory" onclick="switchTab('inventory')"><span class="ni">🧪</span><span>原料/資材庫</span></div>
     <div class="nav-tab"        data-tab="rd"        onclick="switchTab('rd')">       <span class="ni">🔬</span><span>研發試算</span></div>
     <div class="nav-tab"        data-tab="batch"     onclick="switchTab('batch')">    <span class="ni">📦</span><span>製作記錄</span></div>
     <div class="nav-tab"        data-tab="stock"     onclick="switchTab('stock')">    <span class="ni">🗄️</span><span>成品庫存</span></div>
@@ -947,6 +947,35 @@ async function renderInventoryPage(mc) {
   </div>
 
   <div class="card" style="margin-top:10px;">
+    <div class="sec-hd"><div class="card-title" style="margin:0">🍾 玻璃瓶庫存</div>
+      <button class="btn btn-ghost btn-sm" onclick="loadBottleOverview();loadBottleLedger();">↻</button></div>
+    <div id="bottleWaterArea"><div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">載入中…</div></div>
+    <div style="border-top:0.5px solid var(--border);margin-top:12px;padding-top:12px;">
+      <div class="card-title" style="font-size:13px;">➕ 入庫</div>
+      <div class="form-row">
+        <div class="fg" style="flex:2 1 150px"><label>瓶品名</label><select class="inp" id="biItem" style="margin:0;"></select></div>
+        <div class="fg" style="flex:1 1 80px"><label>數量</label><input class="inp" id="biQty" type="number" min="1" step="1" style="margin:0;"></div>
+        <div class="fg" style="flex:1 1 120px"><label>日期</label><input class="inp" id="biDate" type="date" style="margin:0;"></div>
+      </div>
+      <div class="fe mt8"><button class="btn btn-primary btn-sm" id="biBtn">入庫</button></div>
+    </div>
+    <div style="border-top:0.5px solid var(--border);margin-top:12px;padding-top:12px;">
+      <div class="card-title" style="font-size:13px;">➖ 出庫</div>
+      <div class="form-row">
+        <div class="fg" style="flex:2 1 150px"><label>瓶品名</label><select class="inp" id="boItem" style="margin:0;"></select></div>
+        <div class="fg" style="flex:1 1 80px"><label>數量</label><input class="inp" id="boQty" type="number" min="1" step="1" style="margin:0;"></div>
+        <div class="fg" style="flex:1 1 120px"><label>日期</label><input class="inp" id="boDate" type="date" style="margin:0;"></div>
+      </div>
+      <div class="fe mt8"><button class="btn btn-danger btn-sm" id="boBtn">出庫</button></div>
+    </div>
+    <div style="border-top:0.5px solid var(--border);margin-top:12px;padding-top:12px;">
+      <div class="sec-hd"><div class="card-title" style="margin:0;font-size:13px;">📜 異動歷史</div>
+        <select class="inp" id="blFilter" style="margin:0;width:auto;max-width:150px;padding:6px 26px 6px 10px;font-size:13px;" onchange="bottleFilter=this.value;loadBottleLedger();"></select></div>
+      <div id="bottleLedgerArea"><div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">載入中…</div></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:10px;">
     <div class="card-title">資材費用</div>
     <div class="form-row" style="margin-bottom:10px;">
       <div class="fg" style="flex:0 0 120px"><label>瓶型</label>
@@ -957,6 +986,76 @@ async function renderInventoryPage(mc) {
   </div>`;
   await loadInv();
   renderMaterialCost();
+  // 玻璃瓶庫存
+  const _bd = _localDate();
+  document.getElementById('biDate').value = _bd;
+  document.getElementById('boDate').value = _bd;
+  document.getElementById('biBtn').onclick = () => lockRun(document.getElementById('biBtn'), doBottleIn);
+  document.getElementById('boBtn').onclick = () => lockRun(document.getElementById('boBtn'), doBottleOut);
+  loadBottleOverview();
+  loadBottleLedger();
+}
+// ── 玻璃瓶庫存（數量統計邏輯同成品庫存）──
+let bottleFilter = '';
+async function loadBottleOverview() {
+  const res = await api({ action: 'getBottleOverview' });
+  const area = document.getElementById('bottleWaterArea');
+  if (!area) return;
+  if (!res.ok) { area.innerHTML = `<div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${res.error || ''}</div>`; return; }
+  const list = res.list || [];
+  area.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>瓶品名</th><th class="tr">現有庫存(個)</th></tr></thead><tbody>'
+    + list.map(x =>
+        `<tr><td>${x.item}<div style="font-size:11px;color:var(--ink3);">累計入 ${x.inQty} / 出 ${x.outQty}</div></td>`
+        + `<td class="tr" style="font-weight:600;font-size:16px;${x.stock <= 0 ? 'color:var(--ink3);' : ''}">${x.stock}</td></tr>`
+      ).join('')
+    + '</tbody></table></div>';
+  const opts = list.map(x => `<option value="${x.item}">${x.item}</option>`).join('');
+  const bi = document.getElementById('biItem'); if (bi) bi.innerHTML = opts;
+  const bo = document.getElementById('boItem'); if (bo) bo.innerHTML = opts;
+  const fl = document.getElementById('blFilter');
+  if (fl) { fl.innerHTML = '<option value="">全部瓶型</option>' + opts; fl.value = bottleFilter; }
+}
+async function loadBottleLedger() {
+  const area = document.getElementById('bottleLedgerArea');
+  if (!area) return;
+  const params = { action: 'getBottleLedger' };
+  if (bottleFilter) params.item = bottleFilter;
+  const res = await api(params);
+  if (!res.ok) { area.innerHTML = `<div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${res.error || ''}</div>`; return; }
+  const rows = res.list || [];
+  if (!rows.length) { area.innerHTML = '<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">尚無異動</div>'; return; }
+  area.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>日期</th><th>類型</th><th class="tr">數量</th><th>操作人</th></tr></thead><tbody>'
+    + rows.map(r => {
+        const tag = r.type === '入庫'
+          ? '<span style="color:var(--gold-dk);">入庫</span>'
+          : '<span style="color:var(--red);">出庫</span>';
+        return `<tr><td style="font-size:12px;">${r.date}</td><td>${tag}</td><td class="tr">${r.qty}</td><td style="font-size:12px;">${r.operator}</td></tr>`;
+      }).join('')
+    + '</tbody></table></div>';
+}
+async function doBottleIn() {
+  const item = document.getElementById('biItem').value;
+  const qty = parseInt(document.getElementById('biQty').value, 10);
+  if (!item) { toast('請選瓶品名'); return; }
+  if (!(qty > 0)) { toast('數量需為正整數'); return; }
+  const res = await api({ action: 'bottleIn', item, qty, date: document.getElementById('biDate').value || '', operator: (curUser && curUser.username) || '' });
+  if (res.ok) {
+    toast(`已入庫，${item} 現有 ${res.stock} 個`);
+    document.getElementById('biQty').value = '';
+    loadBottleOverview(); loadBottleLedger();
+  } else toast('入庫失敗：' + (res.error || ''));
+}
+async function doBottleOut() {
+  const item = document.getElementById('boItem').value;
+  const qty = parseInt(document.getElementById('boQty').value, 10);
+  if (!item) { toast('請選瓶品名'); return; }
+  if (!(qty > 0)) { toast('數量需為正整數'); return; }
+  const res = await api({ action: 'bottleOut', item, qty, date: document.getElementById('boDate').value || '', operator: (curUser && curUser.username) || '' });
+  if (res.ok) {
+    toast(`已出庫，${item} 剩 ${res.stock} 個`);
+    document.getElementById('boQty').value = '';
+    loadBottleOverview(); loadBottleLedger();
+  } else toast(res.error || '出庫失敗');
 }
 async function loadInv(force) {
   if (force) C.inv = null;
