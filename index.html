@@ -254,7 +254,7 @@ tbody tr:hover td{background:#faf3e8;}
       <div class="sub">酒譜管理系統</div>
     </div>
     <div class="login-card">
-      <select class="inp" id="loginUser"><option value="">選擇帳號</option><option>Kevin</option><option>Molly</option><option>阿軒</option><option>小捲</option><option>Vic</option></select>
+      <select class="inp" id="loginUser"><option value="">選擇帳號</option><option>Kevin</option><option>Molly</option><option>阿軒</option><option>小捲</option><option>Vic</option><option>小李</option></select>
       <input class="inp" id="loginPass" type="password" placeholder="密碼" inputmode="numeric">
       <button class="btn btn-primary btn-full" id="loginBtn" onclick="doLogin()">登入</button>
       <div id="loginErr"></div>
@@ -278,7 +278,7 @@ tbody tr:hover td{background:#faf3e8;}
     <div class="nav-tab"        data-tab="inventory" onclick="switchTab('inventory')"><span class="ni">🧪</span><span>原料庫</span></div>
     <div class="nav-tab"        data-tab="rd"        onclick="switchTab('rd')">       <span class="ni">🔬</span><span>研發試算</span></div>
     <div class="nav-tab"        data-tab="batch"     onclick="switchTab('batch')">    <span class="ni">📦</span><span>製作記錄</span></div>
-    <div class="nav-tab"        data-tab="order"     onclick="switchTab('order')">    <span class="ni">🍸</span><span>製作任務</span></div>
+    <div class="nav-tab"        data-tab="stock"     onclick="switchTab('stock')">    <span class="ni">🗄️</span><span>成品庫存</span></div>
     <div class="nav-tab admin-only" data-tab="apply" onclick="switchTab('apply')">   <span class="ni">✏️</span><span>審核</span></div>
   </div>
 </div>
@@ -300,7 +300,17 @@ tbody tr:hover td{background:#faf3e8;}
 // ============================================================
 
 // ── API ──────────────────────────────────────────────────────
+// 預覽環境：後端指向「測試部署 /exec」（沙盒資料），與正式站完全隔離。
+// promote.sh 升正式時會把此行 sed 換回正式 /exec，下方橫幅條件即自動失效（不出現在正式站）。
 const API='https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5N4uT9RBaqAHiqWBPseCrSvKV3QnC9NK9S2MGnHQvJg/exec';
+if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5N4uT9RBaqAHiqWBPseCrSvKV3QnC9NK9S2MGnHQvJg/exec') {
+  window.addEventListener('DOMContentLoaded', function () {
+    var b = document.createElement('div');
+    b.textContent = '🧪 預覽／測試環境（沙盒資料，非正式站）';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#2d7d46;color:#fff;font-size:12px;text-align:center;padding:5px;';
+    document.body.appendChild(b);
+  });
+}
 
 async function api(params, silent) {
   const url = API + '?' + Object.entries(params).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
@@ -455,7 +465,20 @@ async function doLogin() {
   app.style.display = 'flex';
   // admin 才顯示審核
   document.querySelectorAll('.admin-only').forEach(el => el.style.display = res.role === 'admin' ? '' : 'none');
-  switchTab('recipe');
+  // 角色分頁分流：倉管只看「製作記錄」+「成品庫存」；其餘角色維持原本可見範圍
+  const ROLE_TABS = { '倉管': ['batch', 'stock'] };
+  const allowed = ROLE_TABS[res.role];
+  if (allowed) {
+    document.querySelectorAll('#navbar .nav-tab').forEach(el =>
+      el.style.display = allowed.includes(el.dataset.tab) ? '' : 'none');
+    switchTab(allowed.includes(curTab) ? curTab : allowed[0]);
+  } else {
+    // 一般/admin：還原非 admin-only 分頁（防同頁切換帳號後殘留隱藏）
+    document.querySelectorAll('#navbar .nav-tab').forEach(el => {
+      if (!el.classList.contains('admin-only')) el.style.display = '';
+    });
+    switchTab('recipe');
+  }
 }
 function doLogout() {
   curUser = null; rdata = null; curSheet = '';
@@ -494,7 +517,7 @@ function switchTab(tab) {
   curTab = tab;
   document.querySelectorAll('.nav-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
   const mc = document.getElementById('mainContent'); mc.scrollTop = 0;
-  ({ recipe:renderRecipePage, profit:renderProfitPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderBatchPage, order:renderOrderPage, apply:renderApplyPage })[tab]?.(mc);
+  ({ recipe:renderRecipePage, profit:renderProfitPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderBatchPage, order:renderOrderPage, stock:renderStockPage, apply:renderApplyPage })[tab]?.(mc);
 }
 
 // ════════════════════════════════════════════════
@@ -1669,6 +1692,144 @@ async function doCompleteTask(oi,ii){
     laborCost:labor, pm:(curUser&&curUser.username)||'', creator:(curUser&&curUser.username)||'', note });
   if(res.ok){ toast(`已完成：${it.product}（訂單${res.orderStatus}）`); loadOrderTasks(); }
   else toast('回報失敗：'+(res.error||''));
+}
+
+// ════════════════════════════════════════════════
+// ⑤-b 成品庫存（南坡萬v2）
+// ════════════════════════════════════════════════
+const STOCK_CLIENT = '南坡萬v.2';
+let stockOverview = [];   // [{item,inQty,outQty,stock}]
+let stockFilter = '';     // 異動歷史酒款篩選
+
+// 本地日期 YYYY-MM-DD（避免 toISOString 的 UTC 位移）
+function _localDate() {
+  const d = new Date();
+  return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+}
+
+function renderStockPage(mc) {
+  mc.innerHTML = `
+  <div class="card" style="margin-bottom:10px;">
+    <div class="sec-hd"><div class="card-title" style="margin:0">🗄️ ${STOCK_CLIENT} 成品庫存</div>
+      <button class="btn btn-ghost btn-sm" onclick="renderStockPage(document.getElementById('mainContent'))">↻</button></div>
+    <div id="stockWaterArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:10px;">
+    <div class="card-title">➕ 手動入庫</div>
+    <div class="form-row">
+      <div class="fg" style="flex:2 1 160px"><label>酒款</label><select class="inp" id="siItem" style="margin:0;"></select></div>
+      <div class="fg" style="flex:1 1 90px"><label>數量(瓶)</label><input class="inp" id="siQty" type="number" min="1" step="1" style="margin:0;"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg" style="flex:1 1 120px"><label>Lot 編號</label><input class="inp" id="siLot" placeholder="選填" style="margin:0;"></div>
+      <div class="fg" style="flex:1 1 120px"><label>日期</label><input class="inp" id="siDate" type="date" style="margin:0;"></div>
+    </div>
+    <div class="fe mt8"><button class="btn btn-primary btn-sm" id="siBtn">入庫</button></div>
+  </div>
+
+  <div class="card" style="margin-bottom:10px;">
+    <div class="card-title">➖ 手動出庫</div>
+    <div class="form-row">
+      <div class="fg" style="flex:2 1 160px"><label>酒款</label><select class="inp" id="soItem" style="margin:0;"></select></div>
+      <div class="fg" style="flex:1 1 90px"><label>數量(瓶)</label><input class="inp" id="soQty" type="number" min="1" step="1" style="margin:0;"></div>
+      <div class="fg" style="flex:1 1 120px"><label>日期</label><input class="inp" id="soDate" type="date" style="margin:0;"></div>
+    </div>
+    <div class="fe mt8"><button class="btn btn-danger btn-sm" id="soBtn">出庫</button></div>
+  </div>
+
+  <div class="card">
+    <div class="sec-hd"><div class="card-title" style="margin:0">📜 異動歷史</div>
+      <select class="inp" id="slFilter" style="margin:0;width:auto;max-width:160px;padding:6px 28px 6px 10px;font-size:13px;" onchange="stockFilter=this.value;loadStockLedger();"></select></div>
+    <div id="stockLedgerArea"><div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">載入中…</div></div>
+  </div>`;
+
+  const d = _localDate();
+  document.getElementById('siDate').value = d;
+  document.getElementById('soDate').value = d;
+  document.getElementById('siBtn').onclick = () => lockRun(document.getElementById('siBtn'), doStockIn);
+  document.getElementById('soBtn').onclick = () => lockRun(document.getElementById('soBtn'), doStockOut);
+  loadStockOverview();
+  loadStockLedger();
+}
+
+async function loadStockOverview() {
+  const res = await api({ action: 'getStockOverview', client: STOCK_CLIENT });
+  const area = document.getElementById('stockWaterArea');
+  if (!area) return;
+  if (!res.ok) { area.innerHTML = `<div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${res.error || ''}</div>`; return; }
+  stockOverview = res.list || [];
+  if (!stockOverview.length) {
+    area.innerHTML = '<div style="text-align:center;color:var(--ink3);padding:16px;font-size:13px;">尚無酒款</div>';
+  } else {
+    area.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>酒款</th><th class="tr">目前庫存(瓶)</th></tr></thead><tbody>'
+      + stockOverview.map(x =>
+          `<tr><td>${x.item}<div style="font-size:11px;color:var(--ink3);">累計入 ${x.inQty} / 出 ${x.outQty}</div></td>`
+          + `<td class="tr" style="font-weight:600;font-size:16px;${x.stock <= 0 ? 'color:var(--ink3);' : ''}">${x.stock}</td></tr>`
+        ).join('')
+      + '</tbody></table></div>';
+  }
+  // 下拉：入/出庫 選單 + 歷史篩選（全款清單，含 0 庫存款）
+  const opts = stockOverview.map(x => `<option value="${x.item}">${x.item}</option>`).join('');
+  const si = document.getElementById('siItem'); if (si) si.innerHTML = opts;
+  const so = document.getElementById('soItem'); if (so) so.innerHTML = opts;
+  const fl = document.getElementById('slFilter');
+  if (fl) { fl.innerHTML = '<option value="">全部酒款</option>' + opts; fl.value = stockFilter; }
+}
+
+async function loadStockLedger() {
+  const area = document.getElementById('stockLedgerArea');
+  if (!area) return;
+  const params = { action: 'getStockLedger', client: STOCK_CLIENT };
+  if (stockFilter) params.item = stockFilter;
+  const res = await api(params);
+  if (!res.ok) { area.innerHTML = `<div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${res.error || ''}</div>`; return; }
+  const rows = res.list || [];
+  if (!rows.length) { area.innerHTML = '<div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">尚無異動</div>'; return; }
+  area.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>日期</th><th>類型</th><th class="tr">數量</th><th>Lot/訂單</th><th>操作人</th></tr></thead><tbody>'
+    + rows.map(r => {
+        const tag = r.type === '入庫'
+          ? '<span style="color:var(--gold-dk);">入庫</span>'
+          : '<span style="color:var(--red);">出庫</span>';
+        const ref = r.lot || r.orderNo || '';
+        return `<tr><td style="font-size:12px;">${r.date}</td><td>${tag}</td><td class="tr">${r.qty}</td><td style="font-size:12px;">${ref}</td><td style="font-size:12px;">${r.operator}</td></tr>`;
+      }).join('')
+    + '</tbody></table></div>';
+}
+
+async function doStockIn() {
+  const item = document.getElementById('siItem').value;
+  const qty = parseInt(document.getElementById('siQty').value, 10);
+  if (!item) { toast('請選酒款'); return; }
+  if (!(qty > 0)) { toast('數量需為正整數'); return; }
+  const res = await api({
+    action: 'stockIn', client: STOCK_CLIENT, item, qty,
+    lot: document.getElementById('siLot').value || '',
+    date: document.getElementById('siDate').value || '',
+    operator: (curUser && curUser.username) || ''
+  });
+  if (res.ok) {
+    toast(`已入庫，${item} 現有 ${res.stock} 瓶`);
+    document.getElementById('siQty').value = ''; document.getElementById('siLot').value = '';
+    loadStockOverview(); loadStockLedger();
+  } else toast('入庫失敗：' + (res.error || ''));
+}
+
+async function doStockOut() {
+  const item = document.getElementById('soItem').value;
+  const qty = parseInt(document.getElementById('soQty').value, 10);
+  if (!item) { toast('請選酒款'); return; }
+  if (!(qty > 0)) { toast('數量需為正整數'); return; }
+  const res = await api({
+    action: 'stockOut', client: STOCK_CLIENT, item, qty,
+    date: document.getElementById('soDate').value || '',
+    operator: (curUser && curUser.username) || ''
+  });
+  if (res.ok) {
+    toast(`已出庫，${item} 剩 ${res.stock} 瓶`);
+    document.getElementById('soQty').value = '';
+    loadStockOverview(); loadStockLedger();
+  } else toast(res.error || '出庫失敗'); // 出庫不足時後端回明確訊息（含目前庫存）
 }
 
 // ════════════════════════════════════════════════
