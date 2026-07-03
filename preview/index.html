@@ -1853,13 +1853,15 @@ async function loadOrderMgmt() {
 
 // 建單表單（admin）：接 createOrder，欄位對齊訂單主表 11 欄
 let _orderLineSeq = 0;
+// 瓶型清單（BSPEC 既有 + 香水瓶兩款）；建單/完成回報共用
+function orderBottleList() { return [...Object.keys(BSPEC), '山形香水瓶', '大香水瓶']; }
 function orderLineHtml(idx, client) {
   const recs = recipeList.filter(i => i.client === client);
-  const recOpts = recs.length ? recs.map(i => `<option>${i.recipeName}</option>`).join('') : '<option value="">（此客戶無酒譜）</option>';
-  const btOpts = Object.keys(BSPEC).map(b => `<option>${b}</option>`).join('');
+  const recOpts = recs.map(i => `<option>${i.recipeName}</option>`).join('');
+  const btOpts = orderBottleList().map(b => `<option>${b}</option>`).join('');
   return `<div class="order-line" id="oline_${idx}" style="border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:8px;">
     <div class="form-row" style="gap:6px;">
-      <div class="fg" style="flex:2 1 140px"><label>酒款</label><select class="inp" id="oi_${idx}_rec" style="margin:0;font-size:13px;">${recOpts}</select></div>
+      <div class="fg" style="flex:2 1 140px"><label>酒款</label><input class="inp" id="oi_${idx}_rec" list="oidl_${idx}" placeholder="選或輸入酒款" style="margin:0;font-size:13px;"><datalist id="oidl_${idx}">${recOpts}</datalist></div>
       <div class="fg" style="flex:1 1 70px"><label>數量</label><input class="inp" id="oi_${idx}_qty" type="number" min="1" value="1" style="margin:0;font-size:13px;"></div>
     </div>
     <div class="form-row" style="gap:6px;">
@@ -1877,14 +1879,27 @@ function orderModalClientChange() {
   document.getElementById('orderItemLines').innerHTML = '';
   orderModalAddLine();
 }
+// 新增客戶名稱（自由輸入；新客戶無酒譜時酒款欄可自行輸入）
+function addOrderClient() {
+  const name = (prompt('輸入新客戶名稱：') || '').trim();
+  if (!name) return;
+  const sel = document.getElementById('om_client');
+  if (![...sel.options].some(o => o.value === name)) {
+    const opt = document.createElement('option'); opt.textContent = name; sel.appendChild(opt);
+  }
+  sel.value = name;
+  orderModalClientChange();
+}
 function showOrderModal() {
   const clients = clientList.length ? clientList.map(c => c.name) : ['Feeling Bar', '南坡萬公版', '南坡萬v.2', 'Feeling Bar Cafe'];
   const cOpts = clients.map(c => `<option>${c}</option>`).join('');
   const modal = makeModal(`
     <div class="modal-title">＋ 新增出貨訂單</div>
     <div class="form-row">
-      <div class="fg"><label>客戶</label><select class="inp" id="om_client" style="margin:0;" onchange="orderModalClientChange()">${cOpts}</select></div>
-      <div class="fg"><label>訂單類型</label><input class="inp" id="om_type" list="omTypeList" placeholder="如：換前標公版酒" style="margin:0;"><datalist id="omTypeList"><option>換前標公版酒</option></datalist></div>
+      <div class="fg"><label>客戶</label><div style="display:flex;gap:4px;">
+        <select class="inp" id="om_client" style="margin:0;flex:1;min-width:0;" onchange="orderModalClientChange()">${cOpts}</select>
+        <button class="btn btn-ghost btn-sm" style="flex:0 0 auto;white-space:nowrap;" onclick="addOrderClient()">＋新客戶</button></div></div>
+      <div class="fg"><label>訂單類型</label><input class="inp" id="om_type" list="omTypeList" placeholder="如：換前標公版酒" style="margin:0;"><datalist id="omTypeList"><option>換前標公版酒</option><option>南坡萬自有品牌</option></datalist></div>
     </div>
     <div class="form-row">
       <div class="fg"><label>出貨日</label><input class="inp" id="om_ship" type="date" style="margin:0;"></div>
@@ -1935,7 +1950,7 @@ function showCompleteModal(oi, ii) {
     <div style="font-size:12px;color:var(--ink3);margin-bottom:8px;">${o.orderNo} · ${o.client} · ${it.volume || ''}×${it.qty}瓶</div>
     <div class="form-row">
       <div class="fg"><label>實際裝瓶數</label><input class="inp" type="number" id="ct_cnt" value="${it.qty}" style="margin:0;"></div>
-      <div class="fg"><label>瓶型</label><select id="ct_bt">${Object.keys(BSPEC).map(b => `<option${b === bt ? ' selected' : ''}>${b}</option>`).join('')}</select></div>
+      <div class="fg"><label>瓶型</label><select id="ct_bt">${orderBottleList().map(b => `<option${b === bt ? ' selected' : ''}>${b}</option>`).join('')}</select></div>
     </div>
     <div style="display:flex;gap:16px;margin:8px 0;">
       <label style="display:flex;gap:6px;align-items:center;font-size:13px;"><input type="checkbox" id="ct_front" checked style="width:auto;"> 前標</label>
