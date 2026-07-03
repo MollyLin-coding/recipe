@@ -466,7 +466,7 @@ async function doLogin() {
   // admin 才顯示審核
   document.querySelectorAll('.admin-only').forEach(el => el.style.display = res.role === 'admin' ? '' : 'none');
   // 角色分頁分流：倉管只看「製作記錄」+「成品庫存」；其餘角色維持原本可見範圍
-  const ROLE_TABS = { '倉管': ['batch', 'stock'] };
+  const ROLE_TABS = { '倉管': ['batch', 'stock', 'inventory'] };
   const allowed = ROLE_TABS[res.role];
   if (allowed) {
     document.querySelectorAll('#navbar .nav-tab').forEach(el =>
@@ -479,8 +479,10 @@ async function doLogin() {
     });
     switchTab('recipe');
   }
+  showStockAlerts();
 }
 function doLogout() {
+  const _ab = document.getElementById('stockAlertBar'); if (_ab) _ab.remove();
   curUser = null; rdata = null; curSheet = '';
   Object.assign(C, { inv:null, profit:{}, recipes:{}, batch:null });
   recipeList = []; rdState = { ings:[], tv:4000, bt:'4L桶', title:'', client:'', matSel:{} };
@@ -1003,11 +1005,8 @@ async function loadBottleOverview() {
   if (!area) return;
   if (!res.ok) { area.innerHTML = `<div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${res.error || ''}</div>`; return; }
   const list = res.list || [];
-  area.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>瓶品名</th><th class="tr">現有庫存(個)</th></tr></thead><tbody>'
-    + list.map(x =>
-        `<tr><td>${x.item}<div style="font-size:11px;color:var(--ink3);">累計入 ${x.inQty} / 出 ${x.outQty}</div></td>`
-        + `<td class="tr" style="font-weight:600;font-size:16px;${x.stock <= 0 ? 'color:var(--ink3);' : ''}">${x.stock}</td></tr>`
-      ).join('')
+  area.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>瓶品名</th><th class="tr">現有庫存(個)</th><th class="tr">安全水位</th></tr></thead><tbody>'
+    + list.map(x => safetyRow(x, '玻璃瓶', '')).join('')
     + '</tbody></table></div>';
   const opts = list.map(x => `<option value="${x.item}">${x.item}</option>`).join('');
   const bi = document.getElementById('biItem'); if (bi) bi.innerHTML = opts;
@@ -1806,6 +1805,43 @@ function _localDate() {
   return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
 }
 
+// ── 安全水位共用（成品庫存 / 玻璃瓶庫存 水位表共用）──
+function _canSetSafety() { return curUser && (curUser.role === '倉管' || curUser.role === 'admin'); }
+function safetyRow(x, category, client) {
+  const low = x.safety > 0 && x.stock < x.safety;
+  const safeCell = _canSetSafety()
+    ? `<input type="number" min="0" step="1" value="${x.safety || 0}" data-item="${x.item}" style="width:56px;padding:4px;font-size:13px;text-align:right;border:1px solid var(--border);border-radius:4px;" onchange="saveSafety('${category}','${client}',this.dataset.item,this.value,this)">`
+    : (x.safety || 0);
+  return `<tr${low ? ' style="background:#fbeaea;"' : ''}>`
+    + `<td>${x.item}${low ? ' <span style="color:var(--red);font-size:11px;">⚠低於水位</span>' : ''}<div style="font-size:11px;color:var(--ink3);">累計入 ${x.inQty} / 出 ${x.outQty}</div></td>`
+    + `<td class="tr" style="font-weight:600;font-size:16px;${x.stock <= 0 ? 'color:var(--ink3);' : (low ? 'color:var(--red);' : '')}">${x.stock}</td>`
+    + `<td class="tr">${safeCell}</td></tr>`;
+}
+async function saveSafety(category, client, item, value, el) {
+  const level = parseInt(value, 10);
+  if (!(level >= 0)) { toast('安全水位需為 0 或正整數'); return; }
+  if (el) el.disabled = true;
+  const res = await api({ action: 'setSafetyLevel', category, client, item, level, operator: (curUser && curUser.username) || '' });
+  if (el) el.disabled = false;
+  if (res.ok) {
+    toast(`已設定「${item}」安全水位 ${level}`);
+    if (category === '成品') loadStockOverview(); else loadBottleOverview();
+  } else toast('設定失敗：' + (res.error || ''));
+}
+// 登入後：低於安全水位則頂端橫幅警告（水位回升後下次登入自動消失）
+async function showStockAlerts() {
+  const old = document.getElementById('stockAlertBar'); if (old) old.remove();
+  const res = await api({ action: 'getStockAlerts' }, true);
+  if (!res || !res.ok || !(res.count > 0)) return;
+  const lines = res.alerts.map(a => `${a.category === '玻璃瓶' ? '🍾' : '📦'}${a.item}（${a.stock}/${a.level}）`).join('、');
+  const bar = document.createElement('div');
+  bar.id = 'stockAlertBar';
+  bar.style.cssText = 'display:flex;align-items:center;gap:8px;background:var(--red);color:#fff;font-size:12px;padding:6px 10px;line-height:1.5;';
+  bar.innerHTML = `<span style="flex:1;">⚠ 庫存低於安全水位（${res.count} 項）：${lines}</span><span style="cursor:pointer;padding:0 6px;font-weight:bold;" onclick="this.parentElement.remove()">✕</span>`;
+  const app = document.getElementById('app');
+  app.insertBefore(bar, document.getElementById('mainContent'));
+}
+
 function renderStockPage(mc) {
   mc.innerHTML = `
   <div class="card" style="margin-bottom:10px;">
@@ -1861,11 +1897,8 @@ async function loadStockOverview() {
   if (!stockOverview.length) {
     area.innerHTML = '<div style="text-align:center;color:var(--ink3);padding:16px;font-size:13px;">尚無酒款</div>';
   } else {
-    area.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>酒款</th><th class="tr">目前庫存(瓶)</th></tr></thead><tbody>'
-      + stockOverview.map(x =>
-          `<tr><td>${x.item}<div style="font-size:11px;color:var(--ink3);">累計入 ${x.inQty} / 出 ${x.outQty}</div></td>`
-          + `<td class="tr" style="font-weight:600;font-size:16px;${x.stock <= 0 ? 'color:var(--ink3);' : ''}">${x.stock}</td></tr>`
-        ).join('')
+    area.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>酒款</th><th class="tr">目前庫存(瓶)</th><th class="tr">安全水位</th></tr></thead><tbody>'
+      + stockOverview.map(x => safetyRow(x, '成品', STOCK_CLIENT, '瓶')).join('')
       + '</tbody></table></div>';
   }
   // 下拉：入/出庫 選單 + 歷史篩選（全款清單，含 0 庫存款）
