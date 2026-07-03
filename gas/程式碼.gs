@@ -109,6 +109,9 @@ function doGet(e) {
       case 'bottleIn':               result = bottleIn(p); break;                // 玻璃瓶庫存
       case 'bottleOut':              result = bottleOut(p); break;               // 玻璃瓶庫存
       case 'getBottleLedger':        result = getBottleLedger(p); break;         // 玻璃瓶庫存
+      case 'getSafetyLevels':        result = getSafetyLevels(); break;          // 安全水位
+      case 'setSafetyLevel':         result = setSafetyLevel(p); break;          // 安全水位
+      case 'getStockAlerts':         result = getStockAlerts(); break;           // 安全水位警告(登入用)
       case 'saveProcessNote':result = saveProcessNote(p); break;
       case 'getInventory':   result = getInventory(); break;
       case 'addBatchRecord': result = addBatchRecord(p); break;
@@ -1313,6 +1316,7 @@ function getStockOverview(p) {
   if (!client) return { ok: false, error: '缺少 client' };
   try { getClientCfg(client); } catch (e) { return { ok: false, error: e.message }; }
   const rows = _stockRows_();
+  const smap = _safetyMap_();
   // 酒款宇集 = 全款清單 ∪ ledger 中該客戶出現過的酒款
   const names = {};
   _stockClientItems_(client).forEach(function (n) { names[n] = true; });
@@ -1327,7 +1331,8 @@ function getStockOverview(p) {
       if (String(r[SK.type]) === '入庫') inQty += q;
       else if (String(r[SK.type]) === '出庫') outQty += q;
     });
-    return { item: item, inQty: inQty, outQty: outQty, stock: inQty - outQty };
+    return { item: item, inQty: inQty, outQty: outQty, stock: inQty - outQty,
+      safety: smap['成品|' + client + '|' + item] || 0 };
   });
   list.sort(function (a, b) { return a.item.localeCompare(b.item); });
   return { ok: true, client: client, list: list };
@@ -1422,6 +1427,20 @@ function shipOrder(p) {
         return { ok: false, error: '此訂單已出貨（' + orderNo + '），不重複扣庫存' };
       }
     }
+    // 擋負庫存：彙總每款需求量，任一款不足 → 整張訂單擋下（all-or-nothing）
+    const need = {};
+    items.forEach(function (it) {
+      const q = Math.floor(Number(it.qty)) || 0;
+      if (q > 0) need[it.product || ''] = (need[it.product || ''] || 0) + q;
+    });
+    const short = [];
+    Object.keys(need).forEach(function (prod) {
+      const cur = _stockOf_(rows, client, prod);
+      if (need[prod] > cur) short.push('「' + prod + '」需 ' + need[prod] + '、現有 ' + cur);
+    });
+    if (short.length) {
+      return { ok: false, error: '成品庫存不足，整張訂單未出貨：' + short.join('；'), shortages: short };
+    }
     const ws = _stockSheet_();
     const now = _stockNow_();
     const today = _stockToday_();
@@ -1492,6 +1511,7 @@ function _bottleStockOf_(rows, item) {
 // ── 玻璃瓶庫存總覽：固定 5 款 ∪ ledger 出現過的瓶型 ──
 function getBottleOverview() {
   const rows = _bottleRows_();
+  const smap = _safetyMap_();
   const names = {};
   BOTTLE_TYPES.forEach(function (n) { names[n] = true; });
   rows.forEach(function (r) { if (r[BK.item]) names[String(r[BK.item])] = true; });
@@ -1505,7 +1525,8 @@ function getBottleOverview() {
       if (String(r[BK.type]) === '入庫') inQty += q;
       else if (String(r[BK.type]) === '出庫') outQty += q;
     });
-    return { item: item, inQty: inQty, outQty: outQty, stock: inQty - outQty };
+    return { item: item, inQty: inQty, outQty: outQty, stock: inQty - outQty,
+      safety: smap['玻璃瓶||' + item] || 0 };
   });
   return { ok: true, list: list };
 }
@@ -1562,4 +1583,105 @@ function getBottleLedger(p) {
     });
   }
   return { ok: true, list: out };
+}
+
+// ============================================================
+// 安全水位模組（成品 + 玻璃瓶通用；低於水位在登入後警告）
+//   分頁：安全水位設定（於 MAIN_SHEET_ID）
+//   欄位 A類別(成品/玻璃瓶) B客戶(成品才有) C品名 D安全水位 E更新人 F更新時間
+//   key = 類別|客戶|品名（玻璃瓶客戶留空）
+// ============================================================
+const SAFETY_SHEET_NAME = '安全水位設定';
+const SAFETY_HEADERS = ['類別', '客戶', '品名', '安全水位', '更新人', '更新時間'];
+const SF = { cat: 0, client: 1, item: 2, level: 3, operator: 4, updatedAt: 5 };
+
+function _safetySheet_() {
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  let ws = ss.getSheetByName(SAFETY_SHEET_NAME);
+  if (!ws) {
+    ws = ss.insertSheet(SAFETY_SHEET_NAME);
+    ws.getRange(1, 1, 1, SAFETY_HEADERS.length).setValues([SAFETY_HEADERS]);
+    ws.setFrozenRows(1);
+  } else if (ws.getLastRow() === 0) {
+    ws.getRange(1, 1, 1, SAFETY_HEADERS.length).setValues([SAFETY_HEADERS]);
+    ws.setFrozenRows(1);
+  }
+  return ws;
+}
+
+function _safetyRows_() {
+  const ws = _safetySheet_();
+  if (ws.getLastRow() < 2) return [];
+  return ws.getRange(2, 1, ws.getLastRow() - 1, SAFETY_HEADERS.length).getValues();
+}
+
+// key → level 快查表（供 overview / alerts 併入）
+function _safetyMap_() {
+  const map = {};
+  _safetyRows_().forEach(function (r) {
+    const key = String(r[SF.cat]) + '|' + String(r[SF.client] || '') + '|' + String(r[SF.item]);
+    map[key] = Number(r[SF.level]) || 0;
+  });
+  return map;
+}
+
+// 全部安全水位（設定 UI 用）
+function getSafetyLevels() {
+  const list = _safetyRows_().map(function (r) {
+    return {
+      category: String(r[SF.cat]), client: String(r[SF.client] || ''),
+      item: String(r[SF.item]), level: Number(r[SF.level]) || 0
+    };
+  });
+  return { ok: true, list: list };
+}
+
+// 設定/更新一筆安全水位（倉管/admin；同 類別+客戶+品名 覆蓋）
+function setSafetyLevel(p) {
+  const category = p && p.category, item = p && p.item;
+  const client = (p && p.client) || '';
+  const level = Math.floor(Number(p && p.level));
+  if (category !== '成品' && category !== '玻璃瓶') return { ok: false, error: '類別需為 成品 或 玻璃瓶' };
+  if (!item) return { ok: false, error: '缺少品名' };
+  if (!(level >= 0)) return { ok: false, error: '安全水位需為 0 或正整數' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const ws = _safetySheet_();
+    const data = ws.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][SF.cat]) === category &&
+        String(data[i][SF.client] || '') === String(client) &&
+        String(data[i][SF.item]) === String(item)) {
+        ws.getRange(i + 1, SF.level + 1).setValue(level);
+        ws.getRange(i + 1, SF.operator + 1).setValue(p.operator || '');
+        ws.getRange(i + 1, SF.updatedAt + 1).setValue(_stockNow_());
+        return { ok: true, updated: true, category: category, client: client, item: item, level: level };
+      }
+    }
+    ws.appendRow([category, client, item, level, p.operator || '', _stockNow_()]);
+    return { ok: true, updated: false, category: category, client: client, item: item, level: level };
+  } finally { lock.releaseLock(); }
+}
+
+// 低於安全水位的品項（登入後警告用）；水位=0 視為未設不警告
+function getStockAlerts() {
+  const rows = _safetyRows_();
+  if (!rows.length) return { ok: true, count: 0, alerts: [] };
+  const stockRows = _stockRows_();
+  const bottleRows = _bottleRows_();
+  const alerts = [];
+  rows.forEach(function (r) {
+    const cat = String(r[SF.cat]);
+    const client = String(r[SF.client] || '');
+    const item = String(r[SF.item]);
+    const level = Number(r[SF.level]) || 0;
+    if (level <= 0) return;
+    let stock = 0;
+    if (cat === '成品') stock = _stockOf_(stockRows, client, item);
+    else if (cat === '玻璃瓶') stock = _bottleStockOf_(bottleRows, item);
+    else return;
+    if (stock < level) alerts.push({ category: cat, client: client, item: item, stock: stock, level: level });
+  });
+  return { ok: true, count: alerts.length, alerts: alerts };
 }
