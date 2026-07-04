@@ -105,6 +105,7 @@ function doGet(e) {
       case 'updateOrderFinance':     result = updateOrderFinance(p); break;      // 金流紀錄 N~V 欄(v1.6)
       case 'updateOrderDelivery':    result = updateOrderDelivery(p); break;     // 配送資訊 W~AD 欄(v1.7)
       case 'getOrderHistory':        result = getOrderHistory(p); break;         // 訂單修改歷史(v1.8)
+      case 'updateOrder':            result = updateOrder(p); break;             // 編輯整張訂單(v2.0)
       case 'getFinanceSummary':      result = getFinanceSummary(p); break;       // 當月金流摘要(v1.6, 財務名單限定)
       case 'getStockOverview':       result = getStockOverview(p); break;        // 成品庫存
       case 'stockIn':                result = stockIn(p); break;                 // 成品庫存
@@ -681,6 +682,60 @@ function confirmShipDate(p) {
     }
   }
   return { ok: false, error: '找不到訂單：' + orderNo };
+}
+
+// ── v2.0 編輯整張訂單 ─────────────────────────────
+// 覆寫 B~J(I 製作狀態依 items 重算)、L 實際出貨日、N~V 金流、W~AD 配送。
+// A訂單編號、K建立時間、M出貨日已確認 不動。支援「先建殼、後補資料」工作流。
+function updateOrder(p) {
+  const orderNo = p && p.orderNo;
+  if (!orderNo) return { ok: false, error: '缺少 orderNo' };
+  if (!p.client) return { ok: false, error: '缺少客戶' };
+  let items;
+  try { items = typeof p.items === 'string' ? JSON.parse(p.items) : (p.items || []); }
+  catch (e) { return { ok: false, error: '酒款明細 JSON 解析失敗' }; }
+  if (!items || !items.length) return { ok: false, error: '訂單至少要有一款酒' };
+  items = items.map(function (it) {
+    const o = { product: it.product || '', sheet: it.sheet || '', volume: it.volume || '',
+      bottleType: it.bottleType || '', qty: Number(it.qty) || 0, status: it.status || '待製作' };
+    if (it.batchId) o.batchId = it.batchId;
+    return o;
+  });
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('訂單主表');
+  if (!ws) return { ok: false, error: '找不到訂單主表分頁' };
+  _ensureOrderFinanceHeaders_(ws);
+  const finAdj = (String(p.finalAdjusted || '').toLowerCase() === 'true');
+  const sent = (String(p.invoiceSent || '').toLowerCase() === 'true');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const data = ws.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) !== String(orderNo)) continue;
+      const allDone = items.every(function (it) { return it.status === '完成'; });
+      const anyDone = items.some(function (it) { return it.status === '完成'; });
+      const status = allDone ? '已完成' : (anyDone ? '製作中' : '待製作');
+      ws.getRange(i + 1, 2, 1, 9).setValues([[
+        p.client, p.orderType || '', p.deliveryDate || '', JSON.stringify(items),
+        Number(p.total) || 0, Number(p.balance) || 0, p.depositStatus || '', status, p.pm || ''
+      ]]);
+      ws.getRange(i + 1, 12).setValue(p.actualDeliveryDate || p.deliveryDate || '');
+      ws.getRange(i + 1, 14, 1, 9).setValues([[
+        _numOrBlank_(p.depositAmount), p.depositDueDate || '', p.depositPaidDate || '',
+        _numOrBlank_(p.finalAmount), p.finalDueDate || '', p.finalPaidDate || '',
+        finAdj ? 'TRUE' : '', finAdj ? _numOrBlank_(p.finalAdjustedAmount) : '', p.finalAdjustNote || ''
+      ]]);
+      ws.getRange(i + 1, 23, 1, 8).setValues([[
+        p.shipMethod || '', _numOrBlank_(p.shipFee), p.recvName || '', p.recvPhone || '',
+        p.recvAddr || '', p.taxId || '', sent ? 'TRUE' : '', p.invoiceLast5 || ''
+      ]]);
+      _logOrderChange_(orderNo, p.user || p.pm || '', '編輯訂單',
+        p.client + '／' + items.length + ' 款／總 NT$' + (Number(p.total) || 0) + '／表訂 ' + (p.deliveryDate || '—'));
+      return { ok: true, orderNo: orderNo };
+    }
+    return { ok: false, error: '找不到訂單：' + orderNo };
+  } finally { lock.releaseLock(); }
 }
 
 // ── v1.6 金流紀錄 ─────────────────────────────────
