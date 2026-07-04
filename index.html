@@ -245,6 +245,12 @@ tbody tr:hover td{background:#faf3e8;}
 /* ── 包裝配件 ── */
 .ck-row{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;}
 .ck-row input[type=checkbox]{width:16px;height:16px;cursor:pointer;accent-color:var(--gold);}
+/* 登入帳號按鈕格（v1.9） */
+#loginUserGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.login-user-btn{padding:14px 8px;border:1px solid var(--border);border-radius:12px;background:var(--card);font-size:16px;font-weight:700;color:var(--ink);cursor:pointer;text-align:center;transition:background .12s,border-color .12s;}
+.login-user-btn:active{transform:scale(.98);}
+.login-user-btn.sel{background:var(--gold-lt);border-color:var(--gold-dk);color:var(--gold-dk);}
+.login-user-label{text-align:center;font-size:14px;font-weight:600;color:var(--ink2);margin:2px 0 10px;}
 </style>
 </head>
 <body>
@@ -259,7 +265,17 @@ tbody tr:hover td{background:#faf3e8;}
       <div class="sub">廠務／酒譜管理系統</div>
     </div>
     <div class="login-card">
-      <select class="inp" id="loginUser"><option value="">選擇帳號</option><option>Lulu</option><option>Kevin</option><option>Molly</option><option>阿軒</option><option>小捲</option><option>Vic</option><option>小李</option></select>
+      <div class="login-user-label">請選擇您的帳號</div>
+      <div id="loginUserGrid">
+        <button type="button" class="login-user-btn" onclick="selectLoginUser(this)">Lulu</button>
+        <button type="button" class="login-user-btn" onclick="selectLoginUser(this)">Kevin</button>
+        <button type="button" class="login-user-btn" onclick="selectLoginUser(this)">Molly</button>
+        <button type="button" class="login-user-btn" onclick="selectLoginUser(this)">阿軒</button>
+        <button type="button" class="login-user-btn" onclick="selectLoginUser(this)">小捲</button>
+        <button type="button" class="login-user-btn" onclick="selectLoginUser(this)">Vic</button>
+        <button type="button" class="login-user-btn" onclick="selectLoginUser(this)">小李</button>
+      </div>
+      <input type="hidden" id="loginUser" value="">
       <input class="inp" id="loginPass" type="password" placeholder="密碼" inputmode="numeric">
       <button class="btn btn-primary btn-full" id="loginBtn" onclick="doLogin()">登入</button>
       <div id="loginErr"></div>
@@ -2661,7 +2677,14 @@ document.addEventListener('click', e => {
     document.querySelectorAll('.sdrop').forEach(d => d.classList.remove('open'));
 });
 document.getElementById('loginPass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
-document.getElementById('loginUser').addEventListener('change', () => setTimeout(()=>document.getElementById('loginPass').focus(), 50));
+// v1.9 帳號改按鈕格：點按鈕選帳號→highlight＋自動聚焦密碼欄（#loginUser 改 hidden input 承接值，doLogin 不用改）
+function selectLoginUser(btn) {
+  document.querySelectorAll('#loginUserGrid .login-user-btn').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  document.getElementById('loginUser').value = btn.textContent.trim();
+  document.getElementById('loginErr').textContent = '';
+  setTimeout(() => document.getElementById('loginPass').focus(), 50);
+}
 </script>
 </body>
 </html>
