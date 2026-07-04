@@ -1888,6 +1888,13 @@ function orderBottleList() { return [...Object.keys(BSPEC), '山形香水瓶', '
 // 客戶顯示名（只改顯示、資料鍵不變）與隱藏清單
 const CLIENT_LABELS = { '南坡萬v.2': '南坡萬自有品牌酒' };
 const HIDDEN_CLIENTS = ['Feeling Bar Cafe', '南坡萬公版'];
+// OEM 客戶（前端補充；無後端酒譜，酒款為建單用名稱、sheet 留空）
+const EXTRA_CLIENT_RECIPES = {
+  'OEM-Babyface': ['Babyface-泰奶焙火蘭姆酒', 'Babyface-玫瑰夏多內琴酒', 'Babyface-茉莉檸檬茶琴酒'],
+  'OEM-好野吧': ['好野吧-玫開二度', '好野吧-老鷹教父', '好野吧-灌籃高手', '好野吧-蝴蝶魔球'],
+  'OEM-Lane72': ['茉莉香片琴酒(利口酒)', '焙火烏龍威士忌(利口酒)', '玫瑰烏龍威士忌', '桂花烏龍威士忌'],
+};
+const EXTRA_CLIENTS = Object.keys(EXTRA_CLIENT_RECIPES);
 function clientLabel(key) { return CLIENT_LABELS[key] || key; }
 // 訂單類型欄：南坡萬自有品牌酒(南坡萬v.2) → 定期生產/自行keyin；其餘 → 一般建議清單
 function orderTypeFieldHtml(client) {
@@ -1897,8 +1904,11 @@ function orderTypeFieldHtml(client) {
   return '<input class="inp" id="om_type" list="omTypeList" placeholder="如：換前標公版酒" style="margin:0;"><datalist id="omTypeList"><option>換前標公版酒</option><option>南坡萬自有品牌</option></datalist>';
 }
 function orderLineHtml(idx, client) {
-  const recs = recipeList.filter(i => i.client === client);
-  const recOpts = recs.map(i => `<option>${i.recipeName}</option>`).join('');
+  const names = [...new Set([
+    ...recipeList.filter(i => i.client === client).map(i => i.recipeName),
+    ...(EXTRA_CLIENT_RECIPES[client] || [])
+  ])];
+  const recOpts = names.map(n => `<option>${n}</option>`).join('');
   const btOpts = orderBottleList().map(b => `<option>${b}</option>`).join('');
   return `<div class="order-line" id="oline_${idx}" style="border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:8px;">
     <div class="form-row" style="gap:6px;">
@@ -1936,7 +1946,7 @@ function addOrderClient() {
 }
 function showOrderModal() {
   const allClients = clientList.length ? clientList.map(c => c.name) : ['Feeling Bar', '南坡萬公版', '南坡萬v.2', 'Feeling Bar Cafe'];
-  const clients = allClients.filter(c => !HIDDEN_CLIENTS.includes(c));
+  const clients = allClients.filter(c => !HIDDEN_CLIENTS.includes(c)).concat(EXTRA_CLIENTS.filter(c => !allClients.includes(c)));
   const cOpts = clients.map(c => `<option value="${c}">${clientLabel(c)}</option>`).join('');
   const c0 = clients[0] || '';
   const modal = makeModal(`
