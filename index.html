@@ -1853,18 +1853,15 @@ async function renderRuncardPage(mc) {
   mc.innerHTML = `
     ${isFinanceUser() ? '<div id="financeSummaryCard"></div>' : ''}
     <div class="card" style="margin-bottom:10px;">
-      <div class="sec-hd"><div class="card-title" style="margin:0">🗓️ 本月訂單（依出貨日）</div>
-        <button class="btn btn-ghost btn-sm" onclick="loadOrderMgmt()">↻</button></div>
-      <div id="monthOrderArea"><div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">載入中…</div></div>
-    </div>
-    <div class="card" style="margin-bottom:10px;">
-      <div class="sec-hd"><div class="card-title" style="margin:0">📦 出貨訂單</div>
+      <div class="sec-hd"><div class="card-title" style="margin:0">📦 訂單列表（依出貨日）</div>
         <div style="display:flex;gap:6px;">
+          <button class="btn btn-ghost btn-sm" id="ordScopeBtn" onclick="toggleOrderScope()">${_orderScopeAll ? '只看本月' : '顯示全部'}</button>
           <button class="btn btn-ghost btn-sm" onclick="loadOrderMgmt()">↻</button>
           ${isAdmin ? '<button class="btn btn-primary btn-sm" onclick="showOrderModal()">＋ 建單</button>' : ''}
         </div>
       </div>
-      <div id="orderMgmtArea"><div style="text-align:center;color:var(--ink3);padding:16px;font-size:13px;">載入中…</div></div>
+      <div style="font-size:11px;color:var(--ink3);margin-bottom:2px;">點卡片查看完整詳情與操作（完成回報／確認出貨／編輯）</div>
+      <div id="monthOrderArea"><div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">載入中…</div></div>
     </div>
     <div id="runcardArea"><div class="card"><div style="text-align:center;color:var(--ink3);padding:16px;font-size:13px;">載入 run card…</div></div></div>`;
   if (isFinanceUser()) loadFinanceSummary();
@@ -1898,56 +1895,15 @@ async function loadFinanceSummary() {
   </div>`;
 }
 
+// v2.0：出貨訂單大卡片區已移除（與訂單列表+詳情重複）；此函式只負責抓資料+渲染列表
 async function loadOrderMgmt() {
   const isAdmin = curUser && curUser.role === 'admin';
   const canSeeMoney = isAdmin || isFinanceUser();
   const res = await api(canSeeMoney ? { action: 'getOrders' } : { action: 'getOrders', view: 'bartender' });
-  const area = document.getElementById('orderMgmtArea'); if (!area) return;
-  if (!res.ok) { area.innerHTML = `<div class="warn" style="padding:10px;">${res.error || '讀取失敗'}</div>`; return; }
-  const orders = res.orders || [];
-  window._mgmtOrders = orders;
-  renderMonthOrders(orders);
-  if (!orders.length) { area.innerHTML = '<div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">尚無訂單</div>'; return; }
-  const canAct = isAdmin || (curUser && curUser.role === '倉管');
-  area.innerHTML = orders.map((o, oi) => {
-    const d = daysToShip(o.deliveryDate);
-    const done = o.status === '已完成';
-    const urgent = d !== null && d <= 7 && !done;
-    const dbadge = d === null ? '' : d < 0 ? `<span class="badge bg-red">逾期${-d}天</span>`
-      : d <= 7 ? `<span class="badge bg-red">剩${d}天</span>` : `<span class="badge bg-brown">${d}天後</span>`;
-    const items = (o.items || []).map((it, ii) => {
-      const idone = it.status === '完成';
-      const canComplete = canAct && !idone && !!it.sheet;
-      return `<div style="display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--border);border-radius:6px;margin-top:6px;${idone ? 'opacity:.6;' : ''}">
-        <div style="flex:1;"><div style="font-weight:500;font-size:13px;"><span style="color:var(--ink3);">${ii + 1}.</span> ${it.product || '（未綁酒譜）'}</div>
-          <div style="font-size:11px;color:var(--ink3);">${it.volume || ''} × ${it.qty} 瓶${it.bottleType ? (' · ' + it.bottleType) : ''}</div></div>
-        ${idone ? '<span class="badge bg-green">已完成</span>' : (it.sheet ? '<span class="badge bg-brown">待製作</span>' : '<span class="badge bg-yellow">未綁酒譜</span>')}
-        ${canComplete ? `<button class="btn btn-success btn-sm" style="padding:4px 8px;" onclick="showCompleteModal(${oi},${ii})">完成回報</button>` : ''}
-      </div>`;
-    }).join('');
-    const dueUnconfirmed = !done && !o.shipDateConfirmed && d !== null && d <= 0;
-    let money = '';
-    if (canSeeMoney) {
-      const hasDep = o.depositAmount !== '' && o.depositAmount != null;
-      const hasFin = o.finalAmount !== '' && o.finalAmount != null;
-      const finShown = o.finalAdjusted && o.finalAdjustedAmount !== '' && o.finalAdjustedAmount != null
-        ? `<s style="opacity:.6;">NT$${hasFin ? o.finalAmount : (o.balance || 0)}</s> → NT$${o.finalAdjustedAmount}`
-        : (hasFin ? 'NT$' + o.finalAmount : (o.balance ? 'NT$' + o.balance : '—'));
-      money = `<div style="font-size:11px;color:var(--ink3);margin-top:4px;">總 NT$${o.total || 0} · 訂金狀態 ${o.depositStatus || '—'}</div>
-      <div style="font-size:11px;color:var(--ink3);margin-top:2px;">💰 訂金 ${hasDep ? 'NT$' + o.depositAmount : '—'}（預計 ${o.depositDueDate || '—'}｜實收 ${o.depositPaidDate || '<span style="color:var(--red);">未收</span>'}）</div>
-      <div style="font-size:11px;color:var(--ink3);">💰 尾款 ${finShown}（預計 ${o.finalDueDate || '—'}｜實收 ${o.finalPaidDate || '<span style="color:var(--red);">未收</span>'}）${o.finalAdjusted ? '<span class="badge bg-yellow" style="font-size:9px;">特殊調整</span>' : ''}</div>
-      ${o.finalAdjustNote ? `<div style="font-size:10px;color:var(--ink3);">📝 ${o.finalAdjustNote}</div>` : ''}`;
-    }
-    return `<div class="card" style="margin-bottom:10px;padding:12px;${urgent ? 'border-left:3px solid var(--red);' : ''}">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
-        <div><b>${o.orderNo}</b> <span style="color:var(--ink3);font-size:12px;">${clientLabel(o.client)}${o.orderType ? (' · ' + o.orderType) : ''}</span></div>
-        <div style="display:flex;gap:4px;align-items:center;">${dbadge}<span class="badge ${done ? 'bg-green' : 'bg-yellow'}">${o.status || '製作中'}</span></div>
-      </div>
-      <div style="font-size:11px;color:var(--ink3);margin:4px 0 2px;">表訂 ${o.deliveryDate || '—'} ｜ 實際 ${o.shipDateConfirmed ? (o.actualDeliveryDate || o.deliveryDate || '—') : '<span style="color:var(--red);">待確認</span>'}</div>
-      ${money}${items}
-      ${canAct ? `<div class="fe mt8" style="gap:6px;">${isAdmin ? `<button class="btn btn-ghost btn-sm" style="padding:4px 8px;" onclick="showFinanceModal(${oi})">💰 金流</button>` : ''}${dueUnconfirmed ? `<button class="btn btn-sm" style="background:var(--gold-lt);color:var(--gold-dk);border:1px solid var(--gold-dk);padding:4px 8px;" onclick="showConfirmShipModal(${oi})">🚚 確認實際出貨日</button>` : ''}<button class="btn btn-danger btn-sm" onclick="confirmShip(${oi})">確認出貨（扣成品庫存）</button></div>` : ''}
-    </div>`;
-  }).join('');
+  const area = document.getElementById('monthOrderArea');
+  if (!res.ok) { if (area) area.innerHTML = `<div class="warn" style="padding:10px;">${res.error || '讀取失敗'}</div>`; return; }
+  window._mgmtOrders = res.orders || [];
+  renderMonthOrders(window._mgmtOrders);
 }
 
 // 建單表單（admin）：接 createOrder，欄位對齊訂單主表 11 欄
@@ -2131,13 +2087,22 @@ function showDeliveryModal(orderNo) {
     else toast('更新失敗：' + (res.error || ''));
   });
 }
-// 🗓️ 本月訂單列表（依表訂出貨日排序；點卡片看完整詳情）
+// 📦 訂單列表（依表訂出貨日排序；點卡片看完整詳情＋操作）。v2.0：本月/全部切換
+let _orderScopeAll = false;
+function toggleOrderScope() {
+  _orderScopeAll = !_orderScopeAll;
+  const b = document.getElementById('ordScopeBtn');
+  if (b) b.textContent = _orderScopeAll ? '只看本月' : '顯示全部';
+  renderMonthOrders(window._mgmtOrders || []);
+}
 function renderMonthOrders(orders) {
   const area = document.getElementById('monthOrderArea'); if (!area) return;
   const ym = _localDate().slice(0, 7);
-  const list = (orders || []).filter(o => (o.deliveryDate || '').slice(0, 7) === ym)
-    .sort((a, b) => (a.deliveryDate || '').localeCompare(b.deliveryDate || ''));
-  if (!list.length) { area.innerHTML = `<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">本月（${ym}）尚無出貨訂單</div>`; return; }
+  const list = (orders || []).filter(o => _orderScopeAll || (o.deliveryDate || '').slice(0, 7) === ym)
+    .sort((a, b) => _orderScopeAll
+      ? (b.deliveryDate || '').localeCompare(a.deliveryDate || '')
+      : (a.deliveryDate || '').localeCompare(b.deliveryDate || ''));
+  if (!list.length) { area.innerHTML = `<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">${_orderScopeAll ? '尚無訂單' : `本月（${ym}）尚無出貨訂單`}</div>`; return; }
   area.innerHTML = list.map(o => {
     const itemsTxt = (o.items || []).map(it => `${it.product}×${it.qty}`).join('、');
     return `<div onclick="showOrderDetail('${o.orderNo}')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;background:var(--card);">
@@ -2159,11 +2124,13 @@ function showOrderDetail(orderNo) {
   const o = list[idx];
   const isAdmin = curUser && curUser.role === 'admin';
   const canSeeMoney = isAdmin || isFinanceUser();
+  const canAct = isAdmin || (curUser && curUser.role === '倉管');
   const items = (o.items || []).map((it, i) =>
     `<div style="display:flex;gap:6px;align-items:center;padding:6px 8px;border:1px solid var(--border);border-radius:6px;margin-top:4px;font-size:12px;">
       <span style="color:var(--gold-dk);font-weight:700;">${i + 1}.</span>
       <span style="flex:1;">${it.product || '（未綁酒譜）'} · ${it.volume || ''} × ${it.qty} 瓶${it.bottleType ? (' · ' + it.bottleType) : ''}</span>
       <span class="badge ${it.status === '完成' ? 'bg-green' : 'bg-yellow'}" style="font-size:9px;">${it.status || '待製作'}</span>
+      ${canAct && it.status !== '完成' && it.sheet ? `<button class="btn btn-success btn-sm" style="padding:3px 7px;font-size:11px;" onclick="this.closest('.modal-bg').remove();showCompleteModal(${idx},${i})">完成回報</button>` : ''}
     </div>`).join('');
   const row = (k, val) => `<div style="display:flex;gap:8px;font-size:12px;margin-top:3px;"><span style="flex:0 0 92px;color:var(--ink3);">${k}</span><span style="flex:1;">${val}</span></div>`;
   const finShown = o.finalAdjusted && o.finalAdjustedAmount !== '' && o.finalAdjustedAmount != null
@@ -2194,12 +2161,20 @@ function showOrderDetail(orderNo) {
     ${dlvHtml}
     <div style="margin:8px 0 2px;font-size:13px;font-weight:600;color:var(--gold-dk);">📜 修改歷史</div>
     <div id="orderHistArea" style="font-size:11px;color:var(--ink3);">載入中…</div>
-    <div class="fe" style="margin-top:10px;gap:6px;">
+    <div class="fe" style="margin-top:10px;gap:6px;flex-wrap:wrap;">
+      ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();editOrder(${idx})">✏️ 編輯訂單</button>` : ''}
       ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();showDeliveryModal('${o.orderNo}')">🚚 編輯配送</button>` : ''}
       ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();showFinanceModal(${idx})">💰 金流</button>` : ''}
+      ${canAct && !o.shipDateConfirmed ? `<button class="btn btn-sm" style="background:var(--gold-lt);color:var(--gold-dk);border:1px solid var(--gold-dk);" onclick="this.closest('.modal-bg').remove();showConfirmShipModal(${idx})">🚚 確認實際出貨日</button>` : ''}
+      ${canAct ? `<button class="btn btn-danger btn-sm" onclick="this.closest('.modal-bg').remove();confirmShip(${idx})">確認出貨（扣庫存）</button>` : ''}
       <button class="btn btn-primary btn-sm" onclick="this.closest('.modal-bg').remove()">關閉</button>
     </div>`);
   loadOrderHistory(o.orderNo);
+}
+// ✏️ 編輯整張訂單（admin）：帶入既有資料的建單 modal，儲存走 updateOrder
+function editOrder(oi) {
+  const o = (window._mgmtOrders || [])[oi]; if (!o) return;
+  showOrderModal(o);
 }
 // 訂單修改歷史（詳情最下緣備查；v1.8 起記錄，舊訂單此前的操作無紀錄）
 async function loadOrderHistory(orderNo) {
@@ -2243,14 +2218,17 @@ function addOrderClient() {
   sel.value = name;
   orderModalClientChange();
 }
-function showOrderModal() {
+// v2.0：edit 傳入既有訂單物件＝編輯模式（全欄位可改，儲存走 updateOrder、保留各酒款完成狀態）
+function showOrderModal(edit) {
+  const isEdit = !!(edit && edit.orderNo);
   const allClients = clientList.length ? clientList.map(c => c.name) : ['Feeling Bar', '南坡萬公版', '南坡萬v.2', 'Feeling Bar Cafe'];
-  const clients = allClients.filter(c => !HIDDEN_CLIENTS.includes(c)).concat(EXTRA_CLIENTS.filter(c => !allClients.includes(c)));
+  let clients = allClients.filter(c => !HIDDEN_CLIENTS.includes(c)).concat(EXTRA_CLIENTS.filter(c => !allClients.includes(c)));
+  if (isEdit && edit.client && !clients.includes(edit.client)) clients = [edit.client, ...clients];
   const cOpts = clients.map(c => `<option value="${c}">${clientLabel(c)}</option>`).join('');
-  const c0 = clients[0] || '';
+  const c0 = isEdit ? edit.client : (clients[0] || '');
   const modal = makeModal(`
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
-      <div class="modal-title" style="margin:0;">＋ 新增出貨訂單</div>
+      <div class="modal-title" style="margin:0;">${isEdit ? ('✏️ 編輯訂單 ' + edit.orderNo) : '＋ 新增出貨訂單'}</div>
       <button class="btn btn-primary btn-sm" id="om_sub_top" style="flex:0 0 auto;white-space:nowrap;">💾 儲存並關閉</button>
     </div>
     <div class="form-row">
@@ -2264,23 +2242,54 @@ function showOrderModal() {
       <div class="fg"><label>實際出貨日</label><input class="inp" id="om_actual" type="date" style="margin:0;"></div>
     </div>
     <div class="form-row">
-      <div class="fg"><label>PM</label><input class="inp" id="om_pm" value="${(curUser && curUser.username) || ''}" style="margin:0;"></div>
+      <div class="fg"><label>PM</label><input class="inp" id="om_pm" value="${isEdit ? (edit.pm || '') : ((curUser && curUser.username) || '')}" style="margin:0;"></div>
     </div>
     <div style="margin:4px 0 6px;font-size:13px;font-weight:600;color:var(--gold-dk);">酒款明細（已 key <span id="olineCount">0</span> 款）</div>
     <div id="orderItemLines"></div>
     <div class="fe" style="margin-bottom:10px;"><button class="btn btn-ghost btn-sm" onclick="orderModalAddLine()">＋ 加一款</button></div>
     <div class="form-row">
-      <div class="fg"><label>總金額</label><input class="inp" id="om_total" type="number" min="0" value="0" style="margin:0;"></div>
-      <div class="fg"><label>尾款</label><input class="inp" id="om_balance" type="number" min="0" value="0" style="margin:0;"></div>
+      <div class="fg"><label>總金額</label><input class="inp" id="om_total" type="number" min="0" value="${isEdit ? (edit.total || 0) : 0}" style="margin:0;"></div>
+      <div class="fg"><label>尾款</label><input class="inp" id="om_balance" type="number" min="0" value="${isEdit ? (edit.balance || 0) : 0}" style="margin:0;"></div>
     </div>
-    <div class="fg" style="margin-bottom:12px;"><label>訂金狀態</label><input class="inp" id="om_deposit" list="omDepList" placeholder="未收 / 已收訂 / 已結清（可自填如 已收訂金 NT$3,000）" style="margin:0;"><datalist id="omDepList"><option>未收</option><option>已收訂</option><option>已結清</option></datalist></div>
-    ${financeFieldsHtml()}
-    <div id="omDeliveryWrap">${deliveryFieldsHtml()}</div>
-    <div class="fe" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="if(confirm('放棄這張未儲存的訂單？')) this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="om_sub">💾 儲存並關閉</button></div>`, { locked: true });
-  document.getElementById('om_ship').value = _localDate();
-  document.getElementById('om_actual').value = _localDate();
-  _orderLineSeq = 0; orderModalAddLine();
-  refillDeliveryDefaults();
+    <div class="fg" style="margin-bottom:12px;"><label>訂金狀態</label><input class="inp" id="om_deposit" list="omDepList" value="${isEdit ? (edit.depositStatus || '') : ''}" placeholder="未收 / 已收訂 / 已結清（可自填如 已收訂金 NT$3,000）" style="margin:0;"><datalist id="omDepList"><option>未收</option><option>已收訂</option><option>已結清</option></datalist></div>
+    ${financeFieldsHtml(isEdit ? edit : null)}
+    <div id="omDeliveryWrap">${deliveryFieldsHtml(isEdit ? edit : null)}</div>
+    <div class="fe" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="if(confirm('放棄未儲存的變更？')) this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="om_sub">💾 儲存並關閉</button></div>`, { locked: true });
+  if (isEdit) {
+    document.getElementById('om_client').value = edit.client;
+    const t = document.getElementById('om_type');
+    if (t && t.tagName === 'SELECT') {
+      const topts = [...t.options].map(x => x.value);
+      if (topts.includes(edit.orderType)) { t.value = edit.orderType; }
+      else if (edit.orderType) { t.value = '自行keyin'; omTypeSelChange(t); const c = document.getElementById('om_type_custom'); if (c) c.value = edit.orderType; }
+    } else if (t) { t.value = edit.orderType || ''; }
+    document.getElementById('om_ship').value = edit.deliveryDate || _localDate();
+    document.getElementById('om_actual').value = edit.actualDeliveryDate || edit.deliveryDate || _localDate();
+    _orderLineSeq = 0;
+    (edit.items || []).forEach(it => {
+      orderModalAddLine();
+      const lines = document.querySelectorAll('#orderItemLines .order-line');
+      const el = lines[lines.length - 1];
+      const li = el.id.replace('oline_', '');
+      document.getElementById('oi_' + li + '_rec').value = it.product || '';
+      document.getElementById('oi_' + li + '_qty').value = it.qty || 1;
+      document.getElementById('oi_' + li + '_vol').value = it.volume || '';
+      const btSel = document.getElementById('oi_' + li + '_bt');
+      if (it.bottleType && ![...btSel.options].some(x => x.value === it.bottleType)) {
+        const op = document.createElement('option'); op.textContent = it.bottleType; btSel.appendChild(op);
+      }
+      if (it.bottleType) btSel.value = it.bottleType;
+      el.dataset.status = it.status || '待製作';
+      el.dataset.batchId = it.batchId || '';
+    });
+    if (!(edit.items || []).length) orderModalAddLine();
+    renumberOrderLines();
+  } else {
+    document.getElementById('om_ship').value = _localDate();
+    document.getElementById('om_actual').value = _localDate();
+    _orderLineSeq = 0; orderModalAddLine();
+    refillDeliveryDefaults();
+  }
   const doCreate = async () => {
     const client = document.getElementById('om_client').value;
     const items = [];
@@ -2290,11 +2299,15 @@ function showOrderModal() {
       const qty = parseInt(document.getElementById('oi_' + idx + '_qty').value, 10) || 0;
       if (!product || qty <= 0) return;
       const rec = recipeList.find(i => i.client === client && i.recipeName === product);
-      items.push({ product, sheet: rec ? rec.sheet : '', volume: document.getElementById('oi_' + idx + '_vol').value || '', bottleType: document.getElementById('oi_' + idx + '_bt').value || '', qty, status: '待製作' });
+      const item = { product, sheet: rec ? rec.sheet : '', volume: document.getElementById('oi_' + idx + '_vol').value || '', bottleType: document.getElementById('oi_' + idx + '_bt').value || '', qty, status: (isEdit && line.dataset.status) ? line.dataset.status : '待製作' };
+      if (isEdit && line.dataset.batchId) item.batchId = line.dataset.batchId;
+      items.push(item);
     });
     if (!items.length) { toast('請至少加一款酒（數量>0）'); return; }
     const res = await api({
-      action: 'createOrder', client, orderType: getOrderTypeValue(),
+      action: isEdit ? 'updateOrder' : 'createOrder',
+      ...(isEdit ? { orderNo: edit.orderNo, user: (curUser && curUser.username) || '' } : {}),
+      client, orderType: getOrderTypeValue(),
       deliveryDate: document.getElementById('om_ship').value || '',
       actualDeliveryDate: document.getElementById('om_actual').value || document.getElementById('om_ship').value || '',
       items: JSON.stringify(items),
@@ -2302,8 +2315,8 @@ function showOrderModal() {
       depositStatus: document.getElementById('om_deposit').value || '', pm: document.getElementById('om_pm').value || '',
       ...collectFinanceFields(), ...collectDeliveryFields()
     });
-    if (res.ok) { toast('已建立訂單 ' + res.orderNo); modal.remove(); loadOrderMgmt(); if (isFinanceUser()) loadFinanceSummary(); }
-    else toast('建單失敗：' + (res.error || ''));
+    if (res.ok) { toast(isEdit ? ('訂單已更新 ' + edit.orderNo) : ('已建立訂單 ' + res.orderNo)); modal.remove(); loadOrderMgmt(); if (isFinanceUser()) loadFinanceSummary(); }
+    else toast((isEdit ? '更新失敗：' : '建單失敗：') + (res.error || ''));
   };
   const b = modal.querySelector('#om_sub');
   b.onclick = () => lockRun(b, doCreate);
