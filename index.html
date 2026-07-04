@@ -1830,6 +1830,11 @@ async function renderRuncardPage(mc) {
   mc.innerHTML = `
     ${isFinanceUser() ? '<div id="financeSummaryCard"></div>' : ''}
     <div class="card" style="margin-bottom:10px;">
+      <div class="sec-hd"><div class="card-title" style="margin:0">🗓️ 本月訂單（依出貨日）</div>
+        <button class="btn btn-ghost btn-sm" onclick="loadOrderMgmt()">↻</button></div>
+      <div id="monthOrderArea"><div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">載入中…</div></div>
+    </div>
+    <div class="card" style="margin-bottom:10px;">
       <div class="sec-hd"><div class="card-title" style="margin:0">📦 出貨訂單</div>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-ghost btn-sm" onclick="loadOrderMgmt()">↻</button>
@@ -1878,6 +1883,7 @@ async function loadOrderMgmt() {
   if (!res.ok) { area.innerHTML = `<div class="warn" style="padding:10px;">${res.error || '讀取失敗'}</div>`; return; }
   const orders = res.orders || [];
   window._mgmtOrders = orders;
+  renderMonthOrders(orders);
   if (!orders.length) { area.innerHTML = '<div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">尚無訂單</div>'; return; }
   const canAct = isAdmin || (curUser && curUser.role === '倉管');
   area.innerHTML = orders.map((o, oi) => {
@@ -1890,7 +1896,7 @@ async function loadOrderMgmt() {
       const idone = it.status === '完成';
       const canComplete = canAct && !idone && !!it.sheet;
       return `<div style="display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--border);border-radius:6px;margin-top:6px;${idone ? 'opacity:.6;' : ''}">
-        <div style="flex:1;"><div style="font-weight:500;font-size:13px;">${it.product || '（未綁酒譜）'}</div>
+        <div style="flex:1;"><div style="font-weight:500;font-size:13px;"><span style="color:var(--ink3);">${ii + 1}.</span> ${it.product || '（未綁酒譜）'}</div>
           <div style="font-size:11px;color:var(--ink3);">${it.volume || ''} × ${it.qty} 瓶${it.bottleType ? (' · ' + it.bottleType) : ''}</div></div>
         ${idone ? '<span class="badge bg-green">已完成</span>' : (it.sheet ? '<span class="badge bg-brown">待製作</span>' : '<span class="badge bg-yellow">未綁酒譜</span>')}
         ${canComplete ? `<button class="btn btn-success btn-sm" style="padding:4px 8px;" onclick="showCompleteModal(${oi},${ii})">完成回報</button>` : ''}
@@ -1955,6 +1961,7 @@ function orderLineHtml(idx, client) {
   const recOpts = names.map(n => `<option>${n}</option>`).join('');
   const btOpts = orderBottleList().map(b => `<option>${b}</option>`).join('');
   return `<div class="order-line" id="oline_${idx}" style="border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:8px;">
+    <div style="font-size:11px;font-weight:700;color:var(--gold-dk);margin-bottom:2px;">酒款 <span class="oline-no">?</span></div>
     <div class="form-row" style="gap:6px;">
       <div class="fg" style="flex:2 1 140px"><label>酒款</label><input class="inp" id="oi_${idx}_rec" list="oidl_${idx}" placeholder="選或輸入酒款" style="margin:0;font-size:13px;"><datalist id="oidl_${idx}">${recOpts}</datalist></div>
       <div class="fg" style="flex:1 1 70px"><label>數量</label><input class="inp" id="oi_${idx}_qty" type="number" min="1" value="1" style="margin:0;font-size:13px;"></div>
@@ -1962,13 +1969,20 @@ function orderLineHtml(idx, client) {
     <div class="form-row" style="gap:6px;">
       <div class="fg" style="flex:1 1 90px"><label>規格</label><input class="inp" id="oi_${idx}_vol" value="100ml" style="margin:0;font-size:13px;"></div>
       <div class="fg" style="flex:1 1 100px"><label>瓶型</label><select class="inp" id="oi_${idx}_bt" style="margin:0;font-size:13px;">${btOpts}</select></div>
-      <div class="fg" style="flex:0 0 auto;display:flex;align-items:flex-end;"><button class="btn btn-ghost btn-sm" onclick="document.getElementById('oline_${idx}').remove()">✕</button></div>
+      <div class="fg" style="flex:0 0 auto;display:flex;align-items:flex-end;"><button class="btn btn-ghost btn-sm" onclick="document.getElementById('oline_${idx}').remove();renumberOrderLines()">✕</button></div>
     </div>
   </div>`;
+}
+// 酒款編號：加/刪一款後重編 1..n，並更新「已 key N 款」計數
+function renumberOrderLines() {
+  const lines = document.querySelectorAll('#orderItemLines .order-line');
+  lines.forEach((el, i) => { const n = el.querySelector('.oline-no'); if (n) n.textContent = i + 1; });
+  const c = document.getElementById('olineCount'); if (c) c.textContent = lines.length;
 }
 function orderModalAddLine() {
   const client = document.getElementById('om_client').value;
   document.getElementById('orderItemLines').insertAdjacentHTML('beforeend', orderLineHtml(_orderLineSeq++, client));
+  renumberOrderLines();
 }
 function orderModalClientChange() {
   document.getElementById('orderItemLines').innerHTML = '';
@@ -1976,6 +1990,7 @@ function orderModalClientChange() {
   const client = document.getElementById('om_client').value;
   const wrap = document.getElementById('omTypeWrap');
   if (wrap) wrap.innerHTML = orderTypeFieldHtml(client);
+  refillDeliveryDefaults();
 }
 // v1.6 金流紀錄欄位（建單 modal 與 💰金流編輯 modal 共用；id 固定 fin_*，同時只會有一個 modal）
 function financeFieldsHtml(v) {
@@ -2013,6 +2028,137 @@ function collectFinanceFields() {
     finalAdjustedAmount: gv('fin_adjAmt'), finalAdjustNote: gv('fin_adjNote')
   };
 }
+// ── v1.7 配送資訊 ─────────────────────────────
+const SHIP_METHODS = ['貨運公司宅配', '南坡萬專車專送'];
+function deliveryFieldsHtml(v) {
+  v = v || {};
+  const mOpts = SHIP_METHODS.map(m => `<option${v.shipMethod === m ? ' selected' : ''}>${m}</option>`).join('');
+  return `
+    <div style="margin:8px 0 6px;font-size:13px;font-weight:600;color:var(--gold-dk);">配送資訊</div>
+    <div class="form-row" style="gap:6px;">
+      <div class="fg" style="flex:1 1 140px"><label>配送方式</label><select class="inp" id="dlv_method" style="margin:0;font-size:13px;"><option value="">—</option>${mOpts}</select></div>
+      <div class="fg" style="flex:1 1 90px"><label>運費金額</label><input class="inp" id="dlv_fee" type="number" min="0" value="${(v.shipFee === '' || v.shipFee == null) ? '' : v.shipFee}" style="margin:0;font-size:13px;"></div>
+    </div>
+    <div class="form-row" style="gap:6px;">
+      <div class="fg" style="flex:1 1 100px"><label>收件人名稱</label><input class="inp" id="dlv_name" value="${v.recvName || ''}" style="margin:0;font-size:13px;"></div>
+      <div class="fg" style="flex:1 1 120px"><label>收件人手機</label><input class="inp" id="dlv_phone" inputmode="tel" value="${v.recvPhone || ''}" style="margin:0;font-size:13px;"></div>
+    </div>
+    <div class="fg"><label>收件地址</label><input class="inp" id="dlv_addr" value="${v.recvAddr || ''}" style="margin:0 0 6px;font-size:13px;"></div>
+    <div class="form-row" style="gap:6px;">
+      <div class="fg" style="flex:1 1 110px"><label>客戶公司統編</label><input class="inp" id="dlv_taxid" inputmode="numeric" value="${v.taxId || ''}" style="margin:0;font-size:13px;"></div>
+      <div class="fg" style="flex:1 1 110px"><label>發票後五碼</label><input class="inp" id="dlv_last5" inputmode="numeric" value="${v.invoiceLast5 || ''}" style="margin:0;font-size:13px;"></div>
+    </div>
+    <label style="display:flex;gap:6px;align-items:center;font-size:13px;margin:2px 0 6px;">
+      <input type="checkbox" id="dlv_sent" ${v.invoiceSent ? 'checked' : ''} style="width:auto;"> 發票／驗收單已隨貨寄出
+    </label>`;
+}
+function collectDeliveryFields() {
+  const gv = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+  return {
+    shipMethod: gv('dlv_method'), shipFee: gv('dlv_fee'), recvName: gv('dlv_name'),
+    recvPhone: gv('dlv_phone'), recvAddr: gv('dlv_addr'), taxId: gv('dlv_taxid'),
+    invoiceSent: document.getElementById('dlv_sent') && document.getElementById('dlv_sent').checked ? 'true' : '',
+    invoiceLast5: gv('dlv_last5')
+  };
+}
+// 同客戶最近一張有配送資料的訂單＝下一張的預設（免重 key）
+function clientDeliveryDefaults(client) {
+  const list = window._mgmtOrders || [];
+  for (let i = list.length - 1; i >= 0; i--) {
+    const o = list[i];
+    if (o.client === client && (o.recvName || o.recvAddr || o.shipMethod)) return o;
+  }
+  return null;
+}
+function refillDeliveryDefaults() {
+  const wrap = document.getElementById('omDeliveryWrap'); if (!wrap) return;
+  const client = document.getElementById('om_client').value;
+  const d = clientDeliveryDefaults(client);
+  wrap.innerHTML = deliveryFieldsHtml(d ? { ...d, invoiceSent: false, invoiceLast5: '' } : {});
+}
+// 🚚 配送編輯（admin）：整組覆寫 W~AD 欄
+function showDeliveryModal(orderNo) {
+  const o = (window._mgmtOrders || []).find(x => x.orderNo === orderNo); if (!o) return;
+  const modal = makeModal(`
+    <div class="modal-title">🚚 配送資訊：${o.orderNo}</div>
+    <div style="font-size:12px;color:var(--ink3);margin-bottom:8px;">${clientLabel(o.client)} · 表訂 ${o.deliveryDate || '—'}</div>
+    ${deliveryFieldsHtml(o)}
+    <div class="fe" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="dlv_sub">儲存配送</button></div>`);
+  const b = modal.querySelector('#dlv_sub');
+  b.onclick = () => lockRun(b, async () => {
+    const res = await api({ action: 'updateOrderDelivery', orderNo: o.orderNo, ...collectDeliveryFields() });
+    if (res.ok) { toast('配送資訊已更新'); modal.remove(); loadOrderMgmt(); }
+    else toast('更新失敗：' + (res.error || ''));
+  });
+}
+// 🗓️ 本月訂單列表（依表訂出貨日排序；點卡片看完整詳情）
+function renderMonthOrders(orders) {
+  const area = document.getElementById('monthOrderArea'); if (!area) return;
+  const ym = _localDate().slice(0, 7);
+  const list = (orders || []).filter(o => (o.deliveryDate || '').slice(0, 7) === ym)
+    .sort((a, b) => (a.deliveryDate || '').localeCompare(b.deliveryDate || ''));
+  if (!list.length) { area.innerHTML = `<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">本月（${ym}）尚無出貨訂單</div>`; return; }
+  area.innerHTML = list.map(o => {
+    const itemsTxt = (o.items || []).map(it => `${it.product}×${it.qty}`).join('、');
+    return `<div onclick="showOrderDetail('${o.orderNo}')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;background:var(--card);">
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:600;font-size:13px;">${clientLabel(o.client)} <span style="color:var(--ink3);font-weight:400;font-size:11px;">${o.orderNo}</span></div>
+        <div style="font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${itemsTxt || '—'}</div>
+      </div>
+      <div style="text-align:right;flex:0 0 auto;">
+        <div style="font-size:12px;font-weight:600;">${o.deliveryDate || '—'}</div>
+        <span class="badge ${o.status === '已完成' ? 'bg-green' : 'bg-yellow'}" style="font-size:9px;">${o.status || '製作中'}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+// 訂單完整詳情（本月列表卡片點開）
+function showOrderDetail(orderNo) {
+  const list = window._mgmtOrders || [];
+  const idx = list.findIndex(x => x.orderNo === orderNo); if (idx < 0) return;
+  const o = list[idx];
+  const isAdmin = curUser && curUser.role === 'admin';
+  const canSeeMoney = isAdmin || isFinanceUser();
+  const items = (o.items || []).map((it, i) =>
+    `<div style="display:flex;gap:6px;align-items:center;padding:6px 8px;border:1px solid var(--border);border-radius:6px;margin-top:4px;font-size:12px;">
+      <span style="color:var(--gold-dk);font-weight:700;">${i + 1}.</span>
+      <span style="flex:1;">${it.product || '（未綁酒譜）'} · ${it.volume || ''} × ${it.qty} 瓶${it.bottleType ? (' · ' + it.bottleType) : ''}</span>
+      <span class="badge ${it.status === '完成' ? 'bg-green' : 'bg-yellow'}" style="font-size:9px;">${it.status || '待製作'}</span>
+    </div>`).join('');
+  const row = (k, val) => `<div style="display:flex;gap:8px;font-size:12px;margin-top:3px;"><span style="flex:0 0 92px;color:var(--ink3);">${k}</span><span style="flex:1;">${val}</span></div>`;
+  const finShown = o.finalAdjusted && o.finalAdjustedAmount !== '' && o.finalAdjustedAmount != null
+    ? `<s style="opacity:.6;">NT$${o.finalAmount !== '' ? o.finalAmount : (o.balance || 0)}</s> → NT$${o.finalAdjustedAmount}（特殊調整）`
+    : (o.finalAmount !== '' ? 'NT$' + o.finalAmount : (o.balance ? 'NT$' + o.balance : '—'));
+  const moneyHtml = canSeeMoney ? `
+    <div style="margin:8px 0 2px;font-size:13px;font-weight:600;color:var(--gold-dk);">金流</div>
+    ${row('總金額', 'NT$' + (o.total || 0) + '（訂金狀態 ' + (o.depositStatus || '—') + '）')}
+    ${row('訂金', (o.depositAmount !== '' && o.depositAmount != null ? 'NT$' + o.depositAmount : '—') + '（預計 ' + (o.depositDueDate || '—') + '｜實收 ' + (o.depositPaidDate || '未收') + '）')}
+    ${row('尾款', finShown + '（預計 ' + (o.finalDueDate || '—') + '｜實收 ' + (o.finalPaidDate || '未收') + '）')}
+    ${o.finalAdjustNote ? row('調整備註', o.finalAdjustNote) : ''}` : '';
+  const dlvHtml = `
+    <div style="margin:8px 0 2px;font-size:13px;font-weight:600;color:var(--gold-dk);">配送資訊</div>
+    ${row('配送方式', (o.shipMethod || '—') + (o.shipFee !== '' && o.shipFee != null ? '（運費 NT$' + o.shipFee + '）' : ''))}
+    ${row('收件人', (o.recvName || '—') + (o.recvPhone ? ' · ' + o.recvPhone : ''))}
+    ${row('收件地址', o.recvAddr || '—')}
+    ${row('公司統編', o.taxId || '—')}
+    ${row('發票/驗收單', (o.invoiceSent ? '✅ 已隨貨寄出' : '—') + (o.invoiceLast5 ? '｜發票後五碼 ' + o.invoiceLast5 : ''))}`;
+  makeModal(`
+    <div class="modal-title">📦 ${o.orderNo}</div>
+    <div style="font-size:12px;color:var(--ink3);margin-bottom:6px;">${clientLabel(o.client)}${o.orderType ? (' · ' + o.orderType) : ''} <span class="badge ${o.status === '已完成' ? 'bg-green' : 'bg-yellow'}" style="font-size:9px;">${o.status || '製作中'}</span></div>
+    ${row('表訂出貨日', o.deliveryDate || '—')}
+    ${row('實際出貨日', o.shipDateConfirmed ? (o.actualDeliveryDate || '—') : (o.actualDeliveryDate || '—') + '（待確認）')}
+    ${row('PM', o.pm || '—')}
+    <div style="margin:8px 0 2px;font-size:13px;font-weight:600;color:var(--gold-dk);">酒款明細（共 ${(o.items || []).length} 款）</div>
+    ${items}
+    ${moneyHtml}
+    ${dlvHtml}
+    <div class="fe" style="margin-top:10px;gap:6px;">
+      ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();showDeliveryModal('${o.orderNo}')">🚚 編輯配送</button>` : ''}
+      ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();showFinanceModal(${idx})">💰 金流</button>` : ''}
+      <button class="btn btn-primary btn-sm" onclick="this.closest('.modal-bg').remove()">關閉</button>
+    </div>`);
+}
+
 // 💰 金流編輯（admin）：整組覆寫 N~V 欄
 function showFinanceModal(oi) {
   const o = window._mgmtOrders[oi]; if (!o) return;
@@ -2059,7 +2205,7 @@ function showOrderModal() {
     <div class="form-row">
       <div class="fg"><label>PM</label><input class="inp" id="om_pm" value="${(curUser && curUser.username) || ''}" style="margin:0;"></div>
     </div>
-    <div style="margin:4px 0 6px;font-size:13px;font-weight:600;color:var(--gold-dk);">酒款明細</div>
+    <div style="margin:4px 0 6px;font-size:13px;font-weight:600;color:var(--gold-dk);">酒款明細（已 key <span id="olineCount">0</span> 款）</div>
     <div id="orderItemLines"></div>
     <div class="fe" style="margin-bottom:10px;"><button class="btn btn-ghost btn-sm" onclick="orderModalAddLine()">＋ 加一款</button></div>
     <div class="form-row">
@@ -2068,10 +2214,12 @@ function showOrderModal() {
     </div>
     <div class="fg" style="margin-bottom:12px;"><label>訂金狀態</label><input class="inp" id="om_deposit" list="omDepList" placeholder="未收 / 已收訂 / 已結清（可自填如 已收訂金 NT$3,000）" style="margin:0;"><datalist id="omDepList"><option>未收</option><option>已收訂</option><option>已結清</option></datalist></div>
     ${financeFieldsHtml()}
+    <div id="omDeliveryWrap">${deliveryFieldsHtml()}</div>
     <div class="fe" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="om_sub">建立訂單</button></div>`);
   document.getElementById('om_ship').value = _localDate();
   document.getElementById('om_actual').value = _localDate();
   _orderLineSeq = 0; orderModalAddLine();
+  refillDeliveryDefaults();
   const b = modal.querySelector('#om_sub');
   b.onclick = () => lockRun(b, async () => {
     const client = document.getElementById('om_client').value;
@@ -2092,7 +2240,7 @@ function showOrderModal() {
       items: JSON.stringify(items),
       total: document.getElementById('om_total').value || 0, balance: document.getElementById('om_balance').value || 0,
       depositStatus: document.getElementById('om_deposit').value || '', pm: document.getElementById('om_pm').value || '',
-      ...collectFinanceFields()
+      ...collectFinanceFields(), ...collectDeliveryFields()
     });
     if (res.ok) { toast('已建立訂單 ' + res.orderNo); modal.remove(); loadOrderMgmt(); if (isFinanceUser()) loadFinanceSummary(); }
     else toast('建單失敗：' + (res.error || ''));
