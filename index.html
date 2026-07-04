@@ -486,9 +486,11 @@ async function doLogin() {
     switchTab('recipe');
   }
   showStockAlerts();
+  showShipDateAlerts();
 }
 function doLogout() {
   const _ab = document.getElementById('stockAlertBar'); if (_ab) _ab.remove();
+  const _sb = document.getElementById('shipDateAlertBar'); if (_sb) _sb.remove();
   curUser = null; rdata = null; curSheet = '';
   Object.assign(C, { inv:null, profit:{}, recipes:{}, batch:null });
   recipeList = []; rdState = { ings:[], tv:4000, bt:'4L桶', title:'', client:'', matSel:{} };
@@ -1865,15 +1867,16 @@ async function loadOrderMgmt() {
         ${canComplete ? `<button class="btn btn-success btn-sm" style="padding:4px 8px;" onclick="showCompleteModal(${oi},${ii})">完成回報</button>` : ''}
       </div>`;
     }).join('');
+    const dueUnconfirmed = !done && !o.shipDateConfirmed && d !== null && d <= 0;
     const money = isAdmin ? `<div style="font-size:11px;color:var(--ink3);margin-top:4px;">總 NT$${o.total || 0} · 尾款 NT$${o.balance || 0} · 訂金 ${o.depositStatus || '—'}</div>` : '';
     return `<div class="card" style="margin-bottom:10px;padding:12px;${urgent ? 'border-left:3px solid var(--red);' : ''}">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
-        <div><b>${o.orderNo}</b> <span style="color:var(--ink3);font-size:12px;">${o.client}${o.orderType ? (' · ' + o.orderType) : ''}</span></div>
+        <div><b>${o.orderNo}</b> <span style="color:var(--ink3);font-size:12px;">${clientLabel(o.client)}${o.orderType ? (' · ' + o.orderType) : ''}</span></div>
         <div style="display:flex;gap:4px;align-items:center;">${dbadge}<span class="badge ${done ? 'bg-green' : 'bg-yellow'}">${o.status || '製作中'}</span></div>
       </div>
-      <div style="font-size:11px;color:var(--ink3);margin:4px 0 2px;">出貨日 ${o.deliveryDate || '—'}</div>
+      <div style="font-size:11px;color:var(--ink3);margin:4px 0 2px;">表訂 ${o.deliveryDate || '—'} ｜ 實際 ${o.shipDateConfirmed ? (o.actualDeliveryDate || o.deliveryDate || '—') : '<span style="color:var(--red);">待確認</span>'}</div>
       ${money}${items}
-      ${canAct ? `<div class="fe mt8"><button class="btn btn-danger btn-sm" onclick="confirmShip(${oi})">確認出貨（扣成品庫存）</button></div>` : ''}
+      ${canAct ? `<div class="fe mt8" style="gap:6px;">${dueUnconfirmed ? `<button class="btn btn-sm" style="background:var(--gold-lt);color:var(--gold-dk);border:1px solid var(--gold-dk);padding:4px 8px;" onclick="showConfirmShipModal(${oi})">🚚 確認實際出貨日</button>` : ''}<button class="btn btn-danger btn-sm" onclick="confirmShip(${oi})">確認出貨（扣成品庫存）</button></div>` : ''}
     </div>`;
   }).join('');
 }
@@ -1882,6 +1885,17 @@ async function loadOrderMgmt() {
 let _orderLineSeq = 0;
 // 瓶型清單（BSPEC 既有 + 香水瓶兩款）；建單/完成回報共用
 function orderBottleList() { return [...Object.keys(BSPEC), '山形香水瓶', '大香水瓶']; }
+// 客戶顯示名（只改顯示、資料鍵不變）與隱藏清單
+const CLIENT_LABELS = { '南坡萬v.2': '南坡萬自有品牌酒' };
+const HIDDEN_CLIENTS = ['Feeling Bar Cafe', '南坡萬公版'];
+function clientLabel(key) { return CLIENT_LABELS[key] || key; }
+// 訂單類型欄：南坡萬自有品牌酒(南坡萬v.2) → 定期生產/自行keyin；其餘 → 一般建議清單
+function orderTypeFieldHtml(client) {
+  if (client === '南坡萬v.2') {
+    return '<select class="inp" id="om_type" style="margin:0;"><option>定期生產</option><option>自行keyin</option></select>';
+  }
+  return '<input class="inp" id="om_type" list="omTypeList" placeholder="如：換前標公版酒" style="margin:0;"><datalist id="omTypeList"><option>換前標公版酒</option><option>南坡萬自有品牌</option></datalist>';
+}
 function orderLineHtml(idx, client) {
   const recs = recipeList.filter(i => i.client === client);
   const recOpts = recs.map(i => `<option>${i.recipeName}</option>`).join('');
@@ -1905,6 +1919,9 @@ function orderModalAddLine() {
 function orderModalClientChange() {
   document.getElementById('orderItemLines').innerHTML = '';
   orderModalAddLine();
+  const client = document.getElementById('om_client').value;
+  const wrap = document.getElementById('omTypeWrap');
+  if (wrap) wrap.innerHTML = orderTypeFieldHtml(client);
 }
 // 新增客戶名稱（自由輸入；新客戶無酒譜時酒款欄可自行輸入）
 function addOrderClient() {
@@ -1918,18 +1935,23 @@ function addOrderClient() {
   orderModalClientChange();
 }
 function showOrderModal() {
-  const clients = clientList.length ? clientList.map(c => c.name) : ['Feeling Bar', '南坡萬公版', '南坡萬v.2', 'Feeling Bar Cafe'];
-  const cOpts = clients.map(c => `<option>${c}</option>`).join('');
+  const allClients = clientList.length ? clientList.map(c => c.name) : ['Feeling Bar', '南坡萬公版', '南坡萬v.2', 'Feeling Bar Cafe'];
+  const clients = allClients.filter(c => !HIDDEN_CLIENTS.includes(c));
+  const cOpts = clients.map(c => `<option value="${c}">${clientLabel(c)}</option>`).join('');
+  const c0 = clients[0] || '';
   const modal = makeModal(`
     <div class="modal-title">＋ 新增出貨訂單</div>
     <div class="form-row">
       <div class="fg"><label>客戶</label><div style="display:flex;gap:4px;">
         <select class="inp" id="om_client" style="margin:0;flex:1;min-width:0;" onchange="orderModalClientChange()">${cOpts}</select>
         <button class="btn btn-ghost btn-sm" style="flex:0 0 auto;white-space:nowrap;" onclick="addOrderClient()">＋新客戶</button></div></div>
-      <div class="fg"><label>訂單類型</label><input class="inp" id="om_type" list="omTypeList" placeholder="如：換前標公版酒" style="margin:0;"><datalist id="omTypeList"><option>換前標公版酒</option><option>南坡萬自有品牌</option></datalist></div>
+      <div class="fg"><label>訂單類型</label><div id="omTypeWrap">${orderTypeFieldHtml(c0)}</div></div>
     </div>
     <div class="form-row">
-      <div class="fg"><label>出貨日</label><input class="inp" id="om_ship" type="date" style="margin:0;"></div>
+      <div class="fg"><label>表訂出貨日</label><input class="inp" id="om_ship" type="date" style="margin:0;" onchange="const a=document.getElementById('om_actual'); if(a) a.value=this.value;"></div>
+      <div class="fg"><label>實際出貨日</label><input class="inp" id="om_actual" type="date" style="margin:0;"></div>
+    </div>
+    <div class="form-row">
       <div class="fg"><label>PM</label><input class="inp" id="om_pm" value="${(curUser && curUser.username) || ''}" style="margin:0;"></div>
     </div>
     <div style="margin:4px 0 6px;font-size:13px;font-weight:600;color:var(--gold-dk);">酒款明細</div>
@@ -1942,6 +1964,7 @@ function showOrderModal() {
     <div class="fg" style="margin-bottom:12px;"><label>訂金狀態</label><input class="inp" id="om_deposit" list="omDepList" placeholder="未收 / 已收訂 / 已結清（可自填如 已收訂金 NT$3,000）" style="margin:0;"><datalist id="omDepList"><option>未收</option><option>已收訂</option><option>已結清</option></datalist></div>
     <div class="fe"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="om_sub">建立訂單</button></div>`);
   document.getElementById('om_ship').value = _localDate();
+  document.getElementById('om_actual').value = _localDate();
   _orderLineSeq = 0; orderModalAddLine();
   const b = modal.querySelector('#om_sub');
   b.onclick = () => lockRun(b, async () => {
@@ -1958,7 +1981,9 @@ function showOrderModal() {
     if (!items.length) { toast('請至少加一款酒（數量>0）'); return; }
     const res = await api({
       action: 'createOrder', client, orderType: document.getElementById('om_type').value || '',
-      deliveryDate: document.getElementById('om_ship').value || '', items: JSON.stringify(items),
+      deliveryDate: document.getElementById('om_ship').value || '',
+      actualDeliveryDate: document.getElementById('om_actual').value || document.getElementById('om_ship').value || '',
+      items: JSON.stringify(items),
       total: document.getElementById('om_total').value || 0, balance: document.getElementById('om_balance').value || 0,
       depositStatus: document.getElementById('om_deposit').value || '', pm: document.getElementById('om_pm').value || ''
     });
@@ -2011,6 +2036,42 @@ async function confirmShip(oi) {
   const res = await api({ action: 'shipOrder', orderNo: o.orderNo, operator: (curUser && curUser.username) || '' });
   if (res.ok) { toast(`已出貨 ${o.orderNo}（扣 ${res.shippedItems} 款）`); loadOrderMgmt(); }
   else toast(res.error || '出貨失敗');
+}
+
+// 確認/修正實際出貨日（admin+倉管）
+function showConfirmShipModal(oi) {
+  const o = window._mgmtOrders[oi]; if (!o) return;
+  const modal = makeModal(`
+    <div class="modal-title">🚚 確認實際出貨日</div>
+    <div style="font-size:12px;color:var(--ink3);margin-bottom:10px;">${o.orderNo} · ${clientLabel(o.client)} ｜ 表訂出貨日 ${o.deliveryDate || '—'}</div>
+    <div class="fg" style="margin-bottom:12px;"><label>實際出貨日</label><input class="inp" type="date" id="cs_actual" value="${o.actualDeliveryDate || o.deliveryDate || ''}" style="margin:0;"></div>
+    <div class="fe"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="cs_sub">確認</button></div>`);
+  const b = modal.querySelector('#cs_sub');
+  b.onclick = () => lockRun(b, async () => {
+    const actualDate = document.getElementById('cs_actual').value;
+    if (!actualDate) { toast('請選實際出貨日'); return; }
+    const res = await api({ action: 'confirmShipDate', orderNo: o.orderNo, actualDate, operator: (curUser && curUser.username) || '' });
+    if (res.ok) { toast('實際出貨日已確認'); modal.remove(); loadOrderMgmt(); showShipDateAlerts(); }
+    else toast('確認失敗：' + (res.error || ''));
+  });
+}
+// 登入後：到表訂出貨日未確認實際出貨日 → 提醒 admin+倉管（水位回升同理，確認後消失）
+async function showShipDateAlerts() {
+  const old = document.getElementById('shipDateAlertBar'); if (old) old.remove();
+  if (!curUser || !(curUser.role === 'admin' || curUser.role === '倉管')) return;
+  const isAdmin = curUser.role === 'admin';
+  const res = await api(isAdmin ? { action: 'getOrders' } : { action: 'getOrders', view: 'bartender' }, true);
+  if (!res || !res.ok) return;
+  const today = _localDate();
+  const due = (res.orders || []).filter(o => o.status !== '已完成' && !o.shipDateConfirmed && o.deliveryDate && o.deliveryDate <= today);
+  if (!due.length) return;
+  const bar = document.createElement('div');
+  bar.id = 'shipDateAlertBar';
+  bar.style.cssText = 'display:flex;align-items:center;gap:8px;background:var(--gold-dk);color:#fff;font-size:12px;padding:6px 10px;line-height:1.5;cursor:pointer;';
+  bar.innerHTML = `<span style="flex:1;">🚚 ${due.length} 張訂單已到表訂出貨日，請確認實際出貨日（${due.slice(0, 3).map(o => o.orderNo).join('、')}${due.length > 3 ? '…' : ''}）</span><span style="padding:0 6px;font-weight:bold;white-space:nowrap;">前往訂單 ›</span>`;
+  bar.onclick = () => switchTab('batch');
+  const app = document.getElementById('app');
+  app.insertBefore(bar, document.getElementById('mainContent'));
 }
 
 // ════════════════════════════════════════════════
@@ -2066,7 +2127,7 @@ async function showStockAlerts() {
 function renderStockPage(mc) {
   mc.innerHTML = `
   <div class="card" style="margin-bottom:10px;">
-    <div class="sec-hd"><div class="card-title" style="margin:0">🗄️ ${STOCK_CLIENT} 成品庫存</div>
+    <div class="sec-hd"><div class="card-title" style="margin:0">🗄️ ${clientLabel(STOCK_CLIENT)} 成品庫存</div>
       <button class="btn btn-ghost btn-sm" onclick="renderStockPage(document.getElementById('mainContent'))">↻</button></div>
     <div id="stockWaterArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div>
   </div>
