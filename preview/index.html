@@ -1945,13 +1945,30 @@ function clientLabel(key) { return CLIENT_LABELS[key] || key; }
 // v1.6 金流可見名單（僅此三人看得到金流總覽與訂單金流欄；後端 getFinanceSummary 同名單雙重把關）
 const FINANCE_USERS = ['Kevin', 'Molly', 'Lulu'];
 function isFinanceUser() { return !!(curUser && FINANCE_USERS.includes(curUser.username)); }
-// 訂單類型欄：南坡萬自有品牌酒(南坡萬v.2) → 定期生產/自行keyin；OEM 客戶預填「OEM客戶訂單」；其餘 → 一般建議清單
+// 訂單類型欄：南坡萬自有品牌酒(南坡萬v.2) → 定期生產/自行keyin(選後展開自由輸入生產目的)；OEM 客戶預填「OEM客戶訂單」；其餘 → 一般建議清單
 function orderTypeFieldHtml(client) {
   if (client === '南坡萬v.2') {
-    return '<select class="inp" id="om_type" style="margin:0;"><option>定期生產</option><option>自行keyin</option></select>';
+    return '<select class="inp" id="om_type" style="margin:0;" onchange="omTypeSelChange(this)"><option>定期生產</option><option>自行keyin</option></select>'
+      + '<input class="inp" id="om_type_custom" placeholder="輸入此訂單的生產目的（如：中秋禮盒限定）" style="margin:6px 0 0;display:none;font-size:13px;">';
   }
   const preset = EXTRA_CLIENTS.includes(client) ? 'OEM客戶訂單' : '';
   return '<input class="inp" id="om_type" list="omTypeList" placeholder="如：換前標公版酒" value="' + preset + '" style="margin:0;"><datalist id="omTypeList"><option>換前標公版酒</option><option>南坡萬自有品牌</option><option>OEM客戶訂單</option></datalist>';
+}
+// 選「自行keyin」→ 展開生產目的輸入框
+function omTypeSelChange(sel) {
+  const c = document.getElementById('om_type_custom');
+  if (c) c.style.display = sel.value === '自行keyin' ? '' : 'none';
+}
+// 取訂單類型送出值：自行keyin＋有輸入 → 存輸入的生產目的文字
+function getOrderTypeValue() {
+  const el = document.getElementById('om_type');
+  if (!el) return '';
+  if (el.tagName === 'SELECT' && el.value === '自行keyin') {
+    const c = document.getElementById('om_type_custom');
+    const t = c ? c.value.trim() : '';
+    return t || '自行keyin';
+  }
+  return el.value || '';
 }
 function orderLineHtml(idx, client) {
   const names = [...new Set([
@@ -2086,7 +2103,7 @@ function showDeliveryModal(orderNo) {
     <div class="fe" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="dlv_sub">儲存配送</button></div>`);
   const b = modal.querySelector('#dlv_sub');
   b.onclick = () => lockRun(b, async () => {
-    const res = await api({ action: 'updateOrderDelivery', orderNo: o.orderNo, ...collectDeliveryFields() });
+    const res = await api({ action: 'updateOrderDelivery', orderNo: o.orderNo, user: (curUser && curUser.username) || '', ...collectDeliveryFields() });
     if (res.ok) { toast('配送資訊已更新'); modal.remove(); loadOrderMgmt(); }
     else toast('更新失敗：' + (res.error || ''));
   });
@@ -2152,11 +2169,29 @@ function showOrderDetail(orderNo) {
     ${items}
     ${moneyHtml}
     ${dlvHtml}
+    <div style="margin:8px 0 2px;font-size:13px;font-weight:600;color:var(--gold-dk);">📜 修改歷史</div>
+    <div id="orderHistArea" style="font-size:11px;color:var(--ink3);">載入中…</div>
     <div class="fe" style="margin-top:10px;gap:6px;">
       ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();showDeliveryModal('${o.orderNo}')">🚚 編輯配送</button>` : ''}
       ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();showFinanceModal(${idx})">💰 金流</button>` : ''}
       <button class="btn btn-primary btn-sm" onclick="this.closest('.modal-bg').remove()">關閉</button>
     </div>`);
+  loadOrderHistory(o.orderNo);
+}
+// 訂單修改歷史（詳情最下緣備查；v1.8 起記錄，舊訂單此前的操作無紀錄）
+async function loadOrderHistory(orderNo) {
+  const area = document.getElementById('orderHistArea'); if (!area) return;
+  const res = await api({ action: 'getOrderHistory', orderNo }, true);
+  if (!res || !res.ok) { area.textContent = '（歷史載入失敗）'; return; }
+  const h = res.history || [];
+  if (!h.length) { area.textContent = '（尚無紀錄；2026-07-04 前的操作未留存）'; return; }
+  area.innerHTML = h.map(e =>
+    `<div style="display:flex;gap:6px;padding:4px 6px;border-bottom:1px dashed var(--border);">
+      <span style="flex:0 0 118px;">${e.time}</span>
+      <span style="flex:0 0 46px;font-weight:600;color:var(--ink2);">${e.user || '—'}</span>
+      <span style="flex:0 0 76px;color:var(--gold-dk);">${e.action}</span>
+      <span style="flex:1;min-width:0;">${e.summary}</span>
+    </div>`).join('');
 }
 
 // 💰 金流編輯（admin）：整組覆寫 N~V 欄
@@ -2169,7 +2204,7 @@ function showFinanceModal(oi) {
     <div class="fe" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="fin_sub">儲存金流</button></div>`);
   const b = modal.querySelector('#fin_sub');
   b.onclick = () => lockRun(b, async () => {
-    const res = await api({ action: 'updateOrderFinance', orderNo: o.orderNo, ...collectFinanceFields() });
+    const res = await api({ action: 'updateOrderFinance', orderNo: o.orderNo, user: (curUser && curUser.username) || '', ...collectFinanceFields() });
     if (res.ok) { toast('金流已更新'); modal.remove(); loadOrderMgmt(); if (isFinanceUser()) loadFinanceSummary(); }
     else toast('更新失敗：' + (res.error || ''));
   });
@@ -2234,7 +2269,7 @@ function showOrderModal() {
     });
     if (!items.length) { toast('請至少加一款酒（數量>0）'); return; }
     const res = await api({
-      action: 'createOrder', client, orderType: document.getElementById('om_type').value || '',
+      action: 'createOrder', client, orderType: getOrderTypeValue(),
       deliveryDate: document.getElementById('om_ship').value || '',
       actualDeliveryDate: document.getElementById('om_actual').value || document.getElementById('om_ship').value || '',
       items: JSON.stringify(items),
