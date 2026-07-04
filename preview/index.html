@@ -445,7 +445,11 @@ function makeModal(inner) {
   const bg = document.createElement('div');
   bg.className = 'modal-bg';
   bg.innerHTML = `<div class="modal-box">${inner}</div>`;
-  bg.addEventListener('click', e => { if(e.target===bg) bg.remove(); });
+  // BUG修(v1.9.2)：輸入框內拖曳選字、在遮罩上放開 → click target=bg 誤關 modal(建單資料全失)。
+  // 需 mousedown 與放開(click)都落在遮罩上，才視為「點外面關閉」。
+  let downOnBg = false;
+  bg.addEventListener('mousedown', e => { downOnBg = (e.target === bg); });
+  bg.addEventListener('click', e => { if (e.target === bg && downOnBg) { downOnBg = false; bg.remove(); } });
   document.body.appendChild(bg);
   return bg;
 }
