@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
-<title>南坡萬酒廠 酒譜系統</title>
+<title>凱文南坡萬 廠務系統</title>
+<link rel="icon" type="image/png" href="/recipe/knb_head.png">
+<link rel="apple-touch-icon" href="/recipe/knb_head.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -250,8 +252,11 @@ tbody tr:hover td{background:#faf3e8;}
 <div id="loginWrap">
   <div id="loginBox">
     <div class="login-head">
-      <div class="logo">🍶 南坡萬酒廠</div>
-      <div class="sub">酒譜管理系統</div>
+      <div class="logo" style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+        <span style="width:78px;height:78px;border-radius:50%;overflow:hidden;background:#fff;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.08);"><img src="/recipe/knb_head.png" alt="凱文南坡萬" style="width:78px;height:78px;object-fit:cover;"></span>
+        <img src="/recipe/knb_logo.png" alt="凱文南坡萬實業社" style="width:100%;max-width:260px;height:auto;">
+      </div>
+      <div class="sub">廠務／酒譜管理系統</div>
     </div>
     <div class="login-card">
       <select class="inp" id="loginUser"><option value="">選擇帳號</option><option>Kevin</option><option>Molly</option><option>阿軒</option><option>小捲</option><option>Vic</option><option>小李</option></select>
@@ -264,9 +269,10 @@ tbody tr:hover td{background:#faf3e8;}
 
 <div id="app">
   <div id="topbar">
-    <span class="topbar-title">🍶 南坡萬</span>
+    <span class="topbar-title" style="display:flex;align-items:center;gap:7px;"><span style="width:26px;height:26px;border-radius:50%;overflow:hidden;background:#fff;display:inline-flex;flex-shrink:0;"><img src="/recipe/knb_head.png" alt="凱文南坡萬" style="width:26px;height:26px;object-fit:cover;"></span>凱文南坡萬</span>
     <div id="topUserInfo">
       <span id="topUsername" style="font-size:12px;"></span>
+      <button class="btn btn-sm" style="color:#fff;border:1px solid rgba(255,255,255,.4);background:transparent;padding:5px 10px;" onclick="showChangePwModal()" title="修改密碼">🔑</button>
       <button class="btn btn-sm" style="color:#fff;border:1px solid rgba(255,255,255,.4);background:transparent;padding:5px 10px;" onclick="doRefresh()" title="重新整理">↻</button>
       <button class="btn btn-sm" style="color:#fff;border:1px solid rgba(255,255,255,.4);background:transparent;padding:5px 10px;" onclick="doLogout()">登出</button>
     </div>
@@ -277,7 +283,7 @@ tbody tr:hover td{background:#faf3e8;}
     <div class="nav-tab"        data-tab="profit"    onclick="switchTab('profit')">   <span class="ni">📊</span><span>毛利分析</span></div>
     <div class="nav-tab"        data-tab="inventory" onclick="switchTab('inventory')"><span class="ni">🧪</span><span>原料/資材庫</span></div>
     <div class="nav-tab"        data-tab="rd"        onclick="switchTab('rd')">       <span class="ni">🔬</span><span>研發試算</span></div>
-    <div class="nav-tab"        data-tab="batch"     onclick="switchTab('batch')">    <span class="ni">📦</span><span>製作記錄</span></div>
+    <div class="nav-tab"        data-tab="batch"     onclick="switchTab('batch')">    <span class="ni">📦</span><span>訂單/run card</span></div>
     <div class="nav-tab"        data-tab="stock"     onclick="switchTab('stock')">    <span class="ni">🗄️</span><span>成品庫存</span></div>
     <div class="nav-tab admin-only" data-tab="apply" onclick="switchTab('apply')">   <span class="ni">✏️</span><span>審核</span></div>
   </div>
@@ -491,6 +497,27 @@ function doLogout() {
   document.getElementById('loginPass').value = '';
   document.getElementById('loginErr').textContent = '';
 }
+// 自行修改密碼（所有登入者皆可；接後端 changePassword）
+function showChangePwModal() {
+  if (!curUser) { toast('請先登入'); return; }
+  const modal = makeModal(`
+    <div class="modal-title">🔑 修改密碼（${curUser.username}）</div>
+    <input class="inp" id="cp_old" type="password" placeholder="舊密碼" inputmode="numeric" autocomplete="off">
+    <input class="inp" id="cp_new" type="password" placeholder="新密碼" inputmode="numeric" autocomplete="off">
+    <input class="inp" id="cp_new2" type="password" placeholder="再次輸入新密碼" inputmode="numeric" autocomplete="off">
+    <div class="fe" style="margin-top:4px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="cp_sub">儲存</button></div>`);
+  const b = modal.querySelector('#cp_sub');
+  b.onclick = () => lockRun(b, async () => {
+    const oldP = document.getElementById('cp_old').value;
+    const newP = document.getElementById('cp_new').value;
+    const new2 = document.getElementById('cp_new2').value;
+    if (!oldP || !newP) { toast('請填舊密碼與新密碼'); return; }
+    if (newP !== new2) { toast('兩次新密碼不一致'); return; }
+    const res = await api({ action: 'changePassword', username: curUser.username, oldPassword: oldP, newPassword: newP });
+    if (res.ok) { toast('密碼已更新'); modal.remove(); }
+    else toast('更新失敗：' + (res.error || ''));
+  });
+}
 
 // ── 重整 ─────────────────────────────────────────────────────
 function doRefresh() {
@@ -519,7 +546,7 @@ function switchTab(tab) {
   curTab = tab;
   document.querySelectorAll('.nav-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
   const mc = document.getElementById('mainContent'); mc.scrollTop = 0;
-  ({ recipe:renderRecipePage, profit:renderProfitPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderBatchPage, order:renderOrderPage, stock:renderStockPage, apply:renderApplyPage })[tab]?.(mc);
+  ({ recipe:renderRecipePage, profit:renderProfitPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderRuncardPage, order:renderOrderPage, stock:renderStockPage, apply:renderApplyPage })[tab]?.(mc);
 }
 
 // ════════════════════════════════════════════════
@@ -1546,6 +1573,7 @@ async function rdApplyFromRecord(r) {
 let batchRecs = [];
 let _bf = { client:'', from:'', to:'' };
 async function renderBatchPage(mc) {
+  mc = mc || document.getElementById('runcardArea') || document.getElementById('mainContent');
   if (C.batch) { batchRecs = C.batch; renderBatchList(mc); return; }
   mc.innerHTML = '<div class="card"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">載入中…</div></div>';
   const res = await api({ action:'getBatchRecords' });
@@ -1554,7 +1582,7 @@ async function renderBatchPage(mc) {
   renderBatchList(mc);
 }
 function renderBatchList(mc) {
-  mc = mc || document.getElementById('mainContent');
+  mc = mc || document.getElementById('runcardArea') || document.getElementById('mainContent');
   // 篩選（日期區間 + 客戶）：batchRecs 為完整資料,僅顯示層過濾,編輯用原始索引
   const clients = [...new Set(batchRecs.map(r=>r.client).filter(Boolean))];
   const cOpts = '<option value="">全部客戶</option>' + clients.map(c=>`<option${_bf.client===c?' selected':''}>${c}</option>`).join('');
@@ -1790,6 +1818,199 @@ async function doCompleteTask(oi,ii){
     laborCost:labor, pm:(curUser&&curUser.username)||'', creator:(curUser&&curUser.username)||'', note });
   if(res.ok){ toast(`已完成：${it.product}（訂單${res.orderStatus}）`); loadOrderTasks(); }
   else toast('回報失敗：'+(res.error||''));
+}
+
+// ════════════════════════════════════════════════
+// ⑤-c 訂單 / run card（batch 分頁改造；接 createOrder/getOrders/completeOrderItem/shipOrder）
+// ════════════════════════════════════════════════
+async function renderRuncardPage(mc) {
+  const isAdmin = curUser && curUser.role === 'admin';
+  mc.innerHTML = `
+    <div class="card" style="margin-bottom:10px;">
+      <div class="sec-hd"><div class="card-title" style="margin:0">📦 出貨訂單</div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-ghost btn-sm" onclick="loadOrderMgmt()">↻</button>
+          ${isAdmin ? '<button class="btn btn-primary btn-sm" onclick="showOrderModal()">＋ 建單</button>' : ''}
+        </div>
+      </div>
+      <div id="orderMgmtArea"><div style="text-align:center;color:var(--ink3);padding:16px;font-size:13px;">載入中…</div></div>
+    </div>
+    <div id="runcardArea"><div class="card"><div style="text-align:center;color:var(--ink3);padding:16px;font-size:13px;">載入 run card…</div></div></div>`;
+  loadOrderMgmt();
+  C.batch = null; renderBatchPage(document.getElementById('runcardArea'));
+}
+
+async function loadOrderMgmt() {
+  const isAdmin = curUser && curUser.role === 'admin';
+  const res = await api(isAdmin ? { action: 'getOrders' } : { action: 'getOrders', view: 'bartender' });
+  const area = document.getElementById('orderMgmtArea'); if (!area) return;
+  if (!res.ok) { area.innerHTML = `<div class="warn" style="padding:10px;">${res.error || '讀取失敗'}</div>`; return; }
+  const orders = res.orders || [];
+  window._mgmtOrders = orders;
+  if (!orders.length) { area.innerHTML = '<div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">尚無訂單</div>'; return; }
+  const canAct = isAdmin || (curUser && curUser.role === '倉管');
+  area.innerHTML = orders.map((o, oi) => {
+    const d = daysToShip(o.deliveryDate);
+    const done = o.status === '已完成';
+    const urgent = d !== null && d <= 7 && !done;
+    const dbadge = d === null ? '' : d < 0 ? `<span class="badge bg-red">逾期${-d}天</span>`
+      : d <= 7 ? `<span class="badge bg-red">剩${d}天</span>` : `<span class="badge bg-brown">${d}天後</span>`;
+    const items = (o.items || []).map((it, ii) => {
+      const idone = it.status === '完成';
+      const canComplete = canAct && !idone && !!it.sheet;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--border);border-radius:6px;margin-top:6px;${idone ? 'opacity:.6;' : ''}">
+        <div style="flex:1;"><div style="font-weight:500;font-size:13px;">${it.product || '（未綁酒譜）'}</div>
+          <div style="font-size:11px;color:var(--ink3);">${it.volume || ''} × ${it.qty} 瓶${it.bottleType ? (' · ' + it.bottleType) : ''}</div></div>
+        ${idone ? '<span class="badge bg-green">已完成</span>' : (it.sheet ? '<span class="badge bg-brown">待製作</span>' : '<span class="badge bg-yellow">未綁酒譜</span>')}
+        ${canComplete ? `<button class="btn btn-success btn-sm" style="padding:4px 8px;" onclick="showCompleteModal(${oi},${ii})">完成回報</button>` : ''}
+      </div>`;
+    }).join('');
+    const money = isAdmin ? `<div style="font-size:11px;color:var(--ink3);margin-top:4px;">總 NT$${o.total || 0} · 尾款 NT$${o.balance || 0} · 訂金 ${o.depositStatus || '—'}</div>` : '';
+    return `<div class="card" style="margin-bottom:10px;padding:12px;${urgent ? 'border-left:3px solid var(--red);' : ''}">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
+        <div><b>${o.orderNo}</b> <span style="color:var(--ink3);font-size:12px;">${o.client}${o.orderType ? (' · ' + o.orderType) : ''}</span></div>
+        <div style="display:flex;gap:4px;align-items:center;">${dbadge}<span class="badge ${done ? 'bg-green' : 'bg-yellow'}">${o.status || '製作中'}</span></div>
+      </div>
+      <div style="font-size:11px;color:var(--ink3);margin:4px 0 2px;">出貨日 ${o.deliveryDate || '—'}</div>
+      ${money}${items}
+      ${canAct ? `<div class="fe mt8"><button class="btn btn-danger btn-sm" onclick="confirmShip(${oi})">確認出貨（扣成品庫存）</button></div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// 建單表單（admin）：接 createOrder，欄位對齊訂單主表 11 欄
+let _orderLineSeq = 0;
+// 瓶型清單（BSPEC 既有 + 香水瓶兩款）；建單/完成回報共用
+function orderBottleList() { return [...Object.keys(BSPEC), '山形香水瓶', '大香水瓶']; }
+function orderLineHtml(idx, client) {
+  const recs = recipeList.filter(i => i.client === client);
+  const recOpts = recs.map(i => `<option>${i.recipeName}</option>`).join('');
+  const btOpts = orderBottleList().map(b => `<option>${b}</option>`).join('');
+  return `<div class="order-line" id="oline_${idx}" style="border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:8px;">
+    <div class="form-row" style="gap:6px;">
+      <div class="fg" style="flex:2 1 140px"><label>酒款</label><input class="inp" id="oi_${idx}_rec" list="oidl_${idx}" placeholder="選或輸入酒款" style="margin:0;font-size:13px;"><datalist id="oidl_${idx}">${recOpts}</datalist></div>
+      <div class="fg" style="flex:1 1 70px"><label>數量</label><input class="inp" id="oi_${idx}_qty" type="number" min="1" value="1" style="margin:0;font-size:13px;"></div>
+    </div>
+    <div class="form-row" style="gap:6px;">
+      <div class="fg" style="flex:1 1 90px"><label>規格</label><input class="inp" id="oi_${idx}_vol" value="100ml" style="margin:0;font-size:13px;"></div>
+      <div class="fg" style="flex:1 1 100px"><label>瓶型</label><select class="inp" id="oi_${idx}_bt" style="margin:0;font-size:13px;">${btOpts}</select></div>
+      <div class="fg" style="flex:0 0 auto;display:flex;align-items:flex-end;"><button class="btn btn-ghost btn-sm" onclick="document.getElementById('oline_${idx}').remove()">✕</button></div>
+    </div>
+  </div>`;
+}
+function orderModalAddLine() {
+  const client = document.getElementById('om_client').value;
+  document.getElementById('orderItemLines').insertAdjacentHTML('beforeend', orderLineHtml(_orderLineSeq++, client));
+}
+function orderModalClientChange() {
+  document.getElementById('orderItemLines').innerHTML = '';
+  orderModalAddLine();
+}
+// 新增客戶名稱（自由輸入；新客戶無酒譜時酒款欄可自行輸入）
+function addOrderClient() {
+  const name = (prompt('輸入新客戶名稱：') || '').trim();
+  if (!name) return;
+  const sel = document.getElementById('om_client');
+  if (![...sel.options].some(o => o.value === name)) {
+    const opt = document.createElement('option'); opt.textContent = name; sel.appendChild(opt);
+  }
+  sel.value = name;
+  orderModalClientChange();
+}
+function showOrderModal() {
+  const clients = clientList.length ? clientList.map(c => c.name) : ['Feeling Bar', '南坡萬公版', '南坡萬v.2', 'Feeling Bar Cafe'];
+  const cOpts = clients.map(c => `<option>${c}</option>`).join('');
+  const modal = makeModal(`
+    <div class="modal-title">＋ 新增出貨訂單</div>
+    <div class="form-row">
+      <div class="fg"><label>客戶</label><div style="display:flex;gap:4px;">
+        <select class="inp" id="om_client" style="margin:0;flex:1;min-width:0;" onchange="orderModalClientChange()">${cOpts}</select>
+        <button class="btn btn-ghost btn-sm" style="flex:0 0 auto;white-space:nowrap;" onclick="addOrderClient()">＋新客戶</button></div></div>
+      <div class="fg"><label>訂單類型</label><input class="inp" id="om_type" list="omTypeList" placeholder="如：換前標公版酒" style="margin:0;"><datalist id="omTypeList"><option>換前標公版酒</option><option>南坡萬自有品牌</option></datalist></div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>出貨日</label><input class="inp" id="om_ship" type="date" style="margin:0;"></div>
+      <div class="fg"><label>PM</label><input class="inp" id="om_pm" value="${(curUser && curUser.username) || ''}" style="margin:0;"></div>
+    </div>
+    <div style="margin:4px 0 6px;font-size:13px;font-weight:600;color:var(--gold-dk);">酒款明細</div>
+    <div id="orderItemLines"></div>
+    <div class="fe" style="margin-bottom:10px;"><button class="btn btn-ghost btn-sm" onclick="orderModalAddLine()">＋ 加一款</button></div>
+    <div class="form-row">
+      <div class="fg"><label>總金額</label><input class="inp" id="om_total" type="number" min="0" value="0" style="margin:0;"></div>
+      <div class="fg"><label>尾款</label><input class="inp" id="om_balance" type="number" min="0" value="0" style="margin:0;"></div>
+    </div>
+    <div class="fg" style="margin-bottom:12px;"><label>訂金狀態</label><input class="inp" id="om_deposit" list="omDepList" placeholder="未收 / 已收訂 / 已結清（可自填如 已收訂金 NT$3,000）" style="margin:0;"><datalist id="omDepList"><option>未收</option><option>已收訂</option><option>已結清</option></datalist></div>
+    <div class="fe"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="om_sub">建立訂單</button></div>`);
+  document.getElementById('om_ship').value = _localDate();
+  _orderLineSeq = 0; orderModalAddLine();
+  const b = modal.querySelector('#om_sub');
+  b.onclick = () => lockRun(b, async () => {
+    const client = document.getElementById('om_client').value;
+    const items = [];
+    document.querySelectorAll('#orderItemLines .order-line').forEach(line => {
+      const idx = line.id.replace('oline_', '');
+      const product = document.getElementById('oi_' + idx + '_rec').value;
+      const qty = parseInt(document.getElementById('oi_' + idx + '_qty').value, 10) || 0;
+      if (!product || qty <= 0) return;
+      const rec = recipeList.find(i => i.client === client && i.recipeName === product);
+      items.push({ product, sheet: rec ? rec.sheet : '', volume: document.getElementById('oi_' + idx + '_vol').value || '', bottleType: document.getElementById('oi_' + idx + '_bt').value || '', qty, status: '待製作' });
+    });
+    if (!items.length) { toast('請至少加一款酒（數量>0）'); return; }
+    const res = await api({
+      action: 'createOrder', client, orderType: document.getElementById('om_type').value || '',
+      deliveryDate: document.getElementById('om_ship').value || '', items: JSON.stringify(items),
+      total: document.getElementById('om_total').value || 0, balance: document.getElementById('om_balance').value || 0,
+      depositStatus: document.getElementById('om_deposit').value || '', pm: document.getElementById('om_pm').value || ''
+    });
+    if (res.ok) { toast('已建立訂單 ' + res.orderNo); modal.remove(); loadOrderMgmt(); }
+    else toast('建單失敗：' + (res.error || ''));
+  });
+}
+
+// 完成回報（admin+倉管）：接 completeOrderItem，沿用隱藏頁 doCompleteTask 的代工費/寫製作記錄邏輯
+function showCompleteModal(oi, ii) {
+  const o = window._mgmtOrders[oi]; if (!o) return;
+  const it = o.items[ii]; if (!it) return;
+  const bt = it.bottleType || Object.keys(BSPEC)[0];
+  const modal = makeModal(`
+    <div class="modal-title">✓ 完成回報：${it.product}</div>
+    <div style="font-size:12px;color:var(--ink3);margin-bottom:8px;">${o.orderNo} · ${o.client} · ${it.volume || ''}×${it.qty}瓶</div>
+    <div class="form-row">
+      <div class="fg"><label>實際裝瓶數</label><input class="inp" type="number" id="ct_cnt" value="${it.qty}" style="margin:0;"></div>
+      <div class="fg"><label>瓶型</label><select id="ct_bt">${orderBottleList().map(b => `<option${b === bt ? ' selected' : ''}>${b}</option>`).join('')}</select></div>
+    </div>
+    <div style="display:flex;gap:16px;margin:8px 0;">
+      <label style="display:flex;gap:6px;align-items:center;font-size:13px;"><input type="checkbox" id="ct_front" checked style="width:auto;"> 前標</label>
+      <label style="display:flex;gap:6px;align-items:center;font-size:13px;"><input type="checkbox" id="ct_back" checked style="width:auto;"> 後標</label>
+    </div>
+    <div class="fg" style="margin-bottom:10px;"><label>備註</label><input class="inp" id="ct_note" placeholder="選填" style="margin:0;"></div>
+    <div class="fe"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-success btn-sm" id="ct_sub">標記完成並建製作記錄</button></div>`);
+  const b = modal.querySelector('#ct_sub');
+  b.onclick = () => lockRun(b, async () => {
+    const count = parseInt(document.getElementById('ct_cnt').value, 10) || it.qty;
+    const btv = document.getElementById('ct_bt').value;
+    const front = document.getElementById('ct_front').checked, back = document.getElementById('ct_back').checked;
+    const spec = BSPEC[btv] || {};
+    const labor = count * ((spec.labor || 0) + (front ? 1.5 : 0) + (back ? 1.5 : 0));
+    const res = await api({
+      action: 'completeOrderItem', orderNo: o.orderNo, itemIndex: ii, bottleCount: count, bottle: btv,
+      cap: '✓', frontLabel: front ? '✓' : '', backLabel: back ? '✓' : '', laborCost: labor,
+      pm: (curUser && curUser.username) || '', creator: (curUser && curUser.username) || '', note: document.getElementById('ct_note').value
+    });
+    if (res.ok) {
+      toast(`已完成：${it.product}（訂單${res.orderStatus}）`); modal.remove();
+      loadOrderMgmt(); C.batch = null; renderBatchPage(document.getElementById('runcardArea'));
+    } else toast('回報失敗：' + (res.error || ''));
+  });
+}
+
+// 確認出貨（admin+倉管）：接 shipOrder（後端整張擋負+冪等）
+async function confirmShip(oi) {
+  const o = window._mgmtOrders[oi]; if (!o) return;
+  if (!confirm(`確認出貨 ${o.orderNo}？將自動扣成品庫存，不可復原。`)) return;
+  const res = await api({ action: 'shipOrder', orderNo: o.orderNo, operator: (curUser && curUser.username) || '' });
+  if (res.ok) { toast(`已出貨 ${o.orderNo}（扣 ${res.shippedItems} 款）`); loadOrderMgmt(); }
+  else toast(res.error || '出貨失敗');
 }
 
 // ════════════════════════════════════════════════
