@@ -104,6 +104,7 @@ function doGet(e) {
       case 'confirmShipDate':        result = confirmShipDate(p); break;         // 實際出貨日確認
       case 'updateOrderFinance':     result = updateOrderFinance(p); break;      // 金流紀錄 N~V 欄(v1.6)
       case 'updateOrderDelivery':    result = updateOrderDelivery(p); break;     // 配送資訊 W~AD 欄(v1.7)
+      case 'getOrderHistory':        result = getOrderHistory(p); break;         // 訂單修改歷史(v1.8)
       case 'getFinanceSummary':      result = getFinanceSummary(p); break;       // 當月金流摘要(v1.6, 財務名單限定)
       case 'getStockOverview':       result = getStockOverview(p); break;        // 成品庫存
       case 'stockIn':                result = stockIn(p); break;                 // 成品庫存
@@ -499,6 +500,42 @@ function _ensureOrderFinanceHeaders_(ws) {
 // 金額欄：空=未填(保留空字串)，有值才轉數字
 function _numOrBlank_(v) { return (v == null || v === '') ? '' : (Number(v) || 0); }
 
+// ── v1.8 訂單異動紀錄（不可變流水帳；每張訂單的修改歷史備查）──
+var ORDER_LOG_SHEET = '訂單異動紀錄';
+var ORDER_LOG_HEADERS = ['時間', '訂單編號', '操作人', '動作', '內容摘要'];
+function _logOrderChange_(orderNo, user, action, summary) {
+  try {
+    const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+    let ws = ss.getSheetByName(ORDER_LOG_SHEET);
+    if (!ws) {
+      ws = ss.insertSheet(ORDER_LOG_SHEET);
+      ws.getRange(1, 1, 1, ORDER_LOG_HEADERS.length).setValues([ORDER_LOG_HEADERS]);
+    }
+    const now = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss');
+    ws.appendRow([now, String(orderNo), String(user || ''), String(action || ''), String(summary || '')]);
+  } catch (e) { /* 紀錄失敗不阻斷主流程 */ }
+}
+function _fmtDateTime_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss');
+  return String(v == null ? '' : v);
+}
+function getOrderHistory(p) {
+  const orderNo = p && p.orderNo;
+  if (!orderNo) return { ok: false, error: '缺少 orderNo' };
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName(ORDER_LOG_SHEET);
+  if (!ws) return { ok: true, history: [] };
+  const data = ws.getDataRange().getValues();
+  const history = [];
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][1]) === String(orderNo)) {
+      history.push({ time: _fmtDateTime_(data[i][0]), user: String(data[i][2] || ''),
+        action: String(data[i][3] || ''), summary: String(data[i][4] || '') });
+    }
+  }
+  return { ok: true, history: history };
+}
+
 function _genOrderNo(ws) {
   const now = new Date();
   const datePart = '' + now.getFullYear()
@@ -553,6 +590,8 @@ function createOrder(p) {
       p.shipMethod || '', _numOrBlank_(p.shipFee), p.recvName || '', p.recvPhone || '',
       p.recvAddr || '', p.taxId || '',
       (String(p.invoiceSent || '').toLowerCase() === 'true') ? 'TRUE' : '', p.invoiceLast5 || '']);
+    _logOrderChange_(orderNo, p.pm || p.user || '', '建立訂單',
+      p.client + '／' + items.length + ' 款／總 NT$' + (Number(p.total) || 0) + (p.orderType ? '／' + p.orderType : ''));
     return { ok: true, orderNo: orderNo };
   } finally { lock.releaseLock(); }
 }
@@ -637,6 +676,7 @@ function confirmShipDate(p) {
     if (String(data[i][0]) === String(orderNo)) {
       ws.getRange(i + 1, 12).setValue(actualDate); // L 實際出貨日
       ws.getRange(i + 1, 13).setValue('TRUE');      // M 已確認
+      _logOrderChange_(orderNo, p.operator || p.user || '', '確認實際出貨日', '實際出貨日＝' + actualDate);
       return { ok: true, orderNo: orderNo, actualDate: actualDate };
     }
   }
@@ -661,6 +701,9 @@ function updateOrderFinance(p) {
         _numOrBlank_(p.finalAmount), p.finalDueDate || '', p.finalPaidDate || '',
         finAdj ? 'TRUE' : '', finAdj ? _numOrBlank_(p.finalAdjustedAmount) : '', p.finalAdjustNote || ''
       ]]);
+      _logOrderChange_(orderNo, p.user || '', '更新金流',
+        '訂金 ' + (p.depositAmount || '—') + '（實收 ' + (p.depositPaidDate || '未') + '）／尾款 ' + (p.finalAmount || '—')
+        + '（實收 ' + (p.finalPaidDate || '未') + '）' + (finAdj ? '／調整後 ' + (p.finalAdjustedAmount || '—') : ''));
       return { ok: true, orderNo: orderNo };
     }
   }
@@ -684,6 +727,9 @@ function updateOrderDelivery(p) {
         p.shipMethod || '', _numOrBlank_(p.shipFee), p.recvName || '', p.recvPhone || '',
         p.recvAddr || '', p.taxId || '', sent ? 'TRUE' : '', p.invoiceLast5 || ''
       ]]);
+      _logOrderChange_(orderNo, p.user || '', '更新配送',
+        (p.shipMethod || '—') + '／' + (p.recvName || '—') + ' ' + (p.recvPhone || '') + '／' + (p.recvAddr || '—')
+        + (sent ? '／發票驗收單已隨貨' : ''));
       return { ok: true, orderNo: orderNo };
     }
   }
@@ -770,6 +816,8 @@ function completeOrderItem(p) {
     // 2) 更新 item 狀態 + 整單彙總
     items[idx].status = '完成';
     items[idx].batchId = batch.id;
+    _logOrderChange_(orderNo, p.creator || p.pm || '', '完成回報',
+      '第 ' + (idx + 1) + ' 款「' + (item.product || '') + '」完成（裝瓶 ' + (Number(p.bottleCount) || item.qty || 0) + '）');
     const allDone = items.every(function (it) { return it.status === '完成'; });
     const orderStatus = allDone ? '已完成' : '製作中';
     ws.getRange(rowIdx + 1, 5).setValue(JSON.stringify(items)); // E 酒款明細
@@ -1654,6 +1702,7 @@ function shipOrder(p) {
         '', orderNo, p.operator || '', now, '訂單出貨']);
       shipped++;
     });
+    _logOrderChange_(orderNo, p.operator || '', '確認出貨', '扣成品庫存 ' + shipped + ' 款');
     return { ok: true, orderNo: orderNo, client: client, shippedItems: shipped };
   } finally { lock.releaseLock(); }
 }
