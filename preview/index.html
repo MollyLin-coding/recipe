@@ -46,14 +46,17 @@ select.inp{appearance:none;-webkit-appearance:none;background-image:url("data:im
 #topUserInfo{font-size:13px;display:flex;align-items:center;gap:8px;opacity:.9;flex-shrink:0;}
 #mainContent{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px;}
 #navbar{background:var(--card);border-top:1px solid var(--border);display:flex;flex-shrink:0;padding-bottom:var(--safe-b);}
-.nav-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:7px 2px;font-size:10px;cursor:pointer;color:var(--ink3);border-top:2px solid transparent;transition:.15s;gap:3px;touch-action:manipulation;min-height:var(--nav-h);}
+.nav-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:8px 2px 6px;font-size:10px;line-height:1.15;text-align:center;cursor:pointer;color:var(--ink3);border-top:2px solid transparent;transition:.15s;gap:3px;touch-action:manipulation;min-height:var(--nav-h);}
 .nav-tab .ni{font-size:18px;line-height:1;}
 .nav-tab.active{color:var(--gold-dk);border-top-color:var(--gold-dk);background:var(--gold-lt);}
 
 /* cards / layout */
 .card{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:14px;margin-bottom:12px;border:1px solid var(--border);}
 .card-title{font-family:'Noto Serif TC',serif;font-size:15px;font-weight:600;color:var(--gold-dk);margin-bottom:10px;}
-.sec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.sec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;}
+/* v2.0.1 金流總覽數字框：窄螢幕上下堆疊、等寬對齊 */
+.fin-box{flex:1 1 140px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;min-width:0;}
+@media(max-width:480px){.fin-box{flex:1 1 100%;}}
 .form-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
 .fg{display:flex;flex-direction:column;gap:4px;flex:1;min-width:100px;}
 .fg label{font-size:11px;color:var(--ink3);font-weight:500;}
@@ -1853,14 +1856,14 @@ async function renderRuncardPage(mc) {
   mc.innerHTML = `
     ${isFinanceUser() ? '<div id="financeSummaryCard"></div>' : ''}
     <div class="card" style="margin-bottom:10px;">
-      <div class="sec-hd"><div class="card-title" style="margin:0">📦 訂單列表（依出貨日）</div>
+      <div class="sec-hd"><div class="card-title" style="margin:0">📦 訂單列表</div>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-ghost btn-sm" id="ordScopeBtn" onclick="toggleOrderScope()">${_orderScopeAll ? '只看本月' : '顯示全部'}</button>
           <button class="btn btn-ghost btn-sm" onclick="loadOrderMgmt()">↻</button>
           ${isAdmin ? '<button class="btn btn-primary btn-sm" onclick="showOrderModal()">＋ 建單</button>' : ''}
         </div>
       </div>
-      <div style="font-size:11px;color:var(--ink3);margin-bottom:2px;">點卡片查看完整詳情與操作（完成回報／確認出貨／編輯）</div>
+      <div style="font-size:11px;color:var(--ink3);margin-bottom:2px;">依出貨日排序・點卡片看詳情與操作（完成回報／確認出貨／編輯）</div>
       <div id="monthOrderArea"><div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">載入中…</div></div>
     </div>
     <div id="runcardArea"><div class="card"><div style="text-align:center;color:var(--ink3);padding:16px;font-size:13px;">載入 run card…</div></div></div>`;
@@ -1881,12 +1884,12 @@ async function loadFinanceSummary() {
       <button class="btn btn-ghost btn-sm" onclick="loadFinanceSummary()">↻</button>
     </div>
     <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;">
-      <div style="flex:1 1 140px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;">
+      <div class="fin-box">
         <div style="font-size:11px;color:var(--ink3);">當月訂單營收（損益）</div>
         <div style="font-size:20px;font-weight:700;color:var(--gold-dk);">NT$${(res.orderRevenue || 0).toLocaleString()}</div>
         <div style="font-size:10px;color:var(--ink3);">出貨日在本月的 ${res.orderCount || 0} 張訂單</div>
       </div>
-      <div style="flex:1 1 140px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;">
+      <div class="fin-box">
         <div style="font-size:11px;color:var(--ink3);">當月實際收取款項（現金流）</div>
         <div style="font-size:20px;font-weight:700;color:#2e7d32;">NT$${(res.cashReceived || 0).toLocaleString()}</div>
         <div style="font-size:10px;color:var(--ink3);">依訂金／尾款「實際收取日」計</div>
