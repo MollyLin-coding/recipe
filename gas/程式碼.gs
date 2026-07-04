@@ -103,6 +103,7 @@ function doGet(e) {
       case 'completeOrderItem':      result = completeOrderItem(p); break;       // Phase C 訂單系統
       case 'confirmShipDate':        result = confirmShipDate(p); break;         // 實際出貨日確認
       case 'updateOrderFinance':     result = updateOrderFinance(p); break;      // 金流紀錄 N~V 欄(v1.6)
+      case 'updateOrderDelivery':    result = updateOrderDelivery(p); break;     // 配送資訊 W~AD 欄(v1.7)
       case 'getFinanceSummary':      result = getFinanceSummary(p); break;       // 當月金流摘要(v1.6, 財務名單限定)
       case 'getStockOverview':       result = getStockOverview(p); break;        // 成品庫存
       case 'stockIn':                result = stockIn(p); break;                 // 成品庫存
@@ -477,9 +478,22 @@ function getRecipeForProduction(p) {
 // v1.6 金流紀錄欄（N~V）：舊列讀出為空字串，前後端皆以空=未填處理
 var ORDER_FINANCE_HEADERS = ['訂金金額', '訂金預計收取日', '訂金實際收取日',
   '尾款金額', '尾款預計收取日', '尾款實際收取日', '尾款特殊調整', '調整後尾款金額', '調整備註'];
+// v1.7 配送資訊欄（W~AD）
+var ORDER_DELIVERY_HEADERS = ['配送方式', '運費金額', '收件人名稱', '收件人手機',
+  '收件地址', '客戶統編', '發票驗收單已隨貨', '發票後五碼'];
 function _ensureOrderFinanceHeaders_(ws) {
   if (String(ws.getRange(1, 14).getValue() || '') === '') {
     ws.getRange(1, 14, 1, ORDER_FINANCE_HEADERS.length).setValues([ORDER_FINANCE_HEADERS]);
+  }
+  if (String(ws.getRange(1, 23).getValue() || '') === '') {
+    ws.getRange(1, 23, 1, ORDER_DELIVERY_HEADERS.length).setValues([ORDER_DELIVERY_HEADERS]);
+    // 手機/統編/發票後五碼強制文字格式，防開頭 0 被 Sheet 吃掉（Z=26, AB=28, AD=30）
+    var mr = ws.getMaxRows() - 1;
+    if (mr > 0) {
+      ws.getRange(2, 26, mr, 1).setNumberFormat('@');
+      ws.getRange(2, 28, mr, 1).setNumberFormat('@');
+      ws.getRange(2, 30, mr, 1).setNumberFormat('@');
+    }
   }
 }
 // 金額欄：空=未填(保留空字串)，有值才轉數字
@@ -528,14 +542,17 @@ function createOrder(p) {
     const now = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
     _ensureOrderFinanceHeaders_(ws);
     const finAdj = (String(p.finalAdjusted || '').toLowerCase() === 'true');
-    // L實際出貨日(預設=表訂出貨日) M實際出貨日已確認(空=未確認) N~V金流紀錄(v1.6)
+    // L實際出貨日(預設=表訂出貨日) M實際出貨日已確認(空=未確認) N~V金流紀錄(v1.6) W~AD配送資訊(v1.7)
     ws.appendRow([orderNo, p.client, p.orderType || '', p.deliveryDate || '',
       JSON.stringify(items), Number(p.total) || 0, Number(p.balance) || 0,
       p.depositStatus || '', '待製作', p.pm || '', now,
       p.actualDeliveryDate || p.deliveryDate || '', '',
       _numOrBlank_(p.depositAmount), p.depositDueDate || '', p.depositPaidDate || '',
       _numOrBlank_(p.finalAmount), p.finalDueDate || '', p.finalPaidDate || '',
-      finAdj ? 'TRUE' : '', finAdj ? _numOrBlank_(p.finalAdjustedAmount) : '', p.finalAdjustNote || '']);
+      finAdj ? 'TRUE' : '', finAdj ? _numOrBlank_(p.finalAdjustedAmount) : '', p.finalAdjustNote || '',
+      p.shipMethod || '', _numOrBlank_(p.shipFee), p.recvName || '', p.recvPhone || '',
+      p.recvAddr || '', p.taxId || '',
+      (String(p.invoiceSent || '').toLowerCase() === 'true') ? 'TRUE' : '', p.invoiceLast5 || '']);
     return { ok: true, orderNo: orderNo };
   } finally { lock.releaseLock(); }
 }
@@ -563,7 +580,16 @@ function getOrders(p) {
       deliveryDate: _fmtDate_(r[3]), items: items, status: String(r[8] || '').trim(),
       pm: String(r[9] || ''), createdAt: String(r[10] || ''),
       actualDeliveryDate: _fmtDate_(r[11]) || _fmtDate_(r[3]),
-      shipDateConfirmed: (String(r[12]).toUpperCase() === 'TRUE' || r[12] === true)
+      shipDateConfirmed: (String(r[12]).toUpperCase() === 'TRUE' || r[12] === true),
+      // v1.7 配送資訊（兩種 view 皆回；出貨作業需要，非金額）
+      shipMethod: String(r[22] == null ? '' : r[22]),
+      shipFee: _numOrBlank_(r[23]),
+      recvName: String(r[24] == null ? '' : r[24]),
+      recvPhone: String(r[25] == null ? '' : r[25]),
+      recvAddr: String(r[26] == null ? '' : r[26]),
+      taxId: String(r[27] == null ? '' : r[27]),
+      invoiceSent: (String(r[28]).toUpperCase() === 'TRUE' || r[28] === true),
+      invoiceLast5: String(r[29] == null ? '' : r[29])
     };
     if (view === 'bartender') {
       if (base.status === '已完成') continue; // 不回完成單
@@ -634,6 +660,29 @@ function updateOrderFinance(p) {
         _numOrBlank_(p.depositAmount), p.depositDueDate || '', p.depositPaidDate || '',
         _numOrBlank_(p.finalAmount), p.finalDueDate || '', p.finalPaidDate || '',
         finAdj ? 'TRUE' : '', finAdj ? _numOrBlank_(p.finalAdjustedAmount) : '', p.finalAdjustNote || ''
+      ]]);
+      return { ok: true, orderNo: orderNo };
+    }
+  }
+  return { ok: false, error: '找不到訂單：' + orderNo };
+}
+
+// ── v1.7 配送資訊 ─────────────────────────────────
+// 更新訂單配送欄（W~AD，一次整組覆寫；前端 modal 送全部欄位）
+function updateOrderDelivery(p) {
+  const orderNo = p && p.orderNo;
+  if (!orderNo) return { ok: false, error: '缺少 orderNo' };
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('訂單主表');
+  if (!ws) return { ok: false, error: '找不到訂單主表分頁' };
+  _ensureOrderFinanceHeaders_(ws);
+  const sent = (String(p.invoiceSent || '').toLowerCase() === 'true');
+  const data = ws.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(orderNo)) {
+      ws.getRange(i + 1, 23, 1, 8).setValues([[
+        p.shipMethod || '', _numOrBlank_(p.shipFee), p.recvName || '', p.recvPhone || '',
+        p.recvAddr || '', p.taxId || '', sent ? 'TRUE' : '', p.invoiceLast5 || ''
       ]]);
       return { ok: true, orderNo: orderNo };
     }
