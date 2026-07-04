@@ -101,6 +101,8 @@ function doGet(e) {
       case 'getOrders':              result = getOrders(p); break;               // Phase C 訂單系統
       case 'completeOrderItem':      result = completeOrderItem(p); break;       // Phase C 訂單系統
       case 'confirmShipDate':        result = confirmShipDate(p); break;         // 實際出貨日確認
+      case 'updateOrderFinance':     result = updateOrderFinance(p); break;      // 金流紀錄 N~V 欄(v1.6)
+      case 'getFinanceSummary':      result = getFinanceSummary(p); break;       // 當月金流摘要(v1.6, 財務名單限定)
       case 'getStockOverview':       result = getStockOverview(p); break;        // 成品庫存
       case 'stockIn':                result = stockIn(p); break;                 // 成品庫存
       case 'stockOut':               result = stockOut(p); break;                // 成品庫存
@@ -436,9 +438,23 @@ function getRecipeForProduction(p) {
 }
 
 // ── Phase C 訂單系統：訂單寫入 / 讀取 / 完成回報 ──────────────────
-// 訂單主表(主資料庫)11 欄：
+// 訂單主表(主資料庫)欄位：
 //   A訂單編號 B客戶名稱 C訂單類型 D出貨日 E酒款明細(JSON) F總金額 G尾款 H訂金狀態 I製作狀態 J PM K建立時間
+//   L實際出貨日 M實際出貨日已確認(v1.4)
+//   N訂金金額 O訂金預計收取日 P訂金實際收取日 Q尾款金額 R尾款預計收取日 S尾款實際收取日
+//   T尾款特殊調整(TRUE/空) U調整後尾款金額 V調整備註(v1.6 金流紀錄)
 // 製作狀態：per-item 存於 E 的 JSON(status)，I 欄為整單彙總(全完成→已完成，否則製作中)。
+
+// v1.6 金流紀錄欄（N~V）：舊列讀出為空字串，前後端皆以空=未填處理
+var ORDER_FINANCE_HEADERS = ['訂金金額', '訂金預計收取日', '訂金實際收取日',
+  '尾款金額', '尾款預計收取日', '尾款實際收取日', '尾款特殊調整', '調整後尾款金額', '調整備註'];
+function _ensureOrderFinanceHeaders_(ws) {
+  if (String(ws.getRange(1, 14).getValue() || '') === '') {
+    ws.getRange(1, 14, 1, ORDER_FINANCE_HEADERS.length).setValues([ORDER_FINANCE_HEADERS]);
+  }
+}
+// 金額欄：空=未填(保留空字串)，有值才轉數字
+function _numOrBlank_(v) { return (v == null || v === '') ? '' : (Number(v) || 0); }
 
 function _genOrderNo(ws) {
   const now = new Date();
@@ -481,11 +497,16 @@ function createOrder(p) {
   try {
     const orderNo = _genOrderNo(ws);
     const now = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
-    // L實際出貨日(預設=表訂出貨日) M實際出貨日已確認(空=未確認)
+    _ensureOrderFinanceHeaders_(ws);
+    const finAdj = (String(p.finalAdjusted || '').toLowerCase() === 'true');
+    // L實際出貨日(預設=表訂出貨日) M實際出貨日已確認(空=未確認) N~V金流紀錄(v1.6)
     ws.appendRow([orderNo, p.client, p.orderType || '', p.deliveryDate || '',
       JSON.stringify(items), Number(p.total) || 0, Number(p.balance) || 0,
       p.depositStatus || '', '待製作', p.pm || '', now,
-      p.actualDeliveryDate || p.deliveryDate || '', '']);
+      p.actualDeliveryDate || p.deliveryDate || '', '',
+      _numOrBlank_(p.depositAmount), p.depositDueDate || '', p.depositPaidDate || '',
+      _numOrBlank_(p.finalAmount), p.finalDueDate || '', p.finalPaidDate || '',
+      finAdj ? 'TRUE' : '', finAdj ? _numOrBlank_(p.finalAdjustedAmount) : '', p.finalAdjustNote || '']);
     return { ok: true, orderNo: orderNo };
   } finally { lock.releaseLock(); }
 }
@@ -528,6 +549,16 @@ function getOrders(p) {
       base.total = Number(r[5]) || 0;
       base.balance = Number(r[6]) || 0;
       base.depositStatus = String(r[7] || '');
+      // v1.6 金流紀錄（舊列無 N~V → 一律回空字串=未填）
+      base.depositAmount = _numOrBlank_(r[13]);
+      base.depositDueDate = _fmtDate_(r[14]);
+      base.depositPaidDate = _fmtDate_(r[15]);
+      base.finalAmount = _numOrBlank_(r[16]);
+      base.finalDueDate = _fmtDate_(r[17]);
+      base.finalPaidDate = _fmtDate_(r[18]);
+      base.finalAdjusted = (String(r[19]).toUpperCase() === 'TRUE' || r[19] === true);
+      base.finalAdjustedAmount = _numOrBlank_(r[20]);
+      base.finalAdjustNote = String(r[21] == null ? '' : r[21]);
       orders.push(base);
     }
   }
@@ -555,6 +586,69 @@ function confirmShipDate(p) {
     }
   }
   return { ok: false, error: '找不到訂單：' + orderNo };
+}
+
+// ── v1.6 金流紀錄 ─────────────────────────────────
+// 更新訂單金流欄（N~V，一次整組覆寫；前端 modal 送全部欄位）
+function updateOrderFinance(p) {
+  const orderNo = p && p.orderNo;
+  if (!orderNo) return { ok: false, error: '缺少 orderNo' };
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('訂單主表');
+  if (!ws) return { ok: false, error: '找不到訂單主表分頁' };
+  _ensureOrderFinanceHeaders_(ws);
+  const finAdj = (String(p.finalAdjusted || '').toLowerCase() === 'true');
+  const data = ws.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(orderNo)) {
+      ws.getRange(i + 1, 14, 1, 9).setValues([[
+        _numOrBlank_(p.depositAmount), p.depositDueDate || '', p.depositPaidDate || '',
+        _numOrBlank_(p.finalAmount), p.finalDueDate || '', p.finalPaidDate || '',
+        finAdj ? 'TRUE' : '', finAdj ? _numOrBlank_(p.finalAdjustedAmount) : '', p.finalAdjustNote || ''
+      ]]);
+      return { ok: true, orderNo: orderNo };
+    }
+  }
+  return { ok: false, error: '找不到訂單：' + orderNo };
+}
+
+// 當月金流摘要（僅財務名單）：
+//   orderRevenue(損益)＝出貨日(實際L優先、否則表訂D)落在該月的訂單總金額；尾款有特殊調整時以差額修正
+//   cashReceived(現金流)＝訂金實際收取日(P)在該月的訂金 ＋ 尾款實際收取日(S)在該月的實際尾款(調整後優先)
+var FINANCE_USERS = ['Kevin', 'Molly', 'Lulu'];
+function getFinanceSummary(p) {
+  const user = String((p && p.user) || '');
+  if (FINANCE_USERS.indexOf(user) < 0) return { ok: false, error: '無權限查看金流摘要' };
+  const month = String((p && p.month) || '') || Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM');
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('訂單主表');
+  if (!ws) return { ok: true, month: month, orderRevenue: 0, cashReceived: 0, orderCount: 0 };
+  const data = ws.getDataRange().getValues();
+  let revenue = 0, cash = 0, count = 0;
+  for (let i = 1; i < data.length; i++) {
+    const r = data[i];
+    if (!r[0]) continue;
+    const total = Number(r[5]) || 0;
+    const depositAmt = _numOrBlank_(r[13]);
+    const finalAmt = _numOrBlank_(r[16]);
+    const adjusted = (String(r[19]).toUpperCase() === 'TRUE' || r[19] === true);
+    const adjAmt = _numOrBlank_(r[20]);
+    // 實際尾款：有調整→調整後金額；否則 Q 尾款金額，再退回舊 G 尾款欄
+    const effFinal = (adjusted && adjAmt !== '') ? adjAmt : (finalAmt !== '' ? finalAmt : (Number(r[6]) || 0));
+    const shipMonth = (_fmtDate_(r[11]) || _fmtDate_(r[3])).slice(0, 7);
+    if (shipMonth === month) {
+      count++;
+      let eff = total;
+      if (adjusted && adjAmt !== '') {
+        const origFinal = (finalAmt !== '') ? finalAmt : (Number(r[6]) || 0);
+        eff = total - origFinal + adjAmt;
+      }
+      revenue += eff;
+    }
+    if (_fmtDate_(r[15]).slice(0, 7) === month && depositAmt !== '') cash += depositAmt;
+    if (_fmtDate_(r[18]).slice(0, 7) === month) cash += effFinal;
+  }
+  return { ok: true, month: month, orderRevenue: revenue, cashReceived: cash, orderCount: count };
 }
 
 // 完成回報：共用 addBatchRecord 寫一筆製作記錄(F欄=關聯訂單編號)，再更新訂單主表 item 狀態
