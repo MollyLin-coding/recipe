@@ -471,8 +471,8 @@ async function doLogin() {
   app.style.display = 'flex';
   // admin 才顯示審核
   document.querySelectorAll('.admin-only').forEach(el => el.style.display = res.role === 'admin' ? '' : 'none');
-  // 角色分頁分流：倉管只看「製作記錄」+「成品庫存」；其餘角色維持原本可見範圍
-  const ROLE_TABS = { '倉管': ['batch', 'stock', 'inventory'] };
+  // 角色分頁分流：倉管=run card+庫存；財務(Lulu)=只看訂單/run card(含金流總覽)；其餘角色維持原本可見範圍
+  const ROLE_TABS = { '倉管': ['batch', 'stock', 'inventory'], '財務': ['batch'] };
   const allowed = ROLE_TABS[res.role];
   if (allowed) {
     document.querySelectorAll('#navbar .nav-tab').forEach(el =>
@@ -1828,6 +1828,7 @@ async function doCompleteTask(oi,ii){
 async function renderRuncardPage(mc) {
   const isAdmin = curUser && curUser.role === 'admin';
   mc.innerHTML = `
+    ${isFinanceUser() ? '<div id="financeSummaryCard"></div>' : ''}
     <div class="card" style="margin-bottom:10px;">
       <div class="sec-hd"><div class="card-title" style="margin:0">📦 出貨訂單</div>
         <div style="display:flex;gap:6px;">
@@ -1838,13 +1839,41 @@ async function renderRuncardPage(mc) {
       <div id="orderMgmtArea"><div style="text-align:center;color:var(--ink3);padding:16px;font-size:13px;">載入中…</div></div>
     </div>
     <div id="runcardArea"><div class="card"><div style="text-align:center;color:var(--ink3);padding:16px;font-size:13px;">載入 run card…</div></div></div>`;
+  if (isFinanceUser()) loadFinanceSummary();
   loadOrderMgmt();
   C.batch = null; renderBatchPage(document.getElementById('runcardArea'));
 }
 
+// v1.6 當月金流總覽（僅 FINANCE_USERS：Kevin/Molly/Lulu）
+async function loadFinanceSummary() {
+  const el = document.getElementById('financeSummaryCard'); if (!el) return;
+  el.innerHTML = '<div class="card" style="margin-bottom:10px;padding:12px;"><div style="font-size:12px;color:var(--ink3);">💰 金流總覽載入中…</div></div>';
+  const res = await api({ action: 'getFinanceSummary', user: (curUser && curUser.username) || '' }, true);
+  if (!res.ok) { el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="card" style="margin-bottom:10px;padding:12px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div class="card-title" style="margin:0;">💰 ${res.month} 金流總覽</div>
+      <button class="btn btn-ghost btn-sm" onclick="loadFinanceSummary()">↻</button>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;">
+      <div style="flex:1 1 140px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;">
+        <div style="font-size:11px;color:var(--ink3);">當月訂單營收（損益）</div>
+        <div style="font-size:20px;font-weight:700;color:var(--gold-dk);">NT$${(res.orderRevenue || 0).toLocaleString()}</div>
+        <div style="font-size:10px;color:var(--ink3);">出貨日在本月的 ${res.orderCount || 0} 張訂單</div>
+      </div>
+      <div style="flex:1 1 140px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;">
+        <div style="font-size:11px;color:var(--ink3);">當月實際收取款項（現金流）</div>
+        <div style="font-size:20px;font-weight:700;color:#2e7d32;">NT$${(res.cashReceived || 0).toLocaleString()}</div>
+        <div style="font-size:10px;color:var(--ink3);">依訂金／尾款「實際收取日」計</div>
+      </div>
+    </div>
+  </div>`;
+}
+
 async function loadOrderMgmt() {
   const isAdmin = curUser && curUser.role === 'admin';
-  const res = await api(isAdmin ? { action: 'getOrders' } : { action: 'getOrders', view: 'bartender' });
+  const canSeeMoney = isAdmin || isFinanceUser();
+  const res = await api(canSeeMoney ? { action: 'getOrders' } : { action: 'getOrders', view: 'bartender' });
   const area = document.getElementById('orderMgmtArea'); if (!area) return;
   if (!res.ok) { area.innerHTML = `<div class="warn" style="padding:10px;">${res.error || '讀取失敗'}</div>`; return; }
   const orders = res.orders || [];
@@ -1868,7 +1897,18 @@ async function loadOrderMgmt() {
       </div>`;
     }).join('');
     const dueUnconfirmed = !done && !o.shipDateConfirmed && d !== null && d <= 0;
-    const money = isAdmin ? `<div style="font-size:11px;color:var(--ink3);margin-top:4px;">總 NT$${o.total || 0} · 尾款 NT$${o.balance || 0} · 訂金 ${o.depositStatus || '—'}</div>` : '';
+    let money = '';
+    if (canSeeMoney) {
+      const hasDep = o.depositAmount !== '' && o.depositAmount != null;
+      const hasFin = o.finalAmount !== '' && o.finalAmount != null;
+      const finShown = o.finalAdjusted && o.finalAdjustedAmount !== '' && o.finalAdjustedAmount != null
+        ? `<s style="opacity:.6;">NT$${hasFin ? o.finalAmount : (o.balance || 0)}</s> → NT$${o.finalAdjustedAmount}`
+        : (hasFin ? 'NT$' + o.finalAmount : (o.balance ? 'NT$' + o.balance : '—'));
+      money = `<div style="font-size:11px;color:var(--ink3);margin-top:4px;">總 NT$${o.total || 0} · 訂金狀態 ${o.depositStatus || '—'}</div>
+      <div style="font-size:11px;color:var(--ink3);margin-top:2px;">💰 訂金 ${hasDep ? 'NT$' + o.depositAmount : '—'}（預計 ${o.depositDueDate || '—'}｜實收 ${o.depositPaidDate || '<span style="color:var(--red);">未收</span>'}）</div>
+      <div style="font-size:11px;color:var(--ink3);">💰 尾款 ${finShown}（預計 ${o.finalDueDate || '—'}｜實收 ${o.finalPaidDate || '<span style="color:var(--red);">未收</span>'}）${o.finalAdjusted ? '<span class="badge bg-yellow" style="font-size:9px;">特殊調整</span>' : ''}</div>
+      ${o.finalAdjustNote ? `<div style="font-size:10px;color:var(--ink3);">📝 ${o.finalAdjustNote}</div>` : ''}`;
+    }
     return `<div class="card" style="margin-bottom:10px;padding:12px;${urgent ? 'border-left:3px solid var(--red);' : ''}">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
         <div><b>${o.orderNo}</b> <span style="color:var(--ink3);font-size:12px;">${clientLabel(o.client)}${o.orderType ? (' · ' + o.orderType) : ''}</span></div>
@@ -1876,7 +1916,7 @@ async function loadOrderMgmt() {
       </div>
       <div style="font-size:11px;color:var(--ink3);margin:4px 0 2px;">表訂 ${o.deliveryDate || '—'} ｜ 實際 ${o.shipDateConfirmed ? (o.actualDeliveryDate || o.deliveryDate || '—') : '<span style="color:var(--red);">待確認</span>'}</div>
       ${money}${items}
-      ${canAct ? `<div class="fe mt8" style="gap:6px;">${dueUnconfirmed ? `<button class="btn btn-sm" style="background:var(--gold-lt);color:var(--gold-dk);border:1px solid var(--gold-dk);padding:4px 8px;" onclick="showConfirmShipModal(${oi})">🚚 確認實際出貨日</button>` : ''}<button class="btn btn-danger btn-sm" onclick="confirmShip(${oi})">確認出貨（扣成品庫存）</button></div>` : ''}
+      ${canAct ? `<div class="fe mt8" style="gap:6px;">${isAdmin ? `<button class="btn btn-ghost btn-sm" style="padding:4px 8px;" onclick="showFinanceModal(${oi})">💰 金流</button>` : ''}${dueUnconfirmed ? `<button class="btn btn-sm" style="background:var(--gold-lt);color:var(--gold-dk);border:1px solid var(--gold-dk);padding:4px 8px;" onclick="showConfirmShipModal(${oi})">🚚 確認實際出貨日</button>` : ''}<button class="btn btn-danger btn-sm" onclick="confirmShip(${oi})">確認出貨（扣成品庫存）</button></div>` : ''}
     </div>`;
   }).join('');
 }
@@ -1896,12 +1936,16 @@ const EXTRA_CLIENT_RECIPES = {
 };
 const EXTRA_CLIENTS = Object.keys(EXTRA_CLIENT_RECIPES);
 function clientLabel(key) { return CLIENT_LABELS[key] || key; }
-// 訂單類型欄：南坡萬自有品牌酒(南坡萬v.2) → 定期生產/自行keyin；其餘 → 一般建議清單
+// v1.6 金流可見名單（僅此三人看得到金流總覽與訂單金流欄；後端 getFinanceSummary 同名單雙重把關）
+const FINANCE_USERS = ['Kevin', 'Molly', 'Lulu'];
+function isFinanceUser() { return !!(curUser && FINANCE_USERS.includes(curUser.username)); }
+// 訂單類型欄：南坡萬自有品牌酒(南坡萬v.2) → 定期生產/自行keyin；OEM 客戶預填「OEM客戶訂單」；其餘 → 一般建議清單
 function orderTypeFieldHtml(client) {
   if (client === '南坡萬v.2') {
     return '<select class="inp" id="om_type" style="margin:0;"><option>定期生產</option><option>自行keyin</option></select>';
   }
-  return '<input class="inp" id="om_type" list="omTypeList" placeholder="如：換前標公版酒" style="margin:0;"><datalist id="omTypeList"><option>換前標公版酒</option><option>南坡萬自有品牌</option></datalist>';
+  const preset = EXTRA_CLIENTS.includes(client) ? 'OEM客戶訂單' : '';
+  return '<input class="inp" id="om_type" list="omTypeList" placeholder="如：換前標公版酒" value="' + preset + '" style="margin:0;"><datalist id="omTypeList"><option>換前標公版酒</option><option>南坡萬自有品牌</option><option>OEM客戶訂單</option></datalist>';
 }
 function orderLineHtml(idx, client) {
   const names = [...new Set([
@@ -1932,6 +1976,57 @@ function orderModalClientChange() {
   const client = document.getElementById('om_client').value;
   const wrap = document.getElementById('omTypeWrap');
   if (wrap) wrap.innerHTML = orderTypeFieldHtml(client);
+}
+// v1.6 金流紀錄欄位（建單 modal 與 💰金流編輯 modal 共用；id 固定 fin_*，同時只會有一個 modal）
+function financeFieldsHtml(v) {
+  v = v || {};
+  const adj = !!v.finalAdjusted;
+  const val = x => (x === '' || x == null) ? '' : x;
+  return `
+    <div style="margin:4px 0 6px;font-size:13px;font-weight:600;color:var(--gold-dk);">金流紀錄</div>
+    <div class="form-row" style="gap:6px;">
+      <div class="fg" style="flex:1 1 90px"><label>訂金金額</label><input class="inp" id="fin_depAmt" type="number" min="0" value="${val(v.depositAmount)}" style="margin:0;font-size:13px;"></div>
+      <div class="fg" style="flex:1 1 120px"><label>訂金預計收取日</label><input class="inp" id="fin_depDue" type="date" value="${v.depositDueDate || ''}" style="margin:0;font-size:13px;"></div>
+      <div class="fg" style="flex:1 1 120px"><label>訂金實際收取日</label><input class="inp" id="fin_depPaid" type="date" value="${v.depositPaidDate || ''}" style="margin:0;font-size:13px;"></div>
+    </div>
+    <div class="form-row" style="gap:6px;">
+      <div class="fg" style="flex:1 1 90px"><label>尾款金額</label><input class="inp" id="fin_finAmt" type="number" min="0" value="${val(v.finalAmount)}" style="margin:0;font-size:13px;"></div>
+      <div class="fg" style="flex:1 1 120px"><label>尾款預計收取日</label><input class="inp" id="fin_finDue" type="date" value="${v.finalDueDate || ''}" style="margin:0;font-size:13px;"></div>
+      <div class="fg" style="flex:1 1 120px"><label>尾款實際收取日</label><input class="inp" id="fin_finPaid" type="date" value="${v.finalPaidDate || ''}" style="margin:0;font-size:13px;"></div>
+    </div>
+    <label style="display:flex;gap:6px;align-items:center;font-size:13px;margin:2px 0 6px;">
+      <input type="checkbox" id="fin_adj" ${adj ? 'checked' : ''} style="width:auto;" onchange="document.getElementById('finAdjWrap').style.display=this.checked?'':'none'"> 尾款有特殊狀況需修改金額
+    </label>
+    <div id="finAdjWrap" style="${adj ? '' : 'display:none;'}">
+      <div class="form-row" style="gap:6px;">
+        <div class="fg" style="flex:1 1 110px"><label>調整後尾款金額</label><input class="inp" id="fin_adjAmt" type="number" min="0" value="${val(v.finalAdjustedAmount)}" style="margin:0;font-size:13px;"></div>
+        <div class="fg" style="flex:2 1 160px"><label>調整備註</label><input class="inp" id="fin_adjNote" value="${v.finalAdjustNote || ''}" placeholder="如：折讓原因" style="margin:0;font-size:13px;"></div>
+      </div>
+    </div>`;
+}
+function collectFinanceFields() {
+  const gv = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+  return {
+    depositAmount: gv('fin_depAmt'), depositDueDate: gv('fin_depDue'), depositPaidDate: gv('fin_depPaid'),
+    finalAmount: gv('fin_finAmt'), finalDueDate: gv('fin_finDue'), finalPaidDate: gv('fin_finPaid'),
+    finalAdjusted: document.getElementById('fin_adj') && document.getElementById('fin_adj').checked ? 'true' : '',
+    finalAdjustedAmount: gv('fin_adjAmt'), finalAdjustNote: gv('fin_adjNote')
+  };
+}
+// 💰 金流編輯（admin）：整組覆寫 N~V 欄
+function showFinanceModal(oi) {
+  const o = window._mgmtOrders[oi]; if (!o) return;
+  const modal = makeModal(`
+    <div class="modal-title">💰 金流紀錄：${o.orderNo}</div>
+    <div style="font-size:12px;color:var(--ink3);margin-bottom:8px;">${clientLabel(o.client)} · 總金額 NT$${o.total || 0}</div>
+    ${financeFieldsHtml(o)}
+    <div class="fe" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="fin_sub">儲存金流</button></div>`);
+  const b = modal.querySelector('#fin_sub');
+  b.onclick = () => lockRun(b, async () => {
+    const res = await api({ action: 'updateOrderFinance', orderNo: o.orderNo, ...collectFinanceFields() });
+    if (res.ok) { toast('金流已更新'); modal.remove(); loadOrderMgmt(); if (isFinanceUser()) loadFinanceSummary(); }
+    else toast('更新失敗：' + (res.error || ''));
+  });
 }
 // 新增客戶名稱（自由輸入；新客戶無酒譜時酒款欄可自行輸入）
 function addOrderClient() {
@@ -1972,7 +2067,8 @@ function showOrderModal() {
       <div class="fg"><label>尾款</label><input class="inp" id="om_balance" type="number" min="0" value="0" style="margin:0;"></div>
     </div>
     <div class="fg" style="margin-bottom:12px;"><label>訂金狀態</label><input class="inp" id="om_deposit" list="omDepList" placeholder="未收 / 已收訂 / 已結清（可自填如 已收訂金 NT$3,000）" style="margin:0;"><datalist id="omDepList"><option>未收</option><option>已收訂</option><option>已結清</option></datalist></div>
-    <div class="fe"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="om_sub">建立訂單</button></div>`);
+    ${financeFieldsHtml()}
+    <div class="fe" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="om_sub">建立訂單</button></div>`);
   document.getElementById('om_ship').value = _localDate();
   document.getElementById('om_actual').value = _localDate();
   _orderLineSeq = 0; orderModalAddLine();
@@ -1995,9 +2091,10 @@ function showOrderModal() {
       actualDeliveryDate: document.getElementById('om_actual').value || document.getElementById('om_ship').value || '',
       items: JSON.stringify(items),
       total: document.getElementById('om_total').value || 0, balance: document.getElementById('om_balance').value || 0,
-      depositStatus: document.getElementById('om_deposit').value || '', pm: document.getElementById('om_pm').value || ''
+      depositStatus: document.getElementById('om_deposit').value || '', pm: document.getElementById('om_pm').value || '',
+      ...collectFinanceFields()
     });
-    if (res.ok) { toast('已建立訂單 ' + res.orderNo); modal.remove(); loadOrderMgmt(); }
+    if (res.ok) { toast('已建立訂單 ' + res.orderNo); modal.remove(); loadOrderMgmt(); if (isFinanceUser()) loadFinanceSummary(); }
     else toast('建單失敗：' + (res.error || ''));
   });
 }
