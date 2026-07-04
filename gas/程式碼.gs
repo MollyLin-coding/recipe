@@ -100,6 +100,7 @@ function doGet(e) {
       case 'createOrder':            result = createOrder(p); break;             // Phase C 訂單系統
       case 'getOrders':              result = getOrders(p); break;               // Phase C 訂單系統
       case 'completeOrderItem':      result = completeOrderItem(p); break;       // Phase C 訂單系統
+      case 'confirmShipDate':        result = confirmShipDate(p); break;         // 實際出貨日確認
       case 'getStockOverview':       result = getStockOverview(p); break;        // 成品庫存
       case 'stockIn':                result = stockIn(p); break;                 // 成品庫存
       case 'stockOut':               result = stockOut(p); break;                // 成品庫存
@@ -480,13 +481,20 @@ function createOrder(p) {
   try {
     const orderNo = _genOrderNo(ws);
     const now = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+    // L實際出貨日(預設=表訂出貨日) M實際出貨日已確認(空=未確認)
     ws.appendRow([orderNo, p.client, p.orderType || '', p.deliveryDate || '',
       JSON.stringify(items), Number(p.total) || 0, Number(p.balance) || 0,
-      p.depositStatus || '', '待製作', p.pm || '', now]);
+      p.depositStatus || '', '待製作', p.pm || '', now,
+      p.actualDeliveryDate || p.deliveryDate || '', '']);
     return { ok: true, orderNo: orderNo };
   } finally { lock.releaseLock(); }
 }
 
+// 日期正規化：Sheets 可能把日期字串自動轉成 Date 物件，統一輸出 yyyy-MM-dd
+function _fmtDate_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Taipei', 'yyyy-MM-dd');
+  return String(v == null ? '' : v);
+}
 // 讀訂單；view='bartender' → 過濾金額/訂金、只回未完成、依出貨日排序
 function getOrders(p) {
   const view = p && p.view;
@@ -502,8 +510,10 @@ function getOrders(p) {
     try { items = r[4] ? JSON.parse(r[4]) : []; } catch (e) { items = []; }
     const base = {
       orderNo: String(r[0]), client: String(r[1]), orderType: String(r[2]),
-      deliveryDate: String(r[3]), items: items, status: String(r[8] || '').trim(),
-      pm: String(r[9] || ''), createdAt: String(r[10] || '')
+      deliveryDate: _fmtDate_(r[3]), items: items, status: String(r[8] || '').trim(),
+      pm: String(r[9] || ''), createdAt: String(r[10] || ''),
+      actualDeliveryDate: _fmtDate_(r[11]) || _fmtDate_(r[3]),
+      shipDateConfirmed: (String(r[12]).toUpperCase() === 'TRUE' || r[12] === true)
     };
     if (view === 'bartender') {
       if (base.status === '已完成') continue; // 不回完成單
@@ -525,6 +535,26 @@ function getOrders(p) {
     orders.sort(function (a, b) { return (a.deliveryDate || '').localeCompare(b.deliveryDate || ''); });
   }
   return { ok: true, orders: orders };
+}
+
+// 確認/修正實際出貨日（L 實際出貨日、M 已確認）
+function confirmShipDate(p) {
+  const orderNo = p && p.orderNo;
+  if (!orderNo) return { ok: false, error: '缺少 orderNo' };
+  const actualDate = (p && p.actualDate) || '';
+  if (!actualDate) return { ok: false, error: '缺少實際出貨日' };
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('訂單主表');
+  if (!ws) return { ok: false, error: '找不到訂單主表分頁' };
+  const data = ws.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(orderNo)) {
+      ws.getRange(i + 1, 12).setValue(actualDate); // L 實際出貨日
+      ws.getRange(i + 1, 13).setValue('TRUE');      // M 已確認
+      return { ok: true, orderNo: orderNo, actualDate: actualDate };
+    }
+  }
+  return { ok: false, error: '找不到訂單：' + orderNo };
 }
 
 // 完成回報：共用 addBatchRecord 寫一筆製作記錄(F欄=關聯訂單編號)，再更新訂單主表 item 狀態
