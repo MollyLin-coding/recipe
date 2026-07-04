@@ -463,7 +463,7 @@ function createOrder(p) {
   const ws = ss.getSheetByName('訂單主表');
   if (!ws) return { ok: false, error: '找不到訂單主表分頁' };
   if (!p.client) return { ok: false, error: '缺少客戶' };
-  getClientCfg(p.client); // 未知客戶擋下(對應酒譜 Sheet)
+  // 允許自由客戶名（支援「新客戶」建單）；已知客戶照舊，未知客戶不再擋下（訂單只記名稱，不寫客戶酒譜表）
   let items;
   try { items = typeof p.items === 'string' ? JSON.parse(p.items) : (p.items || []); }
   catch (e) { return { ok: false, error: '酒款明細 JSON 解析失敗' }; }
