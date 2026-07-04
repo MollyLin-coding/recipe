@@ -93,6 +93,7 @@ function doGet(e) {
       case 'getEnvInfo':     result = getEnvInfo(); break;                        // 環境探針(確認打到哪份主表)
       case 'login':          result = login(p); break;
       case 'changePassword': result = changePassword(p); break;
+      case 'checkUser':      result = checkUser(p); break;               // 帳號診斷(遮罩、不回密碼)
       case 'getRecipeList':  result = getRecipeList(); break;
       case 'getRecipe':      result = getRecipe(p); break;
       case 'getClientRecipeList':    result = getClientRecipeList(p); break;     // Phase C 訂單系統
@@ -153,11 +154,39 @@ function login(p) {
   const rows = ws.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     const [acc, pwd, role] = rows[i];
-    if (String(acc) === username && String(pwd) === String(password)) {
+    // 容錯：欄位前後空白一律忽略；純數字密碼容忍 Sheet 吃掉開頭 0（存 50916、輸入 050916 也過）
+    const accOk = String(acc == null ? '' : acc).trim() === String(username).trim();
+    const pwStr = String(pwd == null ? '' : pwd).trim();
+    const inStr = String(password).trim();
+    const pwOk = pwStr === inStr || (/^\d+$/.test(inStr) && pwStr === String(Number(inStr)));
+    if (accOk && pwOk) {
       return { ok: true, role: role || 'user' };
     }
   }
   return { ok: false, error: '帳號或密碼錯誤' };
+}
+
+// 帳號診斷（僅回存在性/角色/密碼遮罩特徵，不回密碼內容；排查登入問題用）
+function checkUser(p) {
+  const username = String((p && p.username) || '');
+  if (!username) return { ok: false, error: '缺少 username' };
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  let ws = ss.getSheetByName('使用者資料') || ss.getSheetByName('帳號');
+  if (!ws) return { ok: false, error: '找不到帳號分頁' };
+  const rows = ws.getDataRange().getValues();
+  const hits = [];
+  for (let i = 1; i < rows.length; i++) {
+    const acc = String(rows[i][0] == null ? '' : rows[i][0]);
+    if (acc.trim().toLowerCase() === username.trim().toLowerCase()) {
+      const pw = String(rows[i][1] == null ? '' : rows[i][1]);
+      hits.push({
+        row: i + 1, accExact: acc === username, accHasSpace: acc !== acc.trim(),
+        role: String(rows[i][2] == null ? '' : rows[i][2]), pwLen: pw.length, pwTrimLen: pw.trim().length,
+        pwIsNumeric: /^\d+$/.test(pw.trim()), pwStartsWithZero: pw.trim().charAt(0) === '0'
+      });
+    }
+  }
+  return { ok: true, count: hits.length, hits: hits, sheetName: ws.getName(), totalRows: rows.length - 1 };
 }
 
 // ── 改密碼 ───────────────────────────────────────────────────
