@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
-<title>南坡萬酒廠 酒譜系統</title>
+<title>凱文南坡萬 廠務系統</title>
+<link rel="icon" type="image/png" href="/recipe/knb_head.png">
+<link rel="apple-touch-icon" href="/recipe/knb_head.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -250,8 +252,11 @@ tbody tr:hover td{background:#faf3e8;}
 <div id="loginWrap">
   <div id="loginBox">
     <div class="login-head">
-      <div class="logo">🍶 南坡萬酒廠</div>
-      <div class="sub">酒譜管理系統</div>
+      <div class="logo" style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+        <span style="width:78px;height:78px;border-radius:50%;overflow:hidden;background:#fff;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.08);"><img src="/recipe/knb_head.png" alt="凱文南坡萬" style="width:78px;height:78px;object-fit:cover;"></span>
+        <img src="/recipe/knb_logo.png" alt="凱文南坡萬實業社" style="width:100%;max-width:260px;height:auto;">
+      </div>
+      <div class="sub">廠務／酒譜管理系統</div>
     </div>
     <div class="login-card">
       <select class="inp" id="loginUser"><option value="">選擇帳號</option><option>Kevin</option><option>Molly</option><option>阿軒</option><option>小捲</option><option>Vic</option><option>小李</option></select>
@@ -264,9 +269,10 @@ tbody tr:hover td{background:#faf3e8;}
 
 <div id="app">
   <div id="topbar">
-    <span class="topbar-title">🍶 南坡萬</span>
+    <span class="topbar-title" style="display:flex;align-items:center;gap:7px;"><span style="width:26px;height:26px;border-radius:50%;overflow:hidden;background:#fff;display:inline-flex;flex-shrink:0;"><img src="/recipe/knb_head.png" alt="凱文南坡萬" style="width:26px;height:26px;object-fit:cover;"></span>凱文南坡萬</span>
     <div id="topUserInfo">
       <span id="topUsername" style="font-size:12px;"></span>
+      <button class="btn btn-sm" style="color:#fff;border:1px solid rgba(255,255,255,.4);background:transparent;padding:5px 10px;" onclick="showChangePwModal()" title="修改密碼">🔑</button>
       <button class="btn btn-sm" style="color:#fff;border:1px solid rgba(255,255,255,.4);background:transparent;padding:5px 10px;" onclick="doRefresh()" title="重新整理">↻</button>
       <button class="btn btn-sm" style="color:#fff;border:1px solid rgba(255,255,255,.4);background:transparent;padding:5px 10px;" onclick="doLogout()">登出</button>
     </div>
@@ -490,6 +496,27 @@ function doLogout() {
   document.getElementById('loginWrap').style.display = 'flex';
   document.getElementById('loginPass').value = '';
   document.getElementById('loginErr').textContent = '';
+}
+// 自行修改密碼（所有登入者皆可；接後端 changePassword）
+function showChangePwModal() {
+  if (!curUser) { toast('請先登入'); return; }
+  const modal = makeModal(`
+    <div class="modal-title">🔑 修改密碼（${curUser.username}）</div>
+    <input class="inp" id="cp_old" type="password" placeholder="舊密碼" inputmode="numeric" autocomplete="off">
+    <input class="inp" id="cp_new" type="password" placeholder="新密碼" inputmode="numeric" autocomplete="off">
+    <input class="inp" id="cp_new2" type="password" placeholder="再次輸入新密碼" inputmode="numeric" autocomplete="off">
+    <div class="fe" style="margin-top:4px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="cp_sub">儲存</button></div>`);
+  const b = modal.querySelector('#cp_sub');
+  b.onclick = () => lockRun(b, async () => {
+    const oldP = document.getElementById('cp_old').value;
+    const newP = document.getElementById('cp_new').value;
+    const new2 = document.getElementById('cp_new2').value;
+    if (!oldP || !newP) { toast('請填舊密碼與新密碼'); return; }
+    if (newP !== new2) { toast('兩次新密碼不一致'); return; }
+    const res = await api({ action: 'changePassword', username: curUser.username, oldPassword: oldP, newPassword: newP });
+    if (res.ok) { toast('密碼已更新'); modal.remove(); }
+    else toast('更新失敗：' + (res.error || ''));
+  });
 }
 
 // ── 重整 ─────────────────────────────────────────────────────
