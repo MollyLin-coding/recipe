@@ -84,34 +84,17 @@ function stripRecipePrefix(name) {
 }
 
 // ── 入口 ────────────────────────────────────────────────────
-// v2.1 授權表：FB觀看 只允許這三個 action（後端為準，前端只是 UI）
-var FBVIEW_ALLOWED_ACTIONS = ['getRecipeList', 'getRecipe', 'changePassword'];
 function doGet(e) {
   const p = e.parameter || {};
   const action = p.action || '';
   let result;
   try {
-    // v2.1 輕量 session token：除 login/getEnvInfo 外，所有 action 一律要求有效 token
-    if (action !== 'login' && action !== 'getEnvInfo') {
-      const sess = _getSession_(p.token);
-      if (!sess) {
-        return ContentService.createTextOutput(JSON.stringify({ ok: false, error: 'SESSION_EXPIRED' }))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
-      p._user = sess.username; p._role = sess.role;
-      if (sess.role === 'FB觀看' && FBVIEW_ALLOWED_ACTIONS.indexOf(action) < 0) {
-        return ContentService.createTextOutput(JSON.stringify({ ok: false, error: '權限不足' }))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
-    }
     switch(action) {
       case 'getEnvInfo':     result = getEnvInfo(); break;                        // 環境探針(確認打到哪份主表)
       case 'login':          result = login(p); break;
       case 'changePassword': result = changePassword(p); break;
       case 'checkUser':      result = checkUser(p); break;               // 帳號診斷(遮罩、不回密碼)
-      case '__seedTestUsers': result = __seedTestUsers(); break;         // 沙盒限定：種驗收用測試帳號(PROD 直接拒絕)
-      case '__readLoginLog':  result = __readLoginLog(); break;          // 沙盒限定：讀登入紀錄供自動驗收(PROD 直接拒絕)
-      case 'getRecipeList':  result = getRecipeList(p); break;
+      case 'getRecipeList':  result = getRecipeList(); break;
       case 'getRecipe':      result = getRecipe(p); break;
       case 'getClientRecipeList':    result = getClientRecipeList(p); break;     // Phase C 訂單系統
       case 'getRecipeForProduction': result = getRecipeForProduction(p); break;  // Phase C 訂單系統
@@ -165,29 +148,6 @@ function doGet(e) {
 }
 
 // ── 登入 ─────────────────────────────────────────────────────
-// v2.1 session：token 存 ScriptCache（key=sess_<uuid>，TTL 6h=CacheService 上限），過期即需重新登入
-var SESSION_TTL_SEC = 21600;
-function _getSession_(token) {
-  if (!token) return null;
-  try {
-    const raw = CacheService.getScriptCache().get('sess_' + token);
-    return raw ? JSON.parse(raw) : null;
-  } catch (e) { return null; }
-}
-// v2.1 登入紀錄：成功/失敗全記（分頁自動建立；失敗紀錄不回洩帳號存在與否給前端）
-var LOGIN_LOG_SHEET = '登入紀錄';
-function _logLogin_(username, role, result) {
-  try {
-    const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
-    let ws = ss.getSheetByName(LOGIN_LOG_SHEET);
-    if (!ws) {
-      ws = ss.insertSheet(LOGIN_LOG_SHEET);
-      ws.getRange(1, 1, 1, 4).setValues([['時間', '帳號', '角色', '結果']]);
-    }
-    ws.appendRow([Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss'),
-      String(username || ''), String(role || ''), String(result || '')]);
-  } catch (e) { /* 紀錄失敗不阻斷登入 */ }
-}
 function login(p) {
   const username = p.username, password = p.password;
   if (!username || !password) return { ok: false, error: '請提供帳號密碼' };
@@ -195,58 +155,18 @@ function login(p) {
   let ws = ss.getSheetByName('使用者資料') || ss.getSheetByName('帳號');
   if (!ws) return { ok: false, error: '找不到帳號分頁' };
   const rows = ws.getDataRange().getValues();
-  let matchedAcc = null; // 帳號存在但密碼錯 → 記「密碼錯誤」
   for (let i = 1; i < rows.length; i++) {
     const [acc, pwd, role] = rows[i];
     // 容錯：欄位前後空白一律忽略；純數字密碼容忍 Sheet 吃掉開頭 0（存 50916、輸入 050916 也過）
     const accOk = String(acc == null ? '' : acc).trim() === String(username).trim();
-    if (!accOk) continue;
-    matchedAcc = { role: role || 'user' };
     const pwStr = String(pwd == null ? '' : pwd).trim();
     const inStr = String(password).trim();
     const pwOk = pwStr === inStr || (/^\d+$/.test(inStr) && pwStr === String(Number(inStr)));
-    if (pwOk) {
-      const finalRole = role || 'user';
-      const token = Utilities.getUuid();
-      CacheService.getScriptCache().put('sess_' + token,
-        JSON.stringify({ username: String(username).trim(), role: finalRole }), SESSION_TTL_SEC);
-      _logLogin_(username, finalRole, '成功');
-      return { ok: true, role: finalRole, token: token };
+    if (accOk && pwOk) {
+      return { ok: true, role: role || 'user' };
     }
   }
-  _logLogin_(username, matchedAcc ? matchedAcc.role : '', matchedAcc ? '密碼錯誤' : '帳號不存在');
   return { ok: false, error: '帳號或密碼錯誤' };
-}
-
-// 沙盒限定：種驗收用測試帳號（PROD 一律拒絕；正式帳號永遠人工加列）
-function __seedTestUsers() {
-  if (getEnvInfo().env === 'PROD') return { ok: false, error: '僅限測試環境' };
-  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
-  let ws = ss.getSheetByName('使用者資料') || ss.getSheetByName('帳號');
-  if (!ws) return { ok: false, error: '找不到帳號分頁' };
-  const rows = ws.getDataRange().getValues();
-  const have = {};
-  for (let i = 1; i < rows.length; i++) have[String(rows[i][0]).trim()] = true;
-  const added = [];
-  [['上海Jason', '111111', 'FB觀看'], ['testadmin', '999999', 'admin']].forEach(function (u) {
-    if (!have[u[0]]) { ws.appendRow(u); added.push(u[0]); }
-  });
-  return { ok: true, added: added };
-}
-
-// 沙盒限定：讀登入紀錄末 20 筆（自動驗收用；PROD 一律拒絕）
-function __readLoginLog() {
-  if (getEnvInfo().env === 'PROD') return { ok: false, error: '僅限測試環境' };
-  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
-  const ws = ss.getSheetByName(LOGIN_LOG_SHEET);
-  if (!ws) return { ok: true, rows: [] };
-  const data = ws.getDataRange().getValues();
-  const rows = [];
-  for (let i = Math.max(1, data.length - 20); i < data.length; i++) {
-    rows.push({ time: _fmtDateTime_(data[i][0]), user: String(data[i][1] || ''),
-      role: String(data[i][2] || ''), result: String(data[i][3] || '') });
-  }
-  return { ok: true, rows: rows };
 }
 
 // 帳號診斷（僅回存在性/角色/密碼遮罩特徵，不回密碼內容；排查登入問題用）
@@ -275,8 +195,6 @@ function checkUser(p) {
 // ── 改密碼 ───────────────────────────────────────────────────
 function changePassword(p) {
   const { username, oldPassword, newPassword } = p;
-  // v2.1：只能改自己的密碼（session 身分為準）
-  if (p._user && String(username) !== String(p._user)) return { ok: false, error: '只能修改自己的密碼' };
   const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
   let ws = ss.getSheetByName('使用者資料') || ss.getSheetByName('帳號');
   if (!ws) return { ok: false, error: '找不到帳號分頁' };
@@ -291,12 +209,10 @@ function changePassword(p) {
 }
 
 // ── 酒譜清單 ─────────────────────────────────────────────────
-function getRecipeList(p) {
-  const role = p && p._role;
+function getRecipeList() {
   const cache = CacheService.getScriptCache();
   const cached = cache.get('recipeList_v1');
-  // v2.1 FB觀看：過濾一律在讀 cache「之後」做，且過濾結果絕不寫回共用 cache
-  if (cached) return _filterRecipeListByRole_(JSON.parse(cached), role);
+  if (cached) return JSON.parse(cached);
   const list = [];
   for (const client of Object.keys(CLIENTS)) {
     try {
@@ -324,19 +240,13 @@ function getRecipeList(p) {
   }
   const result = { ok: true, list };
   cache.put('recipeList_v1', JSON.stringify(result), 300);
-  return _filterRecipeListByRole_(result, role);
-}
-function _filterRecipeListByRole_(result, role) {
-  if (role !== 'FB觀看') return result;
-  return { ok: true, list: (result.list || []).filter(function (x) { return x.client === 'Feeling Bar'; }) };
+  return result;
 }
 
 // ── 單一酒譜 ─────────────────────────────────────────────────
 function getRecipe(p) {
   const { client, sheet } = p;
   if (!client || !sheet) return { ok: false, error: '缺少 client 或 sheet' };
-  // v2.1 FB觀看：只能看 Feeling Bar
-  if (p._role === 'FB觀看' && client !== 'Feeling Bar') return { ok: false, error: '權限不足' };
   const ss = getClientSS(client);
   const ws = ss.getSheetByName(sheet);
   if (!ws) return { ok: false, error: '找不到分頁: ' + sheet };
@@ -439,7 +349,7 @@ function getRecipe(p) {
   // 酒稅
   const tax = calcTax(abv, totalVol);
 
-  const result = {
+  return {
     ok: true,
     recipeName,
     abv,
@@ -449,27 +359,6 @@ function getRecipe(p) {
     ingredients,
     processNote
   };
-  // v2.1 FB觀看：回傳前深度剝除所有成本/價格欄位（後端為準，非前端隱藏）
-  return (p._role === 'FB觀看') ? _stripRecipeCosts_(result) : result;
-}
-
-// FB觀看用：只留 名稱/ABV/占比/體積/總體積/製程備註/複合結構(比例)，去除 cost/unitCost/unitPrice/ingredientCost/tax
-function _stripRecipeCosts_(r) {
-  const out = { ok: true, recipeName: r.recipeName, abv: r.abv, totalVol: r.totalVol,
-    ingredients: [], processNote: r.processNote };
-  (r.ingredients || []).forEach(function (ing) {
-    const c = { name: ing.name, pct: ing.pct, vol: ing.vol, abv: ing.abv };
-    if (ing.isCompound) {
-      c.isCompound = true;
-      c.hasLoss = ing.hasLoss;
-      c.batchVol = ing.batchVol;
-      c.subMaterials = (ing.subMaterials || []).map(function (s) {
-        return { name: s.name, coef: s.coef, packVol: s.packVol };
-      });
-    }
-    out.ingredients.push(c);
-  });
-  return out;
 }
 
 function calcTax(abv, vol) {
