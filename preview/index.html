@@ -54,6 +54,11 @@ select.inp{appearance:none;-webkit-appearance:none;background-image:url("data:im
 .card{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:14px;margin-bottom:12px;border:1px solid var(--border);}
 .card-title{font-family:'Noto Serif TC',serif;font-size:15px;font-weight:600;color:var(--gold-dk);margin-bottom:10px;}
 .sec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;}
+/* v2.1 FB觀看(上海Jason)純觀看模式：隱藏一切成本/報價/寫入 UI（後端已剝除資料，這裡防殘影） */
+body.fbviewer .rm-cost,body.fbviewer .ing-cost,body.fbviewer .total-bar,
+body.fbviewer .recipe-actions,body.fbviewer .pn-save,body.fbviewer .fld-client,
+body.fbviewer .cpd-sub-unit,body.fbviewer .cpd-sub-contrib{display:none !important;}
+body.fbviewer .cpd-sub-inp,body.fbviewer .ing-inp,body.fbviewer #rmTv{pointer-events:none;background:var(--bg);}
 /* v2.0.1 金流總覽數字框：窄螢幕上下堆疊、等寬對齊 */
 .fin-box{flex:1 1 140px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;min-width:0;}
 @media(max-width:480px){.fin-box{flex:1 1 100%;}}
@@ -277,6 +282,7 @@ tbody tr:hover td{background:#faf3e8;}
         <button type="button" class="login-user-btn" onclick="selectLoginUser(this)">小李</button>
         <button type="button" class="login-user-btn" onclick="selectLoginUser(this)">Vic</button>
         <button type="button" class="login-user-btn" onclick="selectLoginUser(this)">小捲</button>
+        <button type="button" class="login-user-btn" onclick="selectLoginUser(this)">上海Jason</button>
       </div>
       <input type="hidden" id="loginUser" value="">
       <input class="inp" id="loginPass" type="password" placeholder="密碼" inputmode="numeric">
@@ -337,12 +343,23 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
   });
 }
 
+let _sessExpiredShown = false;
 async function api(params, silent) {
-  const url = API + '?' + Object.entries(params).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
+  // v2.1：登入後所有呼叫自動附帶 session token；token 逾時 → 提示並回登入頁
+  const send = { ...params };
+  if (curToken && send.token == null) send.token = curToken;
+  const url = API + '?' + Object.entries(send).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
   if (!silent) apiLoadStart();
   try {
     const res = await fetch(url);
-    return await res.json();
+    const j = await res.json();
+    if (j && j.error === 'SESSION_EXPIRED' && curUser && !_sessExpiredShown) {
+      _sessExpiredShown = true;
+      toast('登入逾時，請重新登入');
+      doLogout();
+      setTimeout(() => { _sessExpiredShown = false; }, 2000);
+    }
+    return j;
   } catch(e) {
     if (!silent) toast('網路錯誤');
     return { ok: false, error: e.message, _offline: true };
@@ -366,7 +383,9 @@ function setOffline(on){
 }
 
 // ── 狀態 ─────────────────────────────────────────────────────
-let curUser = null, curClient = '', curSheet = '', rdata = null, curTab = 'recipe';
+let curUser = null, curToken = null, curClient = '', curSheet = '', rdata = null, curTab = 'recipe';
+// v2.1 FB觀看（外部唯讀角色，如上海Jason）：純觀看 Feeling Bar 酒譜、無成本
+function isFbViewer() { return !!(curUser && curUser.role === 'FB觀看'); }
 let recipeList = [], clientList = [];
 const C = { inv: null, profit: {}, recipes: {}, batch: null };
 let rdState = { ings: [], tv: 4000, bt: '4L桶', title: '', client: '', matSel: {} };
@@ -467,15 +486,21 @@ async function doLogin() {
   if (!username || !password) { document.getElementById('loginErr').textContent = '請選擇帳號並輸入密碼'; return; }
   document.getElementById('loginBtn').disabled = true;
   document.getElementById('loginErr').textContent = '';
-  // 並行發 login + getInventory + getRecipeList
-  const [res, invRes, lr] = await Promise.all([
-    api({ action: 'login', username, password }),
+  // v2.1：先 login 拿 token，其餘請求才帶得到 token（不可並行，否則被後端 session 閘門擋下）
+  const res = await api({ action: 'login', username, password });
+  if (!res.ok) {
+    document.getElementById('loginBtn').disabled = false;
+    document.getElementById('loginErr').textContent = res.error || '登入失敗';
+    return;
+  }
+  curUser = { username, role: res.role };
+  curToken = res.token || null;
+  document.body.classList.toggle('fbviewer', res.role === 'FB觀看');
+  const [invRes, lr] = await Promise.all([
     api({ action: 'getInventory' }, true),
     api({ action: 'getRecipeList' }, true),
   ]);
   document.getElementById('loginBtn').disabled = false;
-  if (!res.ok) { document.getElementById('loginErr').textContent = res.error || '登入失敗'; return; }
-  curUser = { username, role: res.role };
   if (invRes.ok) C.inv = invRes.items || [];
   if (lr.ok) {
     recipeList = lr.list || [];
@@ -497,8 +522,8 @@ async function doLogin() {
   app.style.display = 'flex';
   // admin 才顯示審核
   document.querySelectorAll('.admin-only').forEach(el => el.style.display = res.role === 'admin' ? '' : 'none');
-  // 角色分頁分流：倉管=run card+庫存；財務(Lulu)=只看訂單/run card(含金流總覽)；其餘角色維持原本可見範圍
-  const ROLE_TABS = { '倉管': ['batch', 'stock', 'inventory'], '財務': ['batch'] };
+  // 角色分頁分流：倉管=run card+庫存；財務(Lulu)=只看訂單/run card(含金流總覽)；FB觀看(上海Jason)=只看酒譜；其餘角色維持原本可見範圍
+  const ROLE_TABS = { '倉管': ['batch', 'stock', 'inventory'], '財務': ['batch'], 'FB觀看': ['recipe'] };
   const allowed = ROLE_TABS[res.role];
   if (allowed) {
     document.querySelectorAll('#navbar .nav-tab').forEach(el =>
@@ -517,7 +542,8 @@ async function doLogin() {
 function doLogout() {
   const _ab = document.getElementById('stockAlertBar'); if (_ab) _ab.remove();
   const _sb = document.getElementById('shipDateAlertBar'); if (_sb) _sb.remove();
-  curUser = null; rdata = null; curSheet = '';
+  curUser = null; curToken = null; rdata = null; curSheet = '';
+  document.body.classList.remove('fbviewer');
   Object.assign(C, { inv:null, profit:{}, recipes:{}, batch:null });
   recipeList = []; rdState = { ings:[], tv:4000, bt:'4L桶', title:'', client:'', matSel:{} };
   document.getElementById('app').style.display = 'none';
@@ -588,7 +614,7 @@ function renderRecipePage(mc) {
   mc.innerHTML = `
   <div class="card">
     <div class="form-row">
-      <div class="fg" style="flex:0 0 150px"><label>客戶</label><select id="selClient" onchange="onClientChange()">${cOpts}</select></div>
+      <div class="fg fld-client" style="flex:0 0 150px"><label>客戶</label><select id="selClient" onchange="onClientChange()">${cOpts}</select></div>
       <div class="fg"><label>酒款</label><select id="selRecipe" onchange="loadRecipe()"></select></div>
     </div>
     <div id="recipeArea"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">請選擇酒款</div></div>
@@ -692,21 +718,21 @@ function renderRecipeDetail(area) {
             oninput="recalcFromTv()"> <span style="font-size:12px;color:var(--ink3);">ml</span>
         </div>
       </div>
-      <div class="rm"><div class="lb">食材成本（批）</div><div class="vl" id="rmCost">${fm(cost)}</div></div>
-      <div class="rm"><div class="lb">食材報價（批）</div><div class="vl acc" id="rmQuote">${fm(quote)}</div></div>
-      <div class="rm"><div class="lb">酒稅（批）</div><div class="vl" id="rmTax">${fm(tax)}</div></div>
-      <div class="rm"><div class="lb">食材總成本(含稅)</div><div class="vl sm" id="rmTotal">${fm((cost*1.15+tax)*1.05)}</div></div>
+      <div class="rm rm-cost"><div class="lb">食材成本（批）</div><div class="vl" id="rmCost">${fm(cost)}</div></div>
+      <div class="rm rm-cost"><div class="lb">食材報價（批）</div><div class="vl acc" id="rmQuote">${fm(quote)}</div></div>
+      <div class="rm rm-cost"><div class="lb">酒稅（批）</div><div class="vl" id="rmTax">${fm(tax)}</div></div>
+      <div class="rm rm-cost"><div class="lb">食材總成本(含稅)</div><div class="vl sm" id="rmTotal">${fm((cost*1.15+tax)*1.05)}</div></div>
     </div>
     <div class="ing-list" style="margin-bottom:10px;">${rows}</div>
     <div class="total-bar">總計：<span id="totalPct"></span> · 成本 <span id="totalCostBar">${fm(cost)}</span></div>
-    <div class="fe" style="gap:6px;margin-bottom:10px;">
+    <div class="fe recipe-actions" style="gap:6px;margin-bottom:10px;">
       <button class="btn btn-ghost btn-sm" onclick="recalcRecipe(true)">↺ 還原比例</button>
       <button class="btn btn-ghost btn-sm" onclick="toRd()">→ 帶入研發試算</button>
       <button class="btn btn-ghost btn-sm" onclick="showApplyModal()">✏️ 申請更改</button>
     </div>
     <div class="sub" style="margin-bottom:5px;">製程備註</div>
-    <textarea id="pnInput" class="inp" style="height:70px;resize:vertical;font-size:13px;">${rdata.processNote || ''}</textarea>
-    <div class="fe mt8"><button class="btn btn-primary btn-sm" onclick="lockRun(this, saveNote)">儲存備註</button></div>`;
+    <textarea id="pnInput" class="inp" style="height:70px;resize:vertical;font-size:13px;"${isFbViewer() ? ' readonly' : ''}>${rdata.processNote || ''}</textarea>
+    <div class="fe mt8 pn-save"><button class="btn btn-primary btn-sm" onclick="lockRun(this, saveNote)">儲存備註</button></div>`;
 
   rdata._origTv = rdata.totalVol; // 記錄原始總體積供還原用
   (rdata.ingredients || []).forEach((ing, idx) => {
