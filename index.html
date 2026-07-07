@@ -1196,7 +1196,7 @@ async function renderRdPage(mc) {
     <div class="card-title">研發試算</div>
     <div class="form-row">
       <div class="fg"><label>試算名稱</label><input class="inp" id="rd_title" value="${title}" placeholder="名稱（儲存用）" style="margin:0;font-size:13px;" oninput="rdState.title=this.value"></div>
-      <div class="fg" style="flex:0 0 130px"><label>客戶</label><select id="rd_client" onchange="rdState.client=this.value">${cliOpts}</select></div>
+      <div class="fg" style="flex:0 0 160px"><label>客戶（可選可自行輸入）</label><input class="inp" id="rd_client" list="rdCliList" value="${client || ''}" placeholder="選或輸入客戶" style="margin:0;font-size:13px;" oninput="rdState.client=this.value"><datalist id="rdCliList">${cliOpts}</datalist></div>
     </div>
     <div class="form-row">
       <div class="fg" style="flex:0 0 110px"><label>製作總體積 ml</label><input class="inp" type="number" id="rd_tv" value="${tv}" oninput="rdTvChange(this.value)" style="margin:0;font-size:13px;"></div>
@@ -1240,14 +1240,51 @@ async function renderRdPage(mc) {
     <div id="rd_sum"></div>
   </div>
 
-  <div class="fe" style="gap:6px;margin-bottom:80px;">
+  <div class="fe" style="gap:6px;margin-bottom:80px;flex-wrap:wrap;">
+    <button class="btn btn-ghost btn-sm" onclick="rdStash()" title="存到這台裝置，隨時回來繼續編輯（不會進儲存記錄）">📝 暫存</button>
     <button class="btn btn-ghost btn-sm" onclick="lockRun(this, rdSave)">💾 儲存</button>
     <button class="btn btn-ghost btn-sm" onclick="rdLoadList()">📋 載入</button>
     <button class="btn btn-ghost btn-sm" onclick="rdExportCSV()">⬇ CSV</button>
     <button class="btn btn-primary btn-sm" onclick="lockRun(this, rdSubmitApply)">📤 送出申請</button>
   </div>`;
 
-  rdRender(); rdUpdateMat(); rdCalc();
+  rdDraftBar(); rdRender(); rdUpdateMat(); rdCalc();
+}
+// ── v2.2.1 暫存草稿（本機 localStorage 單一槽位；編到一半先存、回來繼續）──
+function rdStash() {
+  if (!rdState.ings.length && !rdState.title) { toast('目前沒有內容可暫存'); return; }
+  lsSet('np_rdDraft', { state: rdState, at: new Date().toLocaleString('zh-TW', { hour12: false }) });
+  toast('已暫存到這台裝置 📝（回到研發試算頁可繼續編輯）');
+  rdDraftBar();
+}
+function rdDraftBar() {
+  const card = document.getElementById('rd_ingCard'); if (!card) return;
+  let bar = document.getElementById('rdDraftBar');
+  const d = lsGet('np_rdDraft');
+  if (!d || !d.state) { if (bar) bar.remove(); return; }
+  const html = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;background:var(--gold-lt);border:1px solid var(--gold-dk);border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:12px;">
+    <span style="flex:1;">📝 有暫存草稿：<b>${(d.state.title || '未命名')}</b>（${d.at || ''}・${(d.state.ings || []).length} 項材料）</span>
+    <button class="btn btn-primary btn-sm" style="padding:3px 10px;" onclick="rdResumeDraft()">繼續編輯</button>
+    <button class="btn btn-ghost btn-sm" style="padding:3px 10px;" onclick="rdDiscardDraft()">捨棄</button>
+  </div>`;
+  if (bar) { bar.innerHTML = html; }
+  else { card.insertAdjacentHTML('beforebegin', `<div id="rdDraftBar">${html}</div>`); }
+}
+function rdResumeDraft() {
+  const d = lsGet('np_rdDraft');
+  if (!d || !d.state) { toast('暫存不存在'); return; }
+  if (rdState.ings.length && !confirm('目前畫面上的試算內容將被暫存草稿取代，繼續？')) return;
+  rdState = d.state;
+  if (!rdState.matSel) rdState.matSel = {};
+  if (!Array.isArray(rdState.ings)) rdState.ings = [];
+  renderRdPage(document.getElementById('mainContent'));
+  toast('已載入暫存草稿，繼續編輯吧');
+}
+function rdDiscardDraft() {
+  if (!confirm('捨棄這份暫存草稿？')) return;
+  try { localStorage.removeItem('np_rdDraft'); } catch (e) {}
+  rdDraftBar();
+  toast('已捨棄暫存');
 }
 function rdUpdateMat() {
   const bt = rdState.bt || '4L桶';
@@ -1382,7 +1419,7 @@ function rdRender() {
             <input type="checkbox" ${lossOn?'checked':''} onchange="${ref}.hasLoss=this.checked;this.closest('.cpd-loss').classList.toggle('on',this.checked);rdCalc()">計耗損÷0.8
           </div>
           <input class="cpd-name-i" value="${ing.name}" onchange="${ref}.name=this.value;rdCalc()">
-          <button class="del-btn" onclick="rdDel(${i})">✕</button>
+          <button class="btn btn-sm" style="flex:0 0 auto;color:var(--red);border:1px solid var(--red);background:transparent;padding:2px 8px;font-size:11px;white-space:nowrap;" onclick="rdDel(${i})">🗑 刪除</button>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><div id="rc_${i}" style="font-size:12px;color:var(--gold-dk);"></div><div id="rcp_${i}" style="font-size:11px;color:var(--ink3);"></div></div>
         ${subsHtml}
@@ -1397,7 +1434,7 @@ function rdRender() {
         <div class="ic-r1">
           <div class="ing-name"><input class="ing-name-i" value="${ing.name}" onchange="${ref}.name=this.value;rdCalc()" placeholder="自由材料名稱（如：茶葉）"></div>
           <div id="rc_${i}" class="ing-cost"></div>
-          <button class="del-btn" onclick="rdDel(${i})">✕</button>
+          <button class="btn btn-sm" style="flex:0 0 auto;color:var(--red);border:1px solid var(--red);background:transparent;padding:2px 8px;font-size:11px;white-space:nowrap;" onclick="rdDel(${i})">🗑 刪除</button>
         </div>
         <div class="ic-r2">
           <div class="if"><label>進貨單位</label><select onchange="${ref}.unit=this.value;rdRender();rdCalc()" style="width:64px;font-size:12px;">${uOpts}</select></div>
@@ -1414,7 +1451,7 @@ function rdRender() {
         <div class="ic-r1">
           <div class="ing-name">${ing.isManual?`<input class="ing-name-i" value="${ing.name}" onchange="${ref}.name=this.value;rdCalc()" placeholder="原料名稱">`:fullIngName(ing)}</div>
           <div id="rc_${i}" class="ing-cost"></div>
-          <button class="del-btn" onclick="rdDel(${i})">✕</button>
+          <button class="btn btn-sm" style="flex:0 0 auto;color:var(--red);border:1px solid var(--red);background:transparent;padding:2px 8px;font-size:11px;white-space:nowrap;" onclick="rdDel(${i})">🗑 刪除</button>
         </div>
         ${ing.isManual?`
         <div class="ic-r2">
