@@ -1220,6 +1220,7 @@ async function renderRdPage(mc) {
     <div class="fe" style="gap:6px;">
       <button class="btn btn-ghost btn-sm" onclick="rdAddManual()">+ 手動輸入</button>
       <button class="btn btn-ghost btn-sm" onclick="rdAddCompound()">+ 複合原料</button>
+      <button class="btn btn-ghost btn-sm" onclick="rdAddFree()" title="廠內沒有的材料試成本（茶葉/話梅/水果…）：純成本列，不入占比與ABV；液體要佔占比請用「+ 手動輸入」">+ 自由材料</button>
     </div>
   </div>
 
@@ -1343,6 +1344,11 @@ function rdAddManual() {
   setTimeout(() => { const _ins = document.querySelectorAll('.ing-name-i'); const _l = _ins[_ins.length-1];
     if (_l) { _l.scrollIntoView({behavior:'smooth', block:'center'}); _l.focus(); } }, 80);
 }
+// v2.2 自由材料：廠內沒有的材料直接 key 進貨資訊試成本（純成本列，不入占比/ABV）
+function rdAddFree() {
+  rdState.ings.push({ type:'free', name:'', unit:'g', customUnit:'', packSize:0, packPrice:0, qty:0, hasLoss:false });
+  rdRender(); rdCalc();
+}
 function rdAddCompound() {
   rdState.ings.push({ type:'compound', name:'複合原料', subs:[], hasLoss:false });
   rdRender(); rdCalc();
@@ -1382,6 +1388,26 @@ function rdRender() {
         ${subsHtml}
         <button class="btn btn-ghost btn-sm" style="margin-top:4px;font-size:11px;" onclick="rdAddSubDrop(${i})">+ 加入子原料</button>
         <div class="sdrop sub-drop" id="sdrop_${i}"></div>
+      </div>`;
+    } else if (ing.type === 'free') {
+      // v2.2 自由材料列：進貨單位/規格/單價/本批用量 → 成本=單價÷規格×用量；純成本列
+      const units = ['ml', 'g', 'kg', '顆', '包', '罐', '自訂'];
+      const uOpts = units.map(u => `<option${ing.unit === u ? ' selected' : ''}>${u}</option>`).join('');
+      return `<div class="ing-card">
+        <div class="ic-r1">
+          <div class="ing-name"><input class="ing-name-i" value="${ing.name}" onchange="${ref}.name=this.value;rdCalc()" placeholder="自由材料名稱（如：茶葉）"></div>
+          <div id="rc_${i}" class="ing-cost"></div>
+          <button class="del-btn" onclick="rdDel(${i})">✕</button>
+        </div>
+        <div class="ic-r2">
+          <div class="if"><label>進貨單位</label><select onchange="${ref}.unit=this.value;rdRender();rdCalc()" style="width:64px;font-size:12px;">${uOpts}</select></div>
+          ${ing.unit === '自訂' ? `<div class="if"><label>自訂單位</label><input value="${ing.customUnit || ''}" onchange="${ref}.customUnit=this.value" placeholder="如:斤" style="width:48px;"></div>` : ''}
+          <div class="if"><label>進貨規格</label><input type="number" min="0" value="${ing.packSize || ''}" oninput="${ref}.packSize=parseFloat(this.value)||0;rdCalc()" style="width:62px;"></div>
+          <div class="if"><label>單價NT$</label><input type="number" min="0" value="${ing.packPrice || ''}" oninput="${ref}.packPrice=parseFloat(this.value)||0;rdCalc()" style="width:66px;"></div>
+          <div class="if"><label>本批用量</label><input type="number" min="0" value="${ing.qty || ''}" oninput="${ref}.qty=parseFloat(this.value)||0;rdCalc()" style="width:62px;"></div>
+          <label style="display:flex;align-items:center;gap:3px;font-size:11px;"><input type="checkbox" ${ing.hasLoss ? 'checked' : ''} onchange="${ref}.hasLoss=this.checked;rdCalc()">耗損÷0.8</label>
+        </div>
+        <div style="font-size:10px;color:var(--ink3);margin-top:2px;">自由材料＝純成本列（不計占比/ABV）；液體要佔占比請改用「+ 手動輸入」</div>
       </div>`;
     } else {
       return `<div class="ing-card">
@@ -1476,6 +1502,11 @@ function rdCalc() {
       totalPct += cRatio;
       const rp = document.getElementById('rcp_'+i); if (rp) rp.textContent = subVol>0 ? '占比 '+cRatio.toFixed(1)+'%（'+nt(subVol,0)+'ml）' : '';
       ingCost = ing.hasLoss ? sub/0.8 : sub;
+    } else if (ing.type === 'free') {
+      // v2.2 自由材料：成本=單價÷規格×用量（規格≤0→0，防 NaN/Infinity）；只入 totalCost，不動占比/ABV
+      const ps = parseFloat(ing.packSize) || 0;
+      ingCost = ps > 0 ? ((parseFloat(ing.packPrice) || 0) / ps) * (parseFloat(ing.qty) || 0) : 0;
+      if (ing.hasLoss) ingCost = ingCost / 0.8;
     } else {
       totalPct += ratio;
       ingCost = sCost(ing, vol);
@@ -1545,6 +1576,7 @@ function rdLoadOne(i, modalBg) {
   // Bug fix：ingredients 從 GAS 回傳是 JSON string，需先 parse 才能當 array 使用
   let ings = r.ingredients || [];
   if (typeof ings === 'string') { try { ings = JSON.parse(ings); } catch(e) { ings = []; } }
+  if (!Array.isArray(ings)) ings = []; // 防呆：極舊壞資料 ingredients 非陣列(如誤存結果物件)→空列載入不炸頁
   rdState = { ings, tv:r.volume||4000, bt:r.bottle||'4L桶', title:r.name||'', client:r.client||'' };
   if (!rdState.matSel) rdState.matSel = {};
   modalBg.remove();
@@ -1558,6 +1590,13 @@ function rdExportCSV() {
     if (ing.type === 'compound') {
       lines.push([ing.name,'複合','','','','','',(ing.hasLoss?'÷0.8':''),''].join(','));
       (ing.subs||[]).forEach(s => { const c=rdCpm(s)*(s.volume||0); lines.push(['  '+s.name,s.brand,s.abv,s.price,s.unitVol,'',nt(s.volume),'',nt(c,2)].join(',')); });
+    } else if (ing.type === 'free') {
+      // v2.2 自由材料：占比/ABV 欄標「—」；容量欄放進貨規格；用量欄放本批用量（單位另註）
+      const ps = parseFloat(ing.packSize) || 0;
+      let c = ps > 0 ? ((parseFloat(ing.packPrice) || 0) / ps) * (parseFloat(ing.qty) || 0) : 0;
+      if (ing.hasLoss) c = c / 0.8;
+      const u = ing.unit === '自訂' ? (ing.customUnit || '自訂') : (ing.unit || '');
+      lines.push([ing.name + '(自由材料/' + u + ')', '', '—', ing.packPrice || 0, ing.packSize || 0, '—', (ing.qty || 0), ing.hasLoss ? '÷0.8' : '', nt(c, 2)].join(','));
     } else {
       lines.push([ing.name,ing.brand,ing.abv,ing.price,ing.unitVol,nt(ing.ratio),nt(ing.volume),ing.hasLoss?'÷0.8':'',''].join(','));
     }
