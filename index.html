@@ -1383,7 +1383,7 @@ function rdAddManual() {
 }
 // v2.2 自由材料：廠內沒有的材料直接 key 進貨資訊試成本（純成本列，不入占比/ABV）
 function rdAddFree() {
-  rdState.ings.push({ type:'free', name:'', unit:'g', customUnit:'', packSize:0, packPrice:0, qty:0, hasLoss:false });
+  rdState.ings.push({ type:'free', name:'', unit:'g', customUnit:'', packSize:0, packPrice:0, qty:0, hasLoss:false, ratio:0, volume:0, abv:0 });
   rdRender(); rdCalc();
 }
 function rdAddCompound() {
@@ -1444,7 +1444,13 @@ function rdRender() {
           <div class="if"><label>本批用量</label><input type="number" min="0" value="${ing.qty || ''}" oninput="${ref}.qty=parseFloat(this.value)||0;rdCalc()" style="width:62px;"></div>
           <label style="display:flex;align-items:center;gap:3px;font-size:11px;"><input type="checkbox" ${ing.hasLoss ? 'checked' : ''} onchange="${ref}.hasLoss=this.checked;rdCalc()">耗損÷0.8</label>
         </div>
-        <div style="font-size:10px;color:var(--ink3);margin-top:2px;">自由材料＝純成本列（不計占比/ABV）；液體要佔占比請改用「+ 手動輸入」</div>
+        <div class="ic-r2">
+          <div class="if"><label>占比%</label><input type="number" min="0" id="rdr_${i}" value="${nt(ing.ratio) || ''}" oninput="${ref}.ratio=parseFloat(this.value)||0;${ref}.volume=rdState.tv*(parseFloat(this.value)||0)/100;document.getElementById('rdv_${i}').value=nt(${ref}.volume,0);rdCalc()" style="width:60px;"></div>
+          <span style="font-size:11px;color:var(--ink3);">↔</span>
+          <div class="if"><label>用量ml</label><input type="number" min="0" id="rdv_${i}" value="${nt(ing.volume, 0) || ''}" oninput="${ref}.volume=parseFloat(this.value)||0;${ref}.ratio=rdState.tv>0?(parseFloat(this.value)||0)/rdState.tv*100:0;rdCalc()" style="width:62px;"></div>
+          <div class="if"><label>ABV%</label><input type="number" min="0" value="${ing.abv || ''}" oninput="${ref}.abv=parseFloat(this.value)||0;rdCalc()" style="width:52px;"></div>
+        </div>
+        <div style="font-size:10px;color:var(--ink3);margin-top:2px;">占比/ABV 選填：外購基酒等液體填了即計入 100% 驗證與酒精濃度；不填＝純成本列</div>
       </div>`;
     } else {
       return `<div class="ing-card">
@@ -1540,10 +1546,13 @@ function rdCalc() {
       const rp = document.getElementById('rcp_'+i); if (rp) rp.textContent = subVol>0 ? '占比 '+cRatio.toFixed(1)+'%（'+nt(subVol,0)+'ml）' : '';
       ingCost = ing.hasLoss ? sub/0.8 : sub;
     } else if (ing.type === 'free') {
-      // v2.2 自由材料：成本=單價÷規格×用量（規格≤0→0，防 NaN/Infinity）；只入 totalCost，不動占比/ABV
+      // v2.2 自由材料：成本=單價÷規格×用量（規格≤0→0，防 NaN/Infinity）
+      // v2.3：占比/ABV 改為「選填」——外購基酒等液體填了占比即計入 100% 驗證與 ABV；不填＝純成本列（原行為）
       const ps = parseFloat(ing.packSize) || 0;
       ingCost = ps > 0 ? ((parseFloat(ing.packPrice) || 0) / ps) * (parseFloat(ing.qty) || 0) : 0;
       if (ing.hasLoss) ingCost = ingCost / 0.8;
+      totalPct += ratio;
+      totalAbv += (ing.abv || 0) * (ratio / 100);
     } else {
       totalPct += ratio;
       ingCost = sCost(ing, vol);
@@ -1633,7 +1642,7 @@ function rdExportCSV() {
       let c = ps > 0 ? ((parseFloat(ing.packPrice) || 0) / ps) * (parseFloat(ing.qty) || 0) : 0;
       if (ing.hasLoss) c = c / 0.8;
       const u = ing.unit === '自訂' ? (ing.customUnit || '自訂') : (ing.unit || '');
-      lines.push([ing.name + '(自由材料/' + u + ')', '', '—', ing.packPrice || 0, ing.packSize || 0, '—', (ing.qty || 0), ing.hasLoss ? '÷0.8' : '', nt(c, 2)].join(','));
+      lines.push([ing.name + '(自由材料/' + u + ')', '', ((ing.abv || 0) > 0 ? ing.abv : '—'), ing.packPrice || 0, ing.packSize || 0, ((ing.ratio || 0) > 0 ? nt(ing.ratio) : '—'), (ing.qty || 0), ing.hasLoss ? '÷0.8' : '', nt(c, 2)].join(','));
     } else {
       lines.push([ing.name,ing.brand,ing.abv,ing.price,ing.unitVol,nt(ing.ratio),nt(ing.volume),ing.hasLoss?'÷0.8':'',''].join(','));
     }
