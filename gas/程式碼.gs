@@ -133,6 +133,7 @@ function doGet(e) {
       case 'bottleIn':               result = bottleIn(p); break;                // 玻璃瓶庫存
       case 'bottleOut':              result = bottleOut(p); break;               // 玻璃瓶庫存
       case 'getBottleLedger':        result = getBottleLedger(p); break;         // 玻璃瓶庫存
+      case 'addBottleItem':          result = addBottleItem(p); break;           // 新增玻璃瓶品項(ledger 派生)
       case 'getSafetyLevels':        result = getSafetyLevels(); break;          // 安全水位
       case 'setSafetyLevel':         result = setSafetyLevel(p); break;          // 安全水位
       case 'getStockAlerts':         result = getStockAlerts(); break;           // 安全水位警告(登入用)
@@ -586,6 +587,7 @@ function getRecipeForProduction(p) {
 //   L實際出貨日 M實際出貨日已確認(v1.4)
 //   N訂金金額 O訂金預計收取日 P訂金實際收取日 Q尾款金額 R尾款預計收取日 S尾款實際收取日
 //   T尾款特殊調整(TRUE/空) U調整後尾款金額 V調整備註(v1.6 金流紀錄)
+//   W~AD 配送資訊(v1.7)  AE Lot批號(整單一個，文字格式防吃0)
 // 製作狀態：per-item 存於 E 的 JSON(status)，I 欄為整單彙總(全完成→已完成，否則製作中)。
 
 // v1.6 金流紀錄欄（N~V）：舊列讀出為空字串，前後端皆以空=未填處理
@@ -607,6 +609,12 @@ function _ensureOrderFinanceHeaders_(ws) {
       ws.getRange(2, 28, mr, 1).setNumberFormat('@');
       ws.getRange(2, 30, mr, 1).setNumberFormat('@');
     }
+  }
+  // v1.7.x Lot批號（AE=31 欄）：文字格式防開頭 0 被吃掉
+  if (String(ws.getRange(1, 31).getValue() || '') === '') {
+    ws.getRange(1, 31).setValue('Lot批號');
+    var mrL = ws.getMaxRows() - 1;
+    if (mrL > 0) ws.getRange(2, 31, mrL, 1).setNumberFormat('@');
   }
 }
 // 金額欄：空=未填(保留空字串)，有值才轉數字
@@ -678,11 +686,13 @@ function createOrder(p) {
   catch (e) { return { ok: false, error: '酒款明細 JSON 解析失敗' }; }
   if (!items || !items.length) return { ok: false, error: '訂單至少要有一款酒' };
   items = items.map(function (it) {
-    return {
+    const o = {
       product: it.product || '', sheet: it.sheet || '', volume: it.volume || '',
       bottleType: it.bottleType || '', qty: Number(it.qty) || 0,
       status: it.status || '待製作'
     };
+    if (it.srcClient) o.srcClient = it.srcClient; // 公版酒帶自有品牌配方來源
+    return o;
   });
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -702,8 +712,13 @@ function createOrder(p) {
       p.shipMethod || '', _numOrBlank_(p.shipFee), p.recvName || '', p.recvPhone || '',
       p.recvAddr || '', p.taxId || '',
       (String(p.invoiceSent || '').toLowerCase() === 'true') ? 'TRUE' : '', p.invoiceLast5 || '']);
+    // AE Lot批號：字串+文字格式，防開頭 0 被吃掉
+    if (p.lot != null && String(p.lot).trim() !== '') {
+      ws.getRange(ws.getLastRow(), 31).setNumberFormat('@').setValue(String(p.lot).trim());
+    }
     _logOrderChange_(orderNo, p.pm || p.user || '', '建立訂單',
-      p.client + '／' + items.length + ' 款／總 NT$' + (Number(p.total) || 0) + (p.orderType ? '／' + p.orderType : ''));
+      p.client + '／' + items.length + ' 款／總 NT$' + (Number(p.total) || 0) + (p.orderType ? '／' + p.orderType : '')
+      + (String(p.lot || '').trim() ? '／Lot ' + String(p.lot).trim() : ''));
     return { ok: true, orderNo: orderNo };
   } finally { lock.releaseLock(); }
 }
@@ -740,7 +755,8 @@ function getOrders(p) {
       recvAddr: String(r[26] == null ? '' : r[26]),
       taxId: String(r[27] == null ? '' : r[27]),
       invoiceSent: (String(r[28]).toUpperCase() === 'TRUE' || r[28] === true),
-      invoiceLast5: String(r[29] == null ? '' : r[29])
+      invoiceLast5: String(r[29] == null ? '' : r[29]),
+      lot: String(r[30] == null ? '' : r[30])
     };
     if (view === 'bartender') {
       if (base.status === '已完成') continue; // 不回完成單
@@ -810,6 +826,7 @@ function updateOrder(p) {
     const o = { product: it.product || '', sheet: it.sheet || '', volume: it.volume || '',
       bottleType: it.bottleType || '', qty: Number(it.qty) || 0, status: it.status || '待製作' };
     if (it.batchId) o.batchId = it.batchId;
+    if (it.srcClient) o.srcClient = it.srcClient; // 公版酒帶自有品牌配方來源
     return o;
   });
   const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
@@ -841,8 +858,11 @@ function updateOrder(p) {
         p.shipMethod || '', _numOrBlank_(p.shipFee), p.recvName || '', p.recvPhone || '',
         p.recvAddr || '', p.taxId || '', sent ? 'TRUE' : '', p.invoiceLast5 || ''
       ]]);
+      // AE Lot批號（字串+文字格式，防開頭 0 被吃掉；空=清除）
+      ws.getRange(i + 1, 31).setNumberFormat('@').setValue(p.lot == null ? '' : String(p.lot).trim());
       _logOrderChange_(orderNo, p.user || p.pm || '', '編輯訂單',
-        p.client + '／' + items.length + ' 款／總 NT$' + (Number(p.total) || 0) + '／表訂 ' + (p.deliveryDate || '—'));
+        p.client + '／' + items.length + ' 款／總 NT$' + (Number(p.total) || 0) + '／表訂 ' + (p.deliveryDate || '—')
+        + (String(p.lot || '').trim() ? '／Lot ' + String(p.lot).trim() : ''));
       return { ok: true, orderNo: orderNo };
     }
     return { ok: false, error: '找不到訂單：' + orderNo };
@@ -1992,6 +2012,7 @@ function getBottleLedger(p) {
   for (let i = rows.length - 1; i >= 0; i--) {
     const r = rows[i];
     if (item && String(r[BK.item]) !== String(item)) continue;
+    if (String(r[BK.type]) === '品項建立') continue; // 建立列不列入異動歷史
     out.push({
       id: String(r[BK.id]), date: String(r[BK.date]), item: String(r[BK.item]),
       type: String(r[BK.type]), qty: Number(r[BK.qty]) || 0,
@@ -2000,6 +2021,24 @@ function getBottleLedger(p) {
     });
   }
   return { ok: true, list: out };
+}
+
+// ── 新增玻璃瓶品項（寫一筆 0 數量「品項建立」ledger 列；getBottleOverview 派生自動繼承全套邏輯）──
+function addBottleItem(p) {
+  const item = String((p && p.item) || '').trim();
+  if (!item) return { ok: false, error: '缺少品項名稱' };
+  if (BOTTLE_TYPES.indexOf(item) >= 0) return { ok: false, error: '品項已存在：' + item };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    // 鎖後重查，防併發重複
+    if (_bottleRows_().some(function (r) { return String(r[BK.item]) === item; })) {
+      return { ok: false, error: '品項已存在：' + item };
+    }
+    _bottleSheet_().appendRow([_stockGenId_(), _stockToday_(), item, '品項建立', 0,
+      p.operator || '', _stockNow_(), '新增品項']);
+    return { ok: true, item: item };
+  } finally { lock.releaseLock(); }
 }
 
 // ============================================================
