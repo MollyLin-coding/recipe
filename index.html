@@ -88,7 +88,8 @@ tbody tr:hover td{background:#faf3e8;}
 #loadOverlay{position:fixed;inset:0;background:rgba(247,244,238,.8);display:none;align-items:center;justify-content:center;z-index:999;}
 .spinner{width:34px;height:34px;border:3px solid var(--border);border-top-color:var(--gold-dk);border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
-#toast{position:fixed;bottom:calc(var(--nav-h)+10px+var(--safe-b));left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 18px;border-radius:99px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:9999;max-width:88vw;text-align:center;}
+.toast{position:fixed;bottom:calc(var(--nav-h)+10px+var(--safe-b));left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 18px;border-radius:99px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:10000;max-width:88vw;text-align:center;}
+.toast.show{opacity:1;}
 
 /* 酒譜原料表 */
 .recipe-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
@@ -1021,17 +1022,8 @@ function renderProfitData(res) {
 // ════════════════════════════════════════════════
 async function renderInventoryPage(mc) {
   mc.innerHTML = `<div class="card">
-    <div class="sec-hd"><div class="card-title" style="margin:0">原料庫</div><button class="btn btn-ghost btn-sm" onclick="loadInv(true)">↻ 刷新</button></div>
-    <div class="form-row" style="margin-bottom:8px;">
-      <div class="fg" style="flex:0 0 145px"><label>大分類</label><select id="invCat" onchange="filterInv()"><option value="">全部</option></select></div>
-      <div class="fg"><label>搜尋品名</label><input class="inp" id="invKw" placeholder="關鍵字…" oninput="filterInv()" style="margin:0;padding:9px 12px;font-size:13px;"></div>
-    </div>
-    <div id="invArea"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">載入中…</div></div>
-  </div>
-
-  <div class="card" style="margin-top:10px;">
     <div class="sec-hd"><div class="card-title" style="margin:0">🍾 玻璃瓶庫存</div>
-      <button class="btn btn-ghost btn-sm" onclick="loadBottleOverview();loadBottleLedger();">↻</button></div>
+      <div style="display:flex;gap:6px;">${_canSetSafety() ? '<button class="btn btn-primary btn-sm" onclick="showAddBottleItem()">➕ 新增品項</button>' : ''}<button class="btn btn-ghost btn-sm" onclick="loadBottleOverview();loadBottleLedger();">↻</button></div></div>
     <div id="bottleWaterArea"><div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">載入中…</div></div>
     <div style="border-top:0.5px solid var(--border);margin-top:12px;padding-top:12px;">
       <div class="card-title" style="font-size:13px;">➕ 入庫</div>
@@ -1059,6 +1051,15 @@ async function renderInventoryPage(mc) {
   </div>
 
   <div class="card" style="margin-top:10px;">
+    <div class="sec-hd"><div class="card-title" style="margin:0">原料庫</div><button class="btn btn-ghost btn-sm" onclick="loadInv(true)">↻ 刷新</button></div>
+    <div class="form-row" style="margin-bottom:8px;">
+      <div class="fg" style="flex:0 0 145px"><label>大分類</label><select id="invCat" onchange="filterInv()"><option value="">全部</option></select></div>
+      <div class="fg"><label>搜尋品名</label><input class="inp" id="invKw" placeholder="關鍵字…" oninput="filterInv()" style="margin:0;padding:9px 12px;font-size:13px;"></div>
+    </div>
+    <div id="invArea"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">載入中…</div></div>
+  </div>
+
+  <div class="card" style="margin-top:10px;">
     <div class="card-title">資材費用</div>
     <div class="form-row" style="margin-bottom:10px;">
       <div class="fg" style="flex:0 0 120px"><label>瓶型</label>
@@ -1080,6 +1081,21 @@ async function renderInventoryPage(mc) {
 }
 // ── 玻璃瓶庫存（數量統計邏輯同成品庫存）──
 let bottleFilter = '';
+// 新增玻璃瓶品項（admin+倉管）：寫一筆 0 數量 ledger 列，立即出現在總覽/入出庫/篩選/安全水位
+function showAddBottleItem() {
+  const modal = makeModal(`
+    <div class="modal-title">➕ 新增玻璃瓶品項</div>
+    <div class="fg" style="margin-bottom:12px;"><label>品項名稱</label><input class="inp" id="abi_name" placeholder="如：10L Keg桶" style="margin:0;"></div>
+    <div class="fe"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="abi_sub">新增</button></div>`);
+  const b = modal.querySelector('#abi_sub');
+  b.onclick = () => lockRun(b, async () => {
+    const name = (document.getElementById('abi_name').value || '').trim();
+    if (!name) { toast('請輸入品項名稱'); return; }
+    const res = await api({ action: 'addBottleItem', item: name, operator: (curUser && curUser.username) || '' });
+    if (res.ok) { toast('已新增品項「' + name + '」'); modal.remove(); loadBottleOverview(); loadBottleLedger(); }
+    else toast(res.error || '新增失敗');
+  });
+}
 async function loadBottleOverview() {
   const res = await api({ action: 'getBottleOverview' });
   const area = document.getElementById('bottleWaterArea');
@@ -1895,7 +1911,7 @@ async function loadOrderTasks(){
     }).join('');
     return `<div class="card" style="margin-bottom:10px;padding:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div><b>${o.orderNo}</b> <span style="color:var(--ink3);font-size:12px;">${o.client}</span></div>${dbadge}
+        <div><b>${o.orderNo}</b>${o.lot ? ` <span style="color:var(--gold-dk);font-size:11px;">Lot ${o.lot}</span>` : ''} <span style="color:var(--ink3);font-size:12px;">${o.client}</span></div>${dbadge}
       </div>
       <div style="font-size:11px;color:var(--ink3);margin:4px 0 2px;">出貨日 ${o.deliveryDate||'—'}${o.orderType?(' · '+o.orderType):''}</div>
       ${items}
@@ -1909,7 +1925,7 @@ async function openTaskRecipe(oi,ii){
   if(!it.sheet){ toast('此酒款尚未綁定酒譜，請洽管理員'); return; }
   const area = document.getElementById('orderTaskArea');
   area.innerHTML = `<div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入酒譜中…</div>`;
-  const r = await api({ action:'getRecipeForProduction', client:o.client, sheet:it.sheet, volume:it.volume, qty:it.qty });
+  const r = await api({ action:'getRecipeForProduction', client:(it.srcClient || o.client), sheet:it.sheet, volume:it.volume, qty:it.qty });
   if(!r.ok){ area.innerHTML=`<div class="warn" style="padding:10px;">${r.error}</div><button class="btn btn-ghost btn-sm" onclick="loadOrderTasks()" style="margin-top:8px;">‹ 返回</button>`; return; }
   const rows = (r.ingredients||[]).map(ing=>{
     let sub='';
@@ -2023,7 +2039,7 @@ async function loadOrderMgmt() {
 // 建單表單（admin）：接 createOrder，欄位對齊訂單主表 11 欄
 let _orderLineSeq = 0;
 // 瓶型清單（BSPEC 既有 + 香水瓶兩款）；建單/完成回報共用
-function orderBottleList() { return [...Object.keys(BSPEC), '山形香水瓶', '大香水瓶']; }
+function orderBottleList() { return [...Object.keys(BSPEC), '山形香水瓶', '大香水瓶', '10L Keg桶', '20公升無龍頭PP桶', '20公升有水龍頭桶']; }
 // 客戶顯示名（只改顯示、資料鍵不變）與隱藏清單
 const CLIENT_LABELS = { '南坡萬v.2': '南坡萬自有品牌酒' };
 const HIDDEN_CLIENTS = ['Feeling Bar Cafe', '南坡萬公版'];
@@ -2041,11 +2057,11 @@ function isFinanceUser() { return !!(curUser && FINANCE_USERS.includes(curUser.u
 // 訂單類型欄：南坡萬自有品牌酒(南坡萬v.2) → 定期生產/自行keyin(選後展開自由輸入生產目的)；OEM 客戶預填「OEM客戶訂單」；其餘 → 一般建議清單
 function orderTypeFieldHtml(client) {
   if (client === '南坡萬v.2') {
-    return '<select class="inp" id="om_type" style="margin:0;" onchange="omTypeSelChange(this)"><option>定期生產</option><option>自行keyin</option></select>'
+    return '<select class="inp" id="om_type" style="margin:0;" onchange="omTypeSelChange(this);refreshOrderLineDatalists()"><option>定期生產</option><option>自行keyin</option></select>'
       + '<input class="inp" id="om_type_custom" placeholder="輸入此訂單的生產目的（如：中秋禮盒限定）" style="margin:6px 0 0;display:none;font-size:13px;">';
   }
   const preset = EXTRA_CLIENTS.includes(client) ? 'OEM客戶訂單' : '';
-  return '<input class="inp" id="om_type" list="omTypeList" placeholder="如：換前標公版酒" value="' + preset + '" style="margin:0;"><datalist id="omTypeList"><option>換前標公版酒</option><option>南坡萬自有品牌</option><option>OEM客戶訂單</option></datalist>';
+  return '<input class="inp" id="om_type" list="omTypeList" placeholder="如：換前標公版酒" value="' + preset + '" onchange="refreshOrderLineDatalists()" style="margin:0;"><datalist id="omTypeList"><option>換前標公版酒</option><option>南坡萬自有品牌</option><option>OEM客戶訂單</option></datalist>';
 }
 // 選「自行keyin」→ 展開生產目的輸入框
 function omTypeSelChange(sel) {
@@ -2063,11 +2079,29 @@ function getOrderTypeValue() {
   }
   return el.value || '';
 }
-function orderLineHtml(idx, client) {
-  const names = [...new Set([
+// 訂單類型含「公版酒」→ 建單酒款自動帶入南坡萬自有品牌(資料鍵 南坡萬v.2)全酒款
+function _isGongbanType() {
+  const el = document.getElementById('om_type');
+  return !!(el && String(el.value || '').includes('公版酒'));
+}
+function orderLineRecipeNames(client) {
+  return [...new Set([
     ...recipeList.filter(i => i.client === client).map(i => i.recipeName),
+    ...(_isGongbanType() ? recipeList.filter(i => i.client === '南坡萬v.2').map(i => i.recipeName) : []),
     ...(EXTRA_CLIENT_RECIPES[client] || [])
   ])];
+}
+// 訂單類型改變後重整各列酒款建議清單（保留已輸入值）
+function refreshOrderLineDatalists() {
+  const client = document.getElementById('om_client').value;
+  const opts = orderLineRecipeNames(client).map(n => `<option>${n}</option>`).join('');
+  document.querySelectorAll('#orderItemLines .order-line').forEach(line => {
+    const dl = document.getElementById('oidl_' + line.id.replace('oline_', ''));
+    if (dl) dl.innerHTML = opts;
+  });
+}
+function orderLineHtml(idx, client) {
+  const names = orderLineRecipeNames(client);
   const recOpts = names.map(n => `<option>${n}</option>`).join('');
   const btOpts = orderBottleList().map(b => `<option>${b}</option>`).join('');
   return `<div class="order-line" id="oline_${idx}" style="border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:8px;">
@@ -2269,6 +2303,7 @@ function showOrderDetail(orderNo) {
     ${row('表訂出貨日', o.deliveryDate || '—')}
     ${row('實際出貨日', o.shipDateConfirmed ? (o.actualDeliveryDate || '—') : (o.actualDeliveryDate || '—') + '（待確認）')}
     ${row('PM', o.pm || '—')}
+    ${row('Lot批號', o.lot || '—')}
     <div style="margin:8px 0 2px;font-size:13px;font-weight:600;color:var(--gold-dk);">酒款明細（共 ${(o.items || []).length} 款）</div>
     ${items}
     ${moneyHtml}
@@ -2357,6 +2392,7 @@ function showOrderModal(edit) {
     </div>
     <div class="form-row">
       <div class="fg"><label>PM</label><input class="inp" id="om_pm" value="${isEdit ? (edit.pm || '') : ((curUser && curUser.username) || '')}" style="margin:0;"></div>
+      <div class="fg"><label>Lot批號（選填）</label><input class="inp" id="om_lot" type="text" inputmode="numeric" value="${isEdit ? (edit.lot || '') : ''}" placeholder="純數字，可留空" style="margin:0;"></div>
     </div>
     <div style="margin:4px 0 6px;font-size:13px;font-weight:600;color:var(--gold-dk);">酒款明細（已 key <span id="olineCount">0</span> 款）</div>
     <div id="orderItemLines"></div>
@@ -2412,12 +2448,21 @@ function showOrderModal(edit) {
       const product = document.getElementById('oi_' + idx + '_rec').value;
       const qty = parseInt(document.getElementById('oi_' + idx + '_qty').value, 10) || 0;
       if (!product || qty <= 0) return;
-      const rec = recipeList.find(i => i.client === client && i.recipeName === product);
+      let rec = recipeList.find(i => i.client === client && i.recipeName === product);
+      let srcClient = null;
+      // 公版酒：客戶自己無此款 → 綁南坡萬自有品牌配方(completeOrderItem 不查譜，安全；製作視角用 srcClient)
+      if (!rec && _isGongbanType()) {
+        const npw = recipeList.find(i => i.client === '南坡萬v.2' && i.recipeName === product);
+        if (npw) { rec = npw; srcClient = '南坡萬v.2'; }
+      }
       const item = { product, sheet: rec ? rec.sheet : '', volume: document.getElementById('oi_' + idx + '_vol').value || '', bottleType: document.getElementById('oi_' + idx + '_bt').value || '', qty, status: (isEdit && line.dataset.status) ? line.dataset.status : '待製作' };
+      if (srcClient) item.srcClient = srcClient;
       if (isEdit && line.dataset.batchId) item.batchId = line.dataset.batchId;
       items.push(item);
     });
     if (!items.length) { toast('請至少加一款酒（數量>0）'); return; }
+    const lot = (document.getElementById('om_lot').value || '').trim();
+    if (lot && !/^\d+$/.test(lot)) { toast('Lot批號需為純數字（可留空）'); return; }
     const res = await api({
       action: isEdit ? 'updateOrder' : 'createOrder',
       ...(isEdit ? { orderNo: edit.orderNo, user: (curUser && curUser.username) || '' } : {}),
@@ -2426,7 +2471,7 @@ function showOrderModal(edit) {
       actualDeliveryDate: document.getElementById('om_actual').value || document.getElementById('om_ship').value || '',
       items: JSON.stringify(items),
       total: document.getElementById('om_total').value || 0, balance: document.getElementById('om_balance').value || 0,
-      depositStatus: document.getElementById('om_deposit').value || '', pm: document.getElementById('om_pm').value || '',
+      depositStatus: document.getElementById('om_deposit').value || '', pm: document.getElementById('om_pm').value || '', lot: lot,
       ...collectFinanceFields(), ...collectDeliveryFields()
     });
     if (res.ok) { toast(isEdit ? ('訂單已更新 ' + edit.orderNo) : ('已建立訂單 ' + res.orderNo)); modal.remove(); loadOrderMgmt(); if (isFinanceUser()) loadFinanceSummary(); }
