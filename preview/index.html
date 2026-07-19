@@ -88,7 +88,8 @@ tbody tr:hover td{background:#faf3e8;}
 #loadOverlay{position:fixed;inset:0;background:rgba(247,244,238,.8);display:none;align-items:center;justify-content:center;z-index:999;}
 .spinner{width:34px;height:34px;border:3px solid var(--border);border-top-color:var(--gold-dk);border-radius:50%;animation:spin .7s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
-#toast{position:fixed;bottom:calc(var(--nav-h)+10px+var(--safe-b));left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 18px;border-radius:99px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:9999;max-width:88vw;text-align:center;}
+.toast{position:fixed;bottom:calc(var(--nav-h)+10px+var(--safe-b));left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 18px;border-radius:99px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:10000;max-width:88vw;text-align:center;}
+.toast.show{opacity:1;}
 
 /* 酒譜原料表 */
 .recipe-meta{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px;}
@@ -1895,7 +1896,7 @@ async function loadOrderTasks(){
     }).join('');
     return `<div class="card" style="margin-bottom:10px;padding:12px;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
-        <div><b>${o.orderNo}</b> <span style="color:var(--ink3);font-size:12px;">${o.client}</span></div>${dbadge}
+        <div><b>${o.orderNo}</b>${o.lot ? ` <span style="color:var(--gold-dk);font-size:11px;">Lot ${o.lot}</span>` : ''} <span style="color:var(--ink3);font-size:12px;">${o.client}</span></div>${dbadge}
       </div>
       <div style="font-size:11px;color:var(--ink3);margin:4px 0 2px;">出貨日 ${o.deliveryDate||'—'}${o.orderType?(' · '+o.orderType):''}</div>
       ${items}
@@ -2023,7 +2024,7 @@ async function loadOrderMgmt() {
 // 建單表單（admin）：接 createOrder，欄位對齊訂單主表 11 欄
 let _orderLineSeq = 0;
 // 瓶型清單（BSPEC 既有 + 香水瓶兩款）；建單/完成回報共用
-function orderBottleList() { return [...Object.keys(BSPEC), '山形香水瓶', '大香水瓶']; }
+function orderBottleList() { return [...Object.keys(BSPEC), '山形香水瓶', '大香水瓶', '10L Keg桶', '20公升無龍頭PP桶', '20公升有水龍頭桶']; }
 // 客戶顯示名（只改顯示、資料鍵不變）與隱藏清單
 const CLIENT_LABELS = { '南坡萬v.2': '南坡萬自有品牌酒' };
 const HIDDEN_CLIENTS = ['Feeling Bar Cafe', '南坡萬公版'];
@@ -2269,6 +2270,7 @@ function showOrderDetail(orderNo) {
     ${row('表訂出貨日', o.deliveryDate || '—')}
     ${row('實際出貨日', o.shipDateConfirmed ? (o.actualDeliveryDate || '—') : (o.actualDeliveryDate || '—') + '（待確認）')}
     ${row('PM', o.pm || '—')}
+    ${row('Lot批號', o.lot || '—')}
     <div style="margin:8px 0 2px;font-size:13px;font-weight:600;color:var(--gold-dk);">酒款明細（共 ${(o.items || []).length} 款）</div>
     ${items}
     ${moneyHtml}
@@ -2357,6 +2359,7 @@ function showOrderModal(edit) {
     </div>
     <div class="form-row">
       <div class="fg"><label>PM</label><input class="inp" id="om_pm" value="${isEdit ? (edit.pm || '') : ((curUser && curUser.username) || '')}" style="margin:0;"></div>
+      <div class="fg"><label>Lot批號（選填）</label><input class="inp" id="om_lot" type="text" inputmode="numeric" value="${isEdit ? (edit.lot || '') : ''}" placeholder="純數字，可留空" style="margin:0;"></div>
     </div>
     <div style="margin:4px 0 6px;font-size:13px;font-weight:600;color:var(--gold-dk);">酒款明細（已 key <span id="olineCount">0</span> 款）</div>
     <div id="orderItemLines"></div>
@@ -2418,6 +2421,8 @@ function showOrderModal(edit) {
       items.push(item);
     });
     if (!items.length) { toast('請至少加一款酒（數量>0）'); return; }
+    const lot = (document.getElementById('om_lot').value || '').trim();
+    if (lot && !/^\d+$/.test(lot)) { toast('Lot批號需為純數字（可留空）'); return; }
     const res = await api({
       action: isEdit ? 'updateOrder' : 'createOrder',
       ...(isEdit ? { orderNo: edit.orderNo, user: (curUser && curUser.username) || '' } : {}),
@@ -2426,7 +2431,7 @@ function showOrderModal(edit) {
       actualDeliveryDate: document.getElementById('om_actual').value || document.getElementById('om_ship').value || '',
       items: JSON.stringify(items),
       total: document.getElementById('om_total').value || 0, balance: document.getElementById('om_balance').value || 0,
-      depositStatus: document.getElementById('om_deposit').value || '', pm: document.getElementById('om_pm').value || '',
+      depositStatus: document.getElementById('om_deposit').value || '', pm: document.getElementById('om_pm').value || '', lot: lot,
       ...collectFinanceFields(), ...collectDeliveryFields()
     });
     if (res.ok) { toast(isEdit ? ('訂單已更新 ' + edit.orderNo) : ('已建立訂單 ' + res.orderNo)); modal.remove(); loadOrderMgmt(); if (isFinanceUser()) loadFinanceSummary(); }
