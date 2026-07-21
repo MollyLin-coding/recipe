@@ -2107,7 +2107,7 @@ function orderLineHtml(idx, client) {
   return `<div class="order-line" id="oline_${idx}" style="border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:8px;">
     <div style="font-size:11px;font-weight:700;color:var(--gold-dk);margin-bottom:2px;">酒款 <span class="oline-no">?</span></div>
     <div class="form-row" style="gap:6px;">
-      <div class="fg" style="flex:2 1 140px"><label>酒款</label><input class="inp" id="oi_${idx}_rec" list="oidl_${idx}" placeholder="選或輸入酒款" style="margin:0;font-size:13px;"><datalist id="oidl_${idx}">${recOpts}</datalist></div>
+      <div class="fg" style="flex:2 1 140px"><label>酒款</label><input class="inp" id="oi_${idx}_rec" list="oidl_${idx}" placeholder="選或輸入酒款" style="margin:0;font-size:13px;" oninput="var w=document.getElementById('om_warn'); if(w&&this.value.trim())w.style.display='none';"><datalist id="oidl_${idx}">${recOpts}</datalist></div>
       <div class="fg" style="flex:1 1 70px"><label>數量</label><input class="inp" id="oi_${idx}_qty" type="number" min="1" value="1" style="margin:0;font-size:13px;"></div>
     </div>
     <div class="form-row" style="gap:6px;">
@@ -2380,6 +2380,7 @@ function showOrderModal(edit) {
       <div class="modal-title" style="margin:0;">${isEdit ? ('✏️ 編輯訂單 ' + edit.orderNo) : '＋ 新增出貨訂單'}</div>
       <button class="btn btn-primary btn-sm" id="om_sub_top" style="flex:0 0 auto;white-space:nowrap;">💾 儲存並關閉</button>
     </div>
+    <div id="om_warn" style="display:none;margin:0 0 8px;padding:8px 10px;background:#fdecea;border:1px solid #e74c3c;border-radius:8px;color:#c0392b;font-size:13px;font-weight:700;">⚠️ 請先至少選擇一款酒（酒款＋數量），才能儲存並關閉</div>
     <div class="form-row">
       <div class="fg"><label>客戶</label><div style="display:flex;gap:4px;">
         <select class="inp" id="om_client" style="margin:0;flex:1;min-width:0;" onchange="orderModalClientChange()">${cOpts}</select>
@@ -2460,7 +2461,11 @@ function showOrderModal(edit) {
       if (isEdit && line.dataset.batchId) item.batchId = line.dataset.batchId;
       items.push(item);
     });
-    if (!items.length) { toast('請至少加一款酒（數量>0）'); return; }
+    if (!items.length) {
+      const w = document.getElementById('om_warn'); if (w) w.style.display = 'block';
+      const il = document.getElementById('orderItemLines'); if (il) il.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      toast('請至少加一款酒（數量>0）'); return;
+    }
     const lot = (document.getElementById('om_lot').value || '').trim();
     if (lot && !/^\d+$/.test(lot)) { toast('Lot批號需為純數字（可留空）'); return; }
     const res = await api({
