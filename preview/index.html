@@ -389,7 +389,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v2.7.6';
+const APP_VERSION='v2.7.7';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -666,10 +666,12 @@ function switchTab(tab) {
 // ① 酒譜頁（v10：雙行版面、占比↔體積即時換算）
 // ════════════════════════════════════════════════
 function renderRecipePage(mc) {
-  const clients = [...new Set(recipeList.map(i => i.client))];
+  // v2.7.8 與「新增出貨訂單」客戶清單同步：隱藏建單不出現的客戶（HIDDEN_CLIENTS），
+  // 顯示名走 clientLabel（南坡萬v.2→南坡萬自有品牌酒），value 仍用資料真鍵
+  const clients = [...new Set(recipeList.map(i => i.client))].filter(c => !HIDDEN_CLIENTS.includes(c));
   if (!clients.length) { mc.innerHTML = '<div class="card"><div style="text-align:center;color:var(--ink3);padding:20px;">載入中…請稍候</div></div>'; return; }
   if (!clients.includes(curClient)) curClient = clients[0];
-  const cOpts = clients.map(c => `<option${c===curClient?' selected':''}>${c}</option>`).join('');
+  const cOpts = clients.map(c => `<option value="${c}"${c===curClient?' selected':''}>${clientLabel(c)}</option>`).join('');
   mc.innerHTML = `
   <div class="card">
     <div class="form-row">
