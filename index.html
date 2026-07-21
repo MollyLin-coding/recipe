@@ -293,7 +293,14 @@ tbody tr:hover td{background:#faf3e8;}
 #rcBody .rm{padding:7px 9px;}
 #rcBody .rm .vl{font-size:15px;}
 #rcBody .ing-r2{gap:4px;}
-#rcBody .rc-pct{width:46px;padding:4px 4px;}
+#rcBody .rc-pct{width:52px;padding:5px 4px;}
+/* v2.7.5 字級統一（比照建單欄位 14px，手機好讀） */
+#rcBody input,#rcBody select,#rcBody textarea{font-size:14px!important;}
+#rcBody label,#rcBody span,#rcBody .rc-chk,#rcBody .btn,#rcBody .cpd-sub-name,#rcBody .cpd-sub-hd{font-size:13px!important;}
+#rcBody .rm .lb{font-size:12px!important;}
+#rcBody .rm .vl{font-size:16px!important;}
+#rcBody .rc-sec{font-size:15px!important;}
+#rcBody .rc-sno{font-size:14px!important;}
 #rcBody .ing-inp{padding:4px 4px;}
 </style>
 </head>
@@ -3212,7 +3219,7 @@ function rcRenderBody(){
     <div class="rc-grid">
       <div class="fg"><label>客戶名稱</label><input class="inp" value="${rcEsc(st.client)}" oninput="rcState.client=this.value" style="margin:0;"></div>
       <div class="fg"><label>酒款名稱</label><input class="inp" value="${rcEsc(st.product)}" oninput="rcState.product=this.value" style="margin:0;"></div>
-      <div class="fg"><label>瓶型</label><input class="inp" value="${rcEsc(st.bottleType)}" oninput="rcState.bottleType=this.value" style="margin:0;"></div>
+      <div class="fg"><label>瓶型</label><select class="inp" onchange="rcState.bottleType=this.value" style="margin:0;">${(function(){ const bl=[''].concat(orderBottleList()); if(st.bottleType&&bl.indexOf(st.bottleType)<0) bl.push(st.bottleType); return bl.map(b=>`<option value="${rcEsc(b)}"${b===st.bottleType?' selected':''}>${b||'—選擇瓶型—'}</option>`).join(''); })()}</select></div>
       <div class="fg"><label>生產日期</label><input class="inp" type="date" value="${st.prodDate}" oninput="rcState.prodDate=this.value" style="margin:0;"></div>
       <div class="fg"><label>產品PM</label><input class="inp" value="${rcEsc(st.pm)}" oninput="rcState.pm=this.value" style="margin:0;"></div>
       <div class="fg"><label>Lot批號</label><input class="inp" value="${rcEsc(st.lot)}" oninput="rcState.lot=this.value" style="margin:0;"></div>
