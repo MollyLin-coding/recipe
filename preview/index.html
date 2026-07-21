@@ -2935,7 +2935,8 @@ function rcNewState(){
     pm:(curUser&&curUser.username)||'', lot:'', version:'V1', status:'進行中',
     totalVol:0, bottles:'', labelFrontOk:false, labelBackOk:false, processNote:'',
     liquids:[], solids:[],
-    stations:RC_STATIONS_DEFAULT.map((n,i)=>({no:i+1,name:n,note:'',operator:'',done:false})) };
+    stations:RC_STATIONS_DEFAULT.map((n,i)=>({no:i+1,name:n,note:'',operator:'',done:false}))
+      .concat([{no:11,name:'統計此酒款之最終產出瓶數',type:'final',count:'',note:'',operator:'',done:false}]) };
 }
 // 複合原料子料 → 結構化 subs（成本欄不進 run card）
 function rcSubs(ing){
@@ -3005,6 +3006,8 @@ async function rcOpenCard(id){
     processNote:d.processNote||'',
     liquids:Array.isArray(d.liquids)?d.liquids:[], solids:Array.isArray(d.solids)?d.solids:[] });
   if(Array.isArray(d.stations)&&d.stations.length) st.stations=d.stations;
+  if(!st.stations.some(function(x){ return x&&x.type==='final'; }))
+    st.stations.push({no:st.stations.length+1,name:'統計此酒款之最終產出瓶數',type:'final',count:'',note:'',operator:'',done:false});
   rcOpenEditor(st);
 }
 // 由訂單酒款帶入（配方走 getRecipeForProduction：成本已剝除、整單放量）
@@ -3148,6 +3151,13 @@ function rcRenderBody(){
         <label class="rc-chk"><input type="checkbox" ${s.done?'checked':''} onchange="rcState.stations[${i}].done=this.checked;document.getElementById('rcT_${i}').classList.toggle('fed',this.checked)">完成</label>
         <button class="del-btn" style="font-size:13px;" onclick="rcState.stations.splice(${i},1);rcRenderBody()">🗑</button>
       </div>
+      ${s.type==='final'?`
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;width:100%;margin-top:4px;padding:6px 8px;background:var(--gold-lt);border-radius:6px;">
+        <label style="font-size:12px;font-weight:700;color:var(--gold-dk);">最終產出瓶數</label>
+        <input type="number" class="rc-num" style="width:84px;" value="${s.count!=null?s.count:''}" min="0" oninput="rcState.stations[${i}].count=this.value">
+        <span style="font-size:12px;">瓶</span>
+        <span style="font-size:11px;color:#c0392b;font-weight:700;">⚠ 提醒 PM：請留一瓶 100ml 自主留樣樣品</span>
+      </div>`:''}
       <textarea class="rc-snote" rows="1" style="width:100%;margin-top:4px;padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--ink1);resize:none;overflow:hidden;line-height:1.5;" oninput="rcState.stations[${i}].note=this.value;this.style.height='auto';this.style.height=this.scrollHeight+'px';" placeholder="備註（可多行，自動展開）">${rcEsc(s.note||'')}</textarea>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;width:100%;margin-top:4px;font-size:11px;color:var(--ink3);">
         <button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="rcStamp(${i},'inAt')">⏱ 記錄入站時間</button><span id="rcIn_${i}">${s.inAt||'—'}</span>
@@ -3178,11 +3188,6 @@ function rcRenderBody(){
         <div style="display:flex;align-items:center;gap:4px;">
           <input type="number" id="rcTvInp" value="${st.totalVol}" min="0" step="100" style="width:84px;padding:3px 6px;font-size:14px;font-weight:600;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--ink1);text-align:right;" oninput="rcTv(this.value)">
           <span style="font-size:12px;color:var(--ink3);">ml</span>
-        </div></div>
-      <div class="rm"><div class="lb">瓶數</div>
-        <div style="display:flex;align-items:center;gap:4px;">
-          <input type="number" value="${st.bottles}" min="0" style="width:70px;padding:3px 6px;font-size:14px;font-weight:600;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--ink1);text-align:right;" oninput="rcState.bottles=this.value">
-          <span style="font-size:12px;color:var(--ink3);">瓶</span>
         </div></div>
       <div class="rm"><div class="lb">占比合計</div><div class="vl" id="rcPctSum">—</div></div>
     </div>
