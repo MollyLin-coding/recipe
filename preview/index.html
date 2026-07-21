@@ -260,6 +260,9 @@ tbody tr:hover td{background:#faf3e8;}
 .login-user-btn:active{transform:scale(.98);}
 .login-user-btn.sel{background:var(--gold-lt);border-color:var(--gold-dk);color:var(--gold-dk);}
 .login-user-label{text-align:center;font-size:14px;font-weight:600;color:var(--ink2);margin:2px 0 10px;}
+/* ── 登入轉圈提示（v2.6.2）── */
+.btn-spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:btnspin .7s linear infinite;vertical-align:-2px;margin-right:7px;}
+@keyframes btnspin{to{transform:rotate(360deg)}}
 /* ── Run Card（v2.6）── */
 .rc-sec{margin-top:12px;font-size:13px;font-weight:700;color:var(--gold-dk);border-bottom:1px solid var(--border);padding-bottom:3px;}
 .rc-row{display:flex;gap:5px;align-items:center;padding:6px;border:1px solid var(--border);border-radius:8px;margin-top:5px;flex-wrap:wrap;transition:.2s;}
@@ -357,6 +360,10 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
     document.body.appendChild(b);
   });
 }
+
+// v2.6.2 後端暖機：頁面一開就靜默 ping getEnvInfo（免 token），趁使用者選帳號打密碼的空檔
+// 把 GAS 冷啟動（常 2~5 秒）先吃掉，按「登入」時後端已是熱的
+window.addEventListener('DOMContentLoaded', function () { api({ action: 'getEnvInfo' }, true); });
 
 let _sessExpiredShown = false;
 async function api(params, silent) {
@@ -499,15 +506,19 @@ async function doLogin() {
   const username = document.getElementById('loginUser').value;
   const password = document.getElementById('loginPass').value;
   if (!username || !password) { document.getElementById('loginErr').textContent = '請選擇帳號並輸入密碼'; return; }
-  document.getElementById('loginBtn').disabled = true;
+  // v2.6.2：登入鈕轉圈提示（後端可能冷啟動要數秒，讓使用者知道系統有反應、也防重複狂按）
+  const loginBtn = document.getElementById('loginBtn');
+  loginBtn.disabled = true;
+  loginBtn.innerHTML = '<span class="btn-spin"></span>登入中…';
   document.getElementById('loginErr').textContent = '';
   // v2.1：先 login 拿 token，其餘請求才帶得到 token（不可並行，否則被後端 session 閘門擋下）
   const res = await api({ action: 'login', username, password });
   if (!res.ok) {
-    document.getElementById('loginBtn').disabled = false;
+    loginBtn.disabled = false; loginBtn.textContent = '登入';
     document.getElementById('loginErr').textContent = res.error || '登入失敗';
     return;
   }
+  loginBtn.innerHTML = '<span class="btn-spin"></span>載入資料中…';
   curUser = { username, role: res.role };
   curToken = res.token || null;
   document.body.classList.toggle('fbviewer', res.role === 'FB觀看');
@@ -515,7 +526,7 @@ async function doLogin() {
     api({ action: 'getInventory' }, true),
     api({ action: 'getRecipeList' }, true),
   ]);
-  document.getElementById('loginBtn').disabled = false;
+  loginBtn.disabled = false; loginBtn.textContent = '登入';
   if (invRes.ok) C.inv = invRes.items || [];
   if (lr.ok) {
     recipeList = lr.list || [];
