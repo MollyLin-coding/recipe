@@ -27,6 +27,10 @@ cp preview/order.html order.html
 echo "② 正式前台 API 指回正式 /exec（把預覽的測試 URL 換成正式）"
 sed -i "s|const API='[^']*';|const API='${PROD_API}';|" index.html order.html
 
+echo "②b 版本號自動蓋上 ${TAG}（登入頁 #appVer 顯示用）"
+sed -i "s|const APP_VERSION='[^']*';|const APP_VERSION='${TAG}';|" index.html
+grep -q "const APP_VERSION='${TAG}';" index.html || { echo "❌ 版本號置換失敗，已中止（未 commit）"; exit 1; }
+
 echo "③ 驗證：正式前台確實指向正式後端"
 grep -q "const API='${PROD_API}';" index.html || { echo "❌ index.html API 置換失敗，已中止（未 commit）"; exit 1; }
 grep -q "const API='${PROD_API}';" order.html || { echo "❌ order.html API 置換失敗，已中止（未 commit）"; exit 1; }

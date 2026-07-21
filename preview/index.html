@@ -331,6 +331,8 @@ tbody tr:hover td{background:#faf3e8;}
       <input class="inp" id="loginPass" type="password" placeholder="密碼" inputmode="numeric">
       <button class="btn btn-primary btn-full" id="loginBtn" onclick="doLogin()">登入</button>
       <div id="loginErr"></div>
+      <!-- APP 版本號（promote.sh 升版時自動蓋上 tag，用於確認手機拿到的是不是新版） -->
+      <div id="appVer" style="text-align:center;font-size:11px;color:var(--ink3);margin-top:6px;letter-spacing:.5px;"></div>
     </div>
   </div>
 </div>
@@ -385,6 +387,12 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
     document.body.appendChild(b);
   });
 }
+
+// APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
+const APP_VERSION='v2.7.6';
+window.addEventListener('DOMContentLoaded', function () {
+  const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
+});
 
 // v2.6.2 後端暖機：頁面一開就靜默 ping getEnvInfo（免 token），趁使用者選帳號打密碼的空檔
 // 把 GAS 冷啟動（常 2~5 秒）先吃掉，按「登入」時後端已是熱的
