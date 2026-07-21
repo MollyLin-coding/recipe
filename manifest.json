@@ -1,0 +1,12 @@
+{
+  "name": "凱文南坡萬 廠務／酒譜管理系統",
+  "short_name": "南坡萬廠務",
+  "start_url": "/recipe/index.html",
+  "scope": "/recipe/",
+  "display": "standalone",
+  "background_color": "#f7f4ee",
+  "theme_color": "#5c4422",
+  "icons": [
+    { "src": "/recipe/knb_head.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
