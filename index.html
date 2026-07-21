@@ -280,6 +280,14 @@ tbody tr:hover td{background:#faf3e8;}
 .rc-locked{background:var(--bg2);color:var(--ink2);}
 .rc-dev{border-color:#e67e22!important;background:#fdf0e3!important;}
 .rc-note-need{border-color:#c0392b!important;}
+/* v2.7.3 Run Card 手機優化：全黑字＋緊湊（占比欄縮短防%換行） */
+#rcBody,#rcBody label,#rcBody .rm .lb,#rcBody .rm .vl,#rcBody .ing-lbl,#rcBody .ing-unit,#rcBody .ing-sep,#rcBody .rc-chk,#rcBody .rc-sec,#rcBody input,#rcBody select,#rcBody textarea,#rcBody .cpd-sub-hd,#rcBody .cpd-sub-name{color:#1a1a1a;}
+#rcBody .recipe-meta{gap:6px;}
+#rcBody .rm{padding:7px 9px;}
+#rcBody .rm .vl{font-size:15px;}
+#rcBody .ing-r2{gap:4px;}
+#rcBody .rc-pct{width:46px;padding:4px 4px;}
+#rcBody .ing-inp{padding:4px 4px;}
 </style>
 </head>
 <body>
@@ -3033,12 +3041,37 @@ async function rcNewFromOrder(oi, ii){
   const st=await rcFillFromOrderItem(rcNewState(), o, it);
   rcOpenEditor(st);
 }
+// ── 自動暫存（v2.7.3）：每 4 秒把未儲存的卡寫進 localStorage，當機/斷線不掉資料 ──
+let _rcDraftTimer=null,_rcLastSnap='';
+function rcAutoSaveArm(){
+  rcAutoSaveStop();
+  _rcLastSnap=JSON.stringify(rcState);
+  _rcDraftTimer=setInterval(function(){
+    if(!rcState){ rcAutoSaveStop(); return; }
+    const snap=JSON.stringify(rcState);
+    if(snap!==_rcLastSnap){
+      _rcLastSnap=snap;
+      lsSet('np_rcDraft',{ts:Date.now(),state:rcState});
+      const el=document.getElementById('rcDraftInfo');
+      if(el){ const d=new Date(); el.textContent='💾 已自動暫存 '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)+':'+('0'+d.getSeconds()).slice(-2); }
+    }
+  },4000);
+}
+function rcAutoSaveStop(){ if(_rcDraftTimer){ clearInterval(_rcDraftTimer); _rcDraftTimer=null; } }
+function rcDraftClear(){ try{ localStorage.removeItem('np_rcDraft'); }catch(e){} }
 // ── 編輯 Run Card 頁面（鎖定式 modal，只能按鈕關）──
 function rcOpenEditor(st){
+  // 有未儲存草稿（上次當機/斷線遺留）→ 詢問是否接續
+  try{
+    const d=lsGet('np_rcDraft');
+    if(d&&d.state&&confirm('💾 發現上次未儲存的 Run Card 草稿（'+new Date(d.ts).toLocaleString('zh-TW')+'）。\n按「確定」載入草稿接續編輯；按「取消」開新的這張（草稿將捨棄）。')){
+      st=d.state;
+    } else { rcDraftClear(); }
+  }catch(e){}
   rcState=st;
   const modal=makeModal(`
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
-      <div class="modal-title" id="rcTitle" style="margin:0;">📋 ${st.id?('編輯 Run Card '+st.id):'編輯 Run Card（新卡）'}</div>
+      <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;min-width:0;"><div class="modal-title" id="rcTitle" style="margin:0;">📋 ${st.id?('編輯 Run Card '+st.id):'編輯 Run Card（新卡）'}</div><span id="rcDraftInfo" style="font-size:10px;color:#888;"></span></div>
       <div style="display:flex;gap:6px;flex:0 0 auto;">
         <button class="btn btn-primary btn-sm" id="rc_save_top">💾 儲存</button>
         <button class="btn btn-ghost btn-sm" onclick="rcCloseEditor(this)">✖ 關閉</button>
@@ -3057,9 +3090,11 @@ function rcOpenEditor(st){
   bind('#rc_save'); bind('#rc_save_top');
   rcRenderBody();
   rcLoadOrderOptions();
+  rcAutoSaveArm();
 }
 function rcCloseEditor(btn){
   if(!confirm('關閉 Run Card？未儲存的變更會遺失。')) return;
+  rcAutoSaveStop(); rcDraftClear();
   btn.closest('.modal-bg').remove(); rcState=null;
 }
 // 訂單下拉（bartender 視角：無金額、只列未完成單）
@@ -3307,6 +3342,8 @@ async function rcSave(){
   if(res.ok){
     if(!st.id) st.id=res.id;
     const t=document.getElementById('rcTitle'); if(t) t.textContent='📋 編輯 Run Card '+st.id;
+    rcDraftClear(); _rcLastSnap=JSON.stringify(rcState);
+    const di=document.getElementById('rcDraftInfo'); if(di) di.textContent='';
     toast('已儲存 '+st.id);
   } else toast('儲存失敗：'+(res.error||''));
 }
