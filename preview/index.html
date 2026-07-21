@@ -2312,6 +2312,7 @@ function showOrderDetail(orderNo) {
     <div id="orderHistArea" style="font-size:11px;color:var(--ink3);">載入中…</div>
     <div class="fe" style="margin-top:10px;gap:6px;flex-wrap:wrap;">
       ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();editOrder(${idx})">✏️ 編輯訂單</button>` : ''}
+      ${isAdmin ? `<button class="btn btn-ghost btn-sm" style="color:#c0392b;border:1px solid #e74c3c;" onclick="deleteOrderFromDetail('${o.orderNo}')">🗑 刪除訂單</button>` : ''}
       ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();showDeliveryModal('${o.orderNo}')">🚚 編輯配送</button>` : ''}
       ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();showFinanceModal(${idx})">💰 金流</button>` : ''}
       ${canAct && !o.shipDateConfirmed ? `<button class="btn btn-sm" style="background:var(--gold-lt);color:var(--gold-dk);border:1px solid var(--gold-dk);" onclick="this.closest('.modal-bg').remove();showConfirmShipModal(${idx})">🚚 確認實際出貨日</button>` : ''}
@@ -2324,6 +2325,16 @@ function showOrderDetail(orderNo) {
 function editOrder(oi) {
   const o = (window._mgmtOrders || [])[oi]; if (!o) return;
   showOrderModal(o);
+}
+// 🗑 刪除整張訂單（admin）：二次確認 → deleteOrder → 關閉+刷新
+async function deleteOrderFromDetail(orderNo) {
+  if (!confirm('確定刪除訂單 ' + orderNo + '？\n此動作會整張刪除、不可復原。')) return;
+  const res = await api({ action: 'deleteOrder', orderNo: orderNo });
+  if (res.ok) {
+    toast('已刪除訂單 ' + orderNo);
+    document.querySelectorAll('.modal-bg').forEach(m => m.remove());
+    loadOrderMgmt(); if (typeof isFinanceUser === 'function' && isFinanceUser()) loadFinanceSummary();
+  } else toast('刪除失敗：' + (res.error || ''));
 }
 // 訂單修改歷史（詳情最下緣備查；v1.8 起記錄，舊訂單此前的操作無紀錄）
 async function loadOrderHistory(orderNo) {
