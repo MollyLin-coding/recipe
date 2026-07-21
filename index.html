@@ -277,6 +277,9 @@ tbody tr:hover td{background:#faf3e8;}
 .rc-station{display:flex;gap:5px;align-items:center;padding:5px 6px;border:1px solid var(--border);border-radius:8px;margin-top:4px;flex-wrap:wrap;transition:.2s;}
 .rc-station.fed{opacity:.5;background:var(--bg2);}
 .rc-sno{flex:0 0 20px;font-weight:700;color:var(--gold-dk);text-align:center;}
+.rc-locked{background:var(--bg2);color:var(--ink2);}
+.rc-dev{border-color:#e67e22!important;background:#fdf0e3!important;}
+.rc-note-need{border-color:#c0392b!important;}
 </style>
 </head>
 <body>
@@ -2915,8 +2918,9 @@ function selectLoginUser(btn) {
 }
 
 
+
 // ════════════════════════════════════════════════
-// Run Card（v2.6，v2.6.1 液體原料改酒譜頁架構）：製酒各站點紀錄表
+// Run Card（v2.6；v2.6.1 酒譜頁架構；v2.6.3 品名鎖定+占比變更需理由+一鍵回原比例）：製酒各站點紀錄表
 // 入口①酒譜頁「生成run card」②訂單詳情各酒款「📋 Run Card」歷史
 // 一張訂單多酒款＝每酒款一張卡；同酒款多次生產＝多張卡（歷史）
 // ════════════════════════════════════════════════
@@ -2947,7 +2951,8 @@ function rcOpenFromRecipe(){
   st.liquids=(rdata.ingredients||[]).map(ing=>({
     name:ing.name, pct:Math.round((+ing.pct||0)*10)/10, abv:+ing.abv||0,
     vol:Math.round(+ing.vol||0), fed:false, ordered:false, note:'',
-    subs:rcSubs(ing), hasLoss:!!ing.hasLoss }));
+    subs:rcSubs(ing), hasLoss:!!ing.hasLoss,
+    locked:true, origPct:Math.round((+ing.pct||0)*10)/10 }));
   rcOpenEditor(st);
 }
 // 入口②：訂單詳情 → 該酒款 Run Card 歷史清單
@@ -3008,10 +3013,11 @@ async function rcFillFromOrderItem(st, o, it){
   if(res.ok){
     st.totalVol=Math.round(res.orderTotalMl||0);
     st.processNote=res.processNote||'';
-    st.liquids=(res.ingredients||[]).map(g=>({
-      name:g.name, pct:st.totalVol>0?Math.round((+g.orderVol||0)/st.totalVol*1000)/10:0,
-      abv:+g.abv||0, vol:Math.round(+g.orderVol||0), fed:false, ordered:false, note:'',
-      subs:rcSubs(g), hasLoss:!!g.hasLoss }));
+    st.liquids=(res.ingredients||[]).map(g=>{
+      const p=st.totalVol>0?Math.round((+g.orderVol||0)/st.totalVol*1000)/10:0;
+      return { name:g.name, pct:p, abv:+g.abv||0, vol:Math.round(+g.orderVol||0),
+        fed:false, ordered:false, note:'', subs:rcSubs(g), hasLoss:!!g.hasLoss,
+        locked:true, origPct:p }; });
   } else toast('酒譜帶入失敗：'+(res.error||'')+'，請手動填原料');
   return st;
 }
@@ -3095,7 +3101,7 @@ function rcRenderBody(){
     return `
     <div class="ing-row${g.fed?' fed':''}" id="rcL_${i}">
       <div class="ing-r1" style="gap:6px;">
-        <input type="text" class="rc-name" style="flex:1;min-width:100px;" value="${rcEsc(g.name)}" oninput="rcState.liquids[${i}].name=this.value" placeholder="液體原料名稱">
+        <input type="text" class="rc-name${g.locked?' rc-locked':''}" style="flex:1;min-width:100px;" value="${rcEsc(g.name)}" ${g.locked?'readonly title="既有原料品名鎖定；要改品名請至原料庫/酒譜"':'oninput="rcState.liquids['+i+'].name=this.value" placeholder="液體原料名稱"'}>
         ${subs.length?'<span class="cpd-badge">複合</span>':''}
         <label class="rc-chk"><input type="checkbox" ${g.fed?'checked':''} onchange="rcState.liquids[${i}].fed=this.checked;document.getElementById('rcL_${i}').classList.toggle('fed',this.checked)">已投入</label>
         <label class="rc-chk"><input type="checkbox" ${g.ordered?'checked':''} onchange="rcState.liquids[${i}].ordered=this.checked">已叫料</label>
@@ -3105,6 +3111,7 @@ function rcRenderBody(){
         <label class="ing-lbl">占比</label>
         <input type="number" class="ing-inp rc-pct" value="${g.pct}" min="0" step="0.1" oninput="rcLPct(${i},this.value)">
         <span class="ing-unit">%</span>
+        <span class="rc-devtag" style="display:none;font-size:10px;color:#e67e22;white-space:nowrap;">原 ${g.origPct!=null?g.origPct:''}%</span>
         <span class="ing-sep">↔</span>
         <label class="ing-lbl">體積</label>
         <input type="number" class="ing-inp rc-vol" style="width:76px;" value="${g.vol}" min="0" step="1" oninput="rcLVol(${i},this.value)">
@@ -3114,7 +3121,7 @@ function rcRenderBody(){
         <span class="ing-unit">%</span>
       </div>
       ${subHtml}
-      <input type="text" style="width:100%;margin-top:6px;padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--ink1);" value="${rcEsc(g.note||'')}" oninput="rcState.liquids[${i}].note=this.value" placeholder="備註（製法）">
+      <input type="text" class="rc-note" style="width:100%;margin-top:6px;padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--ink1);" value="${rcEsc(g.note||'')}" oninput="rcState.liquids[${i}].note=this.value;rcDevUpd(${i})" placeholder="備註（製法）">
     </div>`; }).join('');
   const sol=st.solids.map((g,i)=>`
     <div class="rc-row${g.fed?' fed':''}" id="rcS_${i}">
@@ -3163,8 +3170,9 @@ function rcRenderBody(){
         </div></div>
       <div class="rm"><div class="lb">占比合計</div><div class="vl" id="rcPctSum">—</div></div>
     </div>
+    ${st.liquids.some(g=>g.origPct!=null)?'<div style="margin:2px 0 4px;"><button class="btn btn-ghost btn-sm" onclick="rcResetPct()">↩ 一鍵回到原酒譜比例</button></div>':''}
     ${liq||'<div style="color:var(--ink3);font-size:12px;padding:6px 0;">尚無液體原料——可由上方選訂單帶入，或點下方新增。</div>'}
-    <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.liquids.push({name:'',pct:0,abv:0,vol:0,fed:false,ordered:false,note:'',subs:[]});rcRenderBody()">＋ 加液體原料</button>
+    <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.liquids.push({name:'',pct:0,abv:0,vol:0,fed:false,ordered:false,note:'',subs:[],locked:false,origPct:null});rcRenderBody()">＋ 加液體原料</button>
     <div class="rc-sec">🧂 固體原料</div>
     ${sol||'<div style="color:var(--ink3);font-size:12px;padding:6px 0;">尚無固體原料。</div>'}
     <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.solids.push({name:'',ratio:'',fed:false,note:''});rcRenderBody()">＋ 加固體原料</button>
@@ -3172,6 +3180,7 @@ function rcRenderBody(){
     ${sta||'<div style="color:var(--ink3);font-size:12px;padding:6px 0;">尚無站點。</div>'}
     <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.stations.push({no:rcState.stations.length+1,name:'',note:'',operator:'',done:false});rcRenderBody()">＋ 加站點</button>`;
   rcPctSum(); rcAbvUpd();
+  st.liquids.forEach(function(_,i){ rcDevUpd(i); });
 }
 // 占比 ↔ 放量互算（總體積為基準；直接改 input 值、不整段重繪避免失焦）
 function rcTv(v){
@@ -3186,7 +3195,7 @@ function rcLPct(i,v){
   const g=rcState.liquids[i]; if(!g) return;
   g.pct=+v||0; g.vol=Math.round((rcState.totalVol||0)*g.pct/100);
   const el=document.querySelector('#rcL_'+i+' .rc-vol'); if(el) el.value=g.vol;
-  rcPctSum(); rcAbvUpd();
+  rcPctSum(); rcAbvUpd(); rcDevUpd(i);
 }
 function rcLVol(i,v){
   const g=rcState.liquids[i]; if(!g) return;
@@ -3195,7 +3204,7 @@ function rcLVol(i,v){
     g.pct=Math.round(g.vol/rcState.totalVol*1000)/10;
     const el=document.querySelector('#rcL_'+i+' .rc-pct'); if(el) el.value=g.pct;
   }
-  rcPctSum(); rcAbvUpd();
+  rcPctSum(); rcAbvUpd(); rcDevUpd(i);
 }
 function rcPctSum(){
   const el=document.getElementById('rcPctSum'); if(!el||!rcState) return;
@@ -3209,9 +3218,42 @@ function rcAbvUpd(){
   const a=rcState.liquids.reduce((s,g)=>s+(+g.abv||0)*(+g.pct||0)/100,0);
   el.textContent=(Math.round(a*10)/10)+'%';
 }
+function rcDeviated(g){ return g.origPct!=null && Math.abs((+g.pct||0)-(+g.origPct||0))>=0.05; }
+function rcDevUpd(i){
+  const g=rcState&&rcState.liquids[i]; if(!g) return;
+  const row=document.getElementById('rcL_'+i); if(!row) return;
+  const dev=rcDeviated(g);
+  const pctEl=row.querySelector('.rc-pct'); if(pctEl) pctEl.classList.toggle('rc-dev',dev);
+  const tag=row.querySelector('.rc-devtag'); if(tag) tag.style.display=dev?'':'none';
+  const note=row.querySelector('.rc-note');
+  if(note){
+    note.classList.toggle('rc-note-need',dev&&!String(g.note||'').trim());
+    note.placeholder=dev?('⚠ 占比已改（原 '+g.origPct+'%），請填修改原因'):'備註（製法）';
+  }
+}
+function rcResetPct(){
+  if(!rcState) return;
+  let n=0;
+  rcState.liquids.forEach(g=>{
+    if(g.origPct==null) return;
+    if(rcDeviated(g)) n++;
+    g.pct=+g.origPct;
+    g.vol=Math.round((rcState.totalVol||0)*g.pct/100);
+  });
+  rcRenderBody();
+  toast(n?('已回復 '+n+' 項原料至原酒譜占比'):'占比已與原酒譜相同，未變動');
+}
 async function rcSave(){
   const st=rcState; if(!st) return;
   if(!String(st.client||'').trim()||!String(st.product||'').trim()){ toast('客戶名稱與酒款名稱必填'); return; }
+  const bad=st.liquids.map((g,i)=>({g,i})).filter(x=>rcDeviated(x.g)&&!String(x.g.note||'').trim());
+  if(bad.length){
+    toast('⚠ '+bad.length+' 項原料占比與原酒譜不同，請在該原料「備註」寫下修改原因');
+    st.liquids.forEach(function(_,i){ rcDevUpd(i); });
+    const row=document.getElementById('rcL_'+bad[0].i);
+    if(row) row.scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
   const data={ totalVol:st.totalVol, bottles:st.bottles, labelFront:st.labelFront, labelBack:st.labelBack,
     processNote:st.processNote, liquids:st.liquids, solids:st.solids, stations:st.stations };
   const res=await api({ action:'saveRunCard', id:st.id||'', orderNo:st.orderNo||'',
