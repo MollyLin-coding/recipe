@@ -2919,8 +2919,9 @@ function selectLoginUser(btn) {
 
 
 
+
 // ════════════════════════════════════════════════
-// Run Card（v2.6；v2.6.1 酒譜頁架構；v2.6.3 品名鎖定+占比變更需理由+一鍵回原比例）：製酒各站點紀錄表
+// Run Card（v2.6~v2.6.3；v2.7 卡號跟訂單走+前後標檢查勾+站點入出站計時+執行人員下拉）：製酒各站點紀錄表
 // 入口①酒譜頁「生成run card」②訂單詳情各酒款「📋 Run Card」歷史
 // 一張訂單多酒款＝每酒款一張卡；同酒款多次生產＝多張卡（歷史）
 // ════════════════════════════════════════════════
@@ -2932,7 +2933,7 @@ function rcToday(){ const d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMo
 function rcNewState(){
   return { id:'', orderNo:'', client:'', product:'', sheet:'', bottleType:'', prodDate:rcToday(),
     pm:(curUser&&curUser.username)||'', lot:'', version:'V1', status:'進行中',
-    totalVol:0, bottles:'', labelFront:'', labelBack:'', processNote:'',
+    totalVol:0, bottles:'', labelFrontOk:false, labelBackOk:false, processNote:'',
     liquids:[], solids:[],
     stations:RC_STATIONS_DEFAULT.map((n,i)=>({no:i+1,name:n,note:'',operator:'',done:false})) };
 }
@@ -2998,8 +2999,10 @@ async function rcOpenCard(id){
     id:c.id, orderNo:c.orderNo, client:c.client, product:c.product, sheet:c.sheet,
     bottleType:c.bottleType, prodDate:c.prodDate||rcToday(), pm:c.pm, lot:c.lot,
     version:c.version, status:c.status||'進行中',
-    totalVol:Number(d.totalVol)||0, bottles:d.bottles||'', labelFront:d.labelFront||'',
-    labelBack:d.labelBack||'', processNote:d.processNote||'',
+    totalVol:Number(d.totalVol)||0, bottles:d.bottles||'',
+    labelFrontOk:(d.labelFrontOk!=null)?!!d.labelFrontOk:!!String(d.labelFront||'').trim(),
+    labelBackOk:(d.labelBackOk!=null)?!!d.labelBackOk:!!String(d.labelBack||'').trim(),
+    processNote:d.processNote||'',
     liquids:Array.isArray(d.liquids)?d.liquids:[], solids:Array.isArray(d.solids)?d.solids:[] });
   if(Array.isArray(d.stations)&&d.stations.length) st.stations=d.stations;
   rcOpenEditor(st);
@@ -3104,7 +3107,6 @@ function rcRenderBody(){
         <input type="text" class="rc-name${g.locked?' rc-locked':''}" style="flex:1;min-width:100px;" value="${rcEsc(g.name)}" ${g.locked?'readonly title="既有原料品名鎖定；要改品名請至原料庫/酒譜"':'oninput="rcState.liquids['+i+'].name=this.value" placeholder="液體原料名稱"'}>
         ${subs.length?'<span class="cpd-badge">複合</span>':''}
         <label class="rc-chk"><input type="checkbox" ${g.fed?'checked':''} onchange="rcState.liquids[${i}].fed=this.checked;document.getElementById('rcL_${i}').classList.toggle('fed',this.checked)">已投入</label>
-        <label class="rc-chk"><input type="checkbox" ${g.ordered?'checked':''} onchange="rcState.liquids[${i}].ordered=this.checked">已叫料</label>
         <button class="del-btn" style="font-size:13px;" onclick="rcState.liquids.splice(${i},1);rcRenderBody()">🗑</button>
       </div>
       <div class="ing-r2">
@@ -3131,15 +3133,29 @@ function rcRenderBody(){
       <button class="del-btn" style="font-size:13px;" onclick="rcState.solids.splice(${i},1);rcRenderBody()">🗑</button>
       <input type="text" style="flex:1 1 100%;" value="${rcEsc(g.note||'')}" oninput="rcState.solids[${i}].note=this.value" placeholder="備註（製法）">
     </div>`).join('');
-  const sta=st.stations.map((s,i)=>`
+  const opNames=rcOperators();
+  const sta=st.stations.map((s,i)=>{
+    if(!s.operator) s.operator=(curUser&&curUser.username)||'';
+    const opList=[''].concat(opNames.slice());
+    if(s.operator&&opList.indexOf(s.operator)<0) opList.push(s.operator);
+    const opOpts=opList.map(n=>`<option value="${rcEsc(n)}"${n===s.operator?' selected':''}>${n||'—執行人員—'}</option>`).join('');
+    return `
     <div class="rc-station${s.done?' fed':''}" id="rcT_${i}">
-      <span class="rc-sno">${i+1}</span>
-      <input type="text" style="width:96px;" value="${rcEsc(s.name)}" oninput="rcState.stations[${i}].name=this.value" placeholder="站點">
-      <input type="text" style="flex:1;min-width:90px;" value="${rcEsc(s.note||'')}" oninput="rcState.stations[${i}].note=this.value" placeholder="備註">
-      <input type="text" style="width:76px;" value="${rcEsc(s.operator||'')}" oninput="rcState.stations[${i}].operator=this.value" placeholder="執行人員">
-      <label class="rc-chk"><input type="checkbox" ${s.done?'checked':''} onchange="rcState.stations[${i}].done=this.checked;document.getElementById('rcT_${i}').classList.toggle('fed',this.checked)">完成</label>
-      <button class="del-btn" style="font-size:13px;" onclick="rcState.stations.splice(${i},1);rcRenderBody()">🗑</button>
-    </div>`).join('');
+      <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;width:100%;">
+        <span class="rc-sno">${i+1}</span>
+        <input type="text" style="width:96px;" value="${rcEsc(s.name)}" oninput="rcState.stations[${i}].name=this.value" placeholder="站點">
+        <select style="width:112px;padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--ink1);" onchange="rcState.stations[${i}].operator=this.value">${opOpts}</select>
+        <label class="rc-chk"><input type="checkbox" ${s.done?'checked':''} onchange="rcState.stations[${i}].done=this.checked;document.getElementById('rcT_${i}').classList.toggle('fed',this.checked)">完成</label>
+        <button class="del-btn" style="font-size:13px;" onclick="rcState.stations.splice(${i},1);rcRenderBody()">🗑</button>
+      </div>
+      <textarea class="rc-snote" rows="1" style="width:100%;margin-top:4px;padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--ink1);resize:none;overflow:hidden;line-height:1.5;" oninput="rcState.stations[${i}].note=this.value;this.style.height='auto';this.style.height=this.scrollHeight+'px';" placeholder="備註（可多行，自動展開）">${rcEsc(s.note||'')}</textarea>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;width:100%;margin-top:4px;font-size:11px;color:var(--ink3);">
+        <button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="rcStamp(${i},'inAt')">⏱ 記錄入站時間</button><span id="rcIn_${i}">${s.inAt||'—'}</span>
+        <span style="color:var(--border);">｜</span>
+        <button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="rcStamp(${i},'outAt')">⏱ 記錄出站時間</button><span id="rcOut_${i}">${s.outAt||'—'}</span>
+        <span id="rcDur_${i}" style="font-weight:600;color:var(--gold-dk);">${rcDurTxt(s)}</span>
+      </div>
+    </div>`; }).join('');
   b.innerHTML=`
     <div class="rc-grid">
       <div class="fg"><label>客戶名稱</label><input class="inp" value="${rcEsc(st.client)}" oninput="rcState.client=this.value" style="margin:0;"></div>
@@ -3148,13 +3164,13 @@ function rcRenderBody(){
       <div class="fg"><label>生產日期</label><input class="inp" type="date" value="${st.prodDate}" oninput="rcState.prodDate=this.value" style="margin:0;"></div>
       <div class="fg"><label>產品PM</label><input class="inp" value="${rcEsc(st.pm)}" oninput="rcState.pm=this.value" style="margin:0;"></div>
       <div class="fg"><label>Lot批號</label><input class="inp" value="${rcEsc(st.lot)}" oninput="rcState.lot=this.value" style="margin:0;"></div>
-      <div class="fg"><label>版本</label><input class="inp" value="${rcEsc(st.version)}" oninput="rcState.version=this.value" style="margin:0;"></div>
+      <div class="fg"><label>Run Card 編號（系統自動生成）</label><input class="inp" value="${rcEsc(st.id||'（儲存後自動生成）')}" readonly style="margin:0;background:var(--bg2);color:var(--ink2);"></div>
       <div class="fg"><label>狀態</label><select class="inp" oninput="rcState.status=this.value" style="margin:0;"><option${st.status==='進行中'?' selected':''}>進行中</option><option${st.status==='完成'?' selected':''}>完成</option></select></div>
-      <div class="fg"><label>酒標前標</label><input class="inp" value="${rcEsc(st.labelFront)}" oninput="rcState.labelFront=this.value" style="margin:0;"></div>
-      <div class="fg"><label>酒標後標</label><input class="inp" value="${rcEsc(st.labelBack)}" oninput="rcState.labelBack=this.value" style="margin:0;"></div>
+      <div class="fg" style="display:flex;align-items:center;"><label class="rc-chk" style="font-size:12px;color:var(--ink1);"><input type="checkbox" ${st.labelFrontOk?'checked':''} onchange="rcState.labelFrontOk=this.checked">前標數量是否充足?</label></div>
+      <div class="fg" style="display:flex;align-items:center;"><label class="rc-chk" style="font-size:12px;color:var(--ink1);"><input type="checkbox" ${st.labelBackOk?'checked':''} onchange="rcState.labelBackOk=this.checked">後標數量是否充足?</label></div>
     </div>
     ${st.orderNo?`<div style="font-size:11px;color:var(--ink3);margin-top:5px;">🔗 綁定訂單：${st.orderNo}</div>`:''}
-    <div class="fg" style="margin-top:6px;"><label>製程備註</label><textarea class="inp" rows="2" oninput="rcState.processNote=this.value" style="margin:0;width:100%;resize:vertical;">${rcEsc(st.processNote)}</textarea></div>
+    <div class="fg" style="margin-top:6px;"><label>製程特別備註欄位</label><textarea class="inp" rows="2" oninput="rcState.processNote=this.value" style="margin:0;width:100%;resize:vertical;">${rcEsc(st.processNote)}</textarea></div>
     <div class="rc-sec">🧪 液體原料</div>
     <div class="recipe-meta" style="margin:8px 0 4px;">
       <div class="rm"><div class="lb">預估酒精濃度</div><div class="vl" id="rcAbv">—</div></div>
@@ -3181,6 +3197,7 @@ function rcRenderBody(){
     <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.stations.push({no:rcState.stations.length+1,name:'',note:'',operator:'',done:false});rcRenderBody()">＋ 加站點</button>`;
   rcPctSum(); rcAbvUpd();
   st.liquids.forEach(function(_,i){ rcDevUpd(i); });
+  b.querySelectorAll('.rc-snote').forEach(function(t){ t.style.height='auto'; t.style.height=t.scrollHeight+'px'; });
 }
 // 占比 ↔ 放量互算（總體積為基準；直接改 input 值、不整段重繪避免失焦）
 function rcTv(v){
@@ -3218,6 +3235,27 @@ function rcAbvUpd(){
   const a=rcState.liquids.reduce((s,g)=>s+(+g.abv||0)*(+g.pct||0)/100,0);
   el.textContent=(Math.round(a*10)/10)+'%';
 }
+// 執行人員清單：取登入頁帳號按鈕格（與「使用者資料」同步維護），失敗用固定清單
+function rcOperators(){
+  let names=[];
+  try{ names=[].slice.call(document.querySelectorAll('#loginUserGrid .login-user-btn')).map(function(b){return b.textContent.trim();}).filter(Boolean); }catch(e){}
+  if(!names.length) names=['Lulu','Kevin','阿軒','Molly','小李','Vic','小捲','上海Jason'];
+  return names;
+}
+function rcNowMin(){ const d=new Date(); const p=n=>('0'+n).slice(-2); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+function rcDurTxt(s){
+  if(!s||!s.inAt||!s.outAt) return '';
+  const a=new Date(String(s.inAt).replace(' ','T')), b=new Date(String(s.outAt).replace(' ','T'));
+  if(isNaN(a)||isNaN(b)||b<a) return '';
+  return '停留 '+(Math.round((b-a)/360000)/10)+' 小時';
+}
+function rcStamp(i,k){
+  const s=rcState&&rcState.stations[i]; if(!s) return;
+  s[k]=rcNowMin();
+  const el=document.getElementById((k==='inAt'?'rcIn_':'rcOut_')+i); if(el) el.textContent=s[k];
+  const d=document.getElementById('rcDur_'+i); if(d) d.textContent=rcDurTxt(s);
+  toast((k==='inAt'?'已記錄入站時間 ':'已記錄出站時間 ')+s[k]);
+}
 function rcDeviated(g){ return g.origPct!=null && Math.abs((+g.pct||0)-(+g.origPct||0))>=0.05; }
 function rcDevUpd(i){
   const g=rcState&&rcState.liquids[i]; if(!g) return;
@@ -3254,7 +3292,7 @@ async function rcSave(){
     if(row) row.scrollIntoView({behavior:'smooth',block:'center'});
     return;
   }
-  const data={ totalVol:st.totalVol, bottles:st.bottles, labelFront:st.labelFront, labelBack:st.labelBack,
+  const data={ totalVol:st.totalVol, bottles:st.bottles, labelFrontOk:!!st.labelFrontOk, labelBackOk:!!st.labelBackOk,
     processNote:st.processNote, liquids:st.liquids, solids:st.solids, stations:st.stations };
   const res=await api({ action:'saveRunCard', id:st.id||'', orderNo:st.orderNo||'',
     client:String(st.client).trim(), product:String(st.product).trim(), sheet:st.sheet||'',

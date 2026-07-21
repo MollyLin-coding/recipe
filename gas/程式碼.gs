@@ -139,6 +139,7 @@ function doGet(e) {
       case 'getRunCards':            result = getRunCards(p); break;             // Run Card(v2.6)
       case 'getRunCard':             result = getRunCard(p); break;              // Run Card(v2.6)
       case 'deleteRunCard':          result = deleteRunCard(p); break;           // Run Card(v2.6, admin 限定)
+      case 'migrateOrderNos':        result = migrateOrderNos(p); break;         // 訂單編號遷移(v2.7, admin 限定, 冪等)
       case 'getSafetyLevels':        result = getSafetyLevels(); break;          // 安全水位
       case 'setSafetyLevel':         result = setSafetyLevel(p); break;          // 安全水位
       case 'getStockAlerts':         result = getStockAlerts(); break;           // 安全水位警告(登入用)
@@ -662,21 +663,63 @@ function getOrderHistory(p) {
 }
 
 function _genOrderNo(ws) {
-  const now = new Date();
-  const datePart = '' + now.getFullYear()
-    + ('0' + (now.getMonth() + 1)).slice(-2)
-    + ('0' + now.getDate()).slice(-2);
-  const prefix = 'NPW-' + datePart + '-';
+  // v2.7 編號規則（主公拍板）：「西元日期六碼-三碼流水」如 260721-001（同日依下單順序遞增）。
+  // 同時掃描舊 NPW-YYYYMMDD-NNN 格式取當日最大流水，避免遷移空窗期撞號。
+  const d6 = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyMMdd');
+  const d8 = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyyMMdd');
+  const prefix = d6 + '-';
+  const oldPrefix = 'NPW-' + d8 + '-';
   const data = ws.getDataRange().getValues();
   let maxSeq = 0;
   for (let i = 1; i < data.length; i++) {
     const no = String(data[i][0] || '');
-    if (no.indexOf(prefix) === 0) {
-      const seq = parseInt(no.slice(prefix.length), 10);
-      if (seq > maxSeq) maxSeq = seq;
-    }
+    let seq = 0;
+    if (no.indexOf(prefix) === 0) seq = parseInt(no.slice(prefix.length), 10) || 0;
+    else if (no.indexOf(oldPrefix) === 0) seq = parseInt(no.slice(oldPrefix.length), 10) || 0;
+    if (seq > maxSeq) maxSeq = seq;
   }
   return prefix + ('00' + (maxSeq + 1)).slice(-3);
+}
+
+// v2.7 一次性遷移（admin 限定、可重複執行=冪等）：舊 NPW-YYYYMMDD-NNN → 新 YYMMDD-NNN
+// 連動五分頁：訂單主表A／訂單異動紀錄B／成品庫存異動H(關聯訂單)／製作記錄F(關聯訂單)／RunCard B
+function migrateOrderNos(p) {
+  if (p._role !== 'admin') return { ok: false, error: '僅管理員可執行編號遷移' };
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const re = /^NPW-\d{2}(\d{6})-(\d{3})$/;
+  const conv = function (no) {
+    const m = String(no == null ? '' : no).trim().match(re);
+    return m ? (m[1] + '-' + m[2]) : null;
+  };
+  const targets = [
+    { sheet: '訂單主表', col: 0 },
+    { sheet: '訂單異動紀錄', col: 1 },
+    { sheet: '成品庫存異動', col: 7 },
+    { sheet: '製作記錄', col: 5 },
+    { sheet: 'RunCard', col: 1 }
+  ];
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const changed = {}; const mapping = [];
+    targets.forEach(function (t) {
+      const ws = ss.getSheetByName(t.sheet);
+      if (!ws || ws.getLastRow() < 2) { changed[t.sheet] = 0; return; }
+      const rng = ws.getRange(2, t.col + 1, ws.getLastRow() - 1, 1);
+      const vals = rng.getValues();
+      let n = 0;
+      for (let i = 0; i < vals.length; i++) {
+        const nv = conv(vals[i][0]);
+        if (nv) {
+          if (t.sheet === '訂單主表') mapping.push(String(vals[i][0]).trim() + ' → ' + nv);
+          vals[i][0] = nv; n++;
+        }
+      }
+      if (n) rng.setValues(vals);
+      changed[t.sheet] = n;
+    });
+    return { ok: true, changed: changed, mapping: mapping };
+  } finally { lock.releaseLock(); }
 }
 
 // 前台送單
@@ -2203,19 +2246,32 @@ function _runcardSheet_() {
   }
   return ws;
 }
-function _genRunCardNo_(ws) {
-  const datePart = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyyMMdd');
-  const prefix = 'RC-' + datePart + '-';
+function _genRunCardNo_(ws, orderNo) {
   const data = ws.getDataRange().getValues();
-  let maxSeq = 0;
+  // v2.7：綁訂單的卡＝「訂單編號-01」流水（跟著訂單走）；未綁訂單維持 RC-YYYYMMDD-NNN
+  if (orderNo) {
+    const prefix = String(orderNo).trim() + '-';
+    let maxSeq = 0;
+    for (let i = 1; i < data.length; i++) {
+      const no = String(data[i][0] || '');
+      if (no.indexOf(prefix) === 0) {
+        const seq = parseInt(no.slice(prefix.length), 10) || 0;
+        if (seq > maxSeq) maxSeq = seq;
+      }
+    }
+    return prefix + ('0' + (maxSeq + 1)).slice(-2);
+  }
+  const datePart = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyyMMdd');
+  const prefix2 = 'RC-' + datePart + '-';
+  let maxSeq2 = 0;
   for (let i = 1; i < data.length; i++) {
     const no = String(data[i][0] || '');
-    if (no.indexOf(prefix) === 0) {
-      const seq = parseInt(no.slice(prefix.length), 10);
-      if (seq > maxSeq) maxSeq = seq;
+    if (no.indexOf(prefix2) === 0) {
+      const seq = parseInt(no.slice(prefix2.length), 10);
+      if (seq > maxSeq2) maxSeq2 = seq;
     }
   }
-  return prefix + ('00' + (maxSeq + 1)).slice(-3);
+  return prefix2 + ('00' + (maxSeq2 + 1)).slice(-3);
 }
 function _runcardRowToObj_(r) {
   let data = {};
@@ -2259,7 +2315,7 @@ function saveRunCard(p) {
       }
       return { ok: false, error: '找不到 Run Card：' + p.id };
     }
-    const id = _genRunCardNo_(ws);
+    const id = _genRunCardNo_(ws, p.orderNo);
     ws.appendRow([id, String(p.orderNo || ''), String(p.client), String(p.product),
       String(p.sheet || ''), String(p.bottleType || ''), String(p.prodDate || ''),
       String(p.pm || ''), String(p.lot || ''), String(p.version || ''),
