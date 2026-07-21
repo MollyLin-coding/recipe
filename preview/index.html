@@ -675,7 +675,7 @@ function renderRecipePage(mc) {
     <div class="form-row">
       <div class="fg fld-client" style="flex:0 0 150px"><label>客戶</label><select id="selClient" onchange="onClientChange()">${cOpts}</select></div>
       <div class="fg"><label>酒款</label><select id="selRecipe" onchange="loadRecipe()"></select></div>
-      ${isFbViewer() ? '' : `<div class="fg" style="flex:0 0 auto;display:flex;align-items:flex-end;"><button class="btn btn-primary btn-sm" style="white-space:nowrap;" onclick="rcOpenFromRecipe()">📋 生成run card</button></div>`}
+      ${isFbViewer() ? '' : `<div class="fg" style="flex:0 0 auto;"><label>&nbsp;</label><button class="btn btn-primary btn-sm" style="white-space:nowrap;" onclick="rcOpenFromRecipe()">📋 生成run card</button></div>`}
     </div>
     <div id="recipeArea"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">請選擇酒款</div></div>
   </div>`;
@@ -3230,8 +3230,8 @@ function rcRenderBody(){
       <div class="fg"><label>瓶型</label><select class="inp" onchange="rcState.bottleType=this.value" style="margin:0;">${(function(){ const bl=[''].concat(orderBottleList()); if(st.bottleType&&bl.indexOf(st.bottleType)<0) bl.push(st.bottleType); return bl.map(b=>`<option value="${rcEsc(b)}"${b===st.bottleType?' selected':''}>${b||'—選擇瓶型—'}</option>`).join(''); })()}</select></div>
       <div class="fg"><label>生產日期</label><input class="inp" type="date" value="${st.prodDate}" oninput="rcState.prodDate=this.value" style="margin:0;"></div>
       <div class="fg"><label>產品PM</label><input class="inp" value="${rcEsc(st.pm)}" oninput="rcState.pm=this.value" style="margin:0;"></div>
-      <div class="fg"><label>Lot批號</label><input class="inp" value="${rcEsc(st.lot)}" oninput="rcState.lot=this.value" style="margin:0;"></div>
-      <div class="fg"><label>Run Card 編號（系統自動生成）</label><input class="inp" value="${rcEsc(st.id||'（儲存後自動生成）')}" readonly style="margin:0;background:var(--bg2);color:var(--ink2);"></div>
+      <div class="fg"><label>Lot批號（由訂單資料帶入）</label><input class="inp" value="${rcEsc(st.lot)}" oninput="rcState.lot=this.value" style="margin:0;"></div>
+      <div class="fg"><label>Run Card 編號（系統生成）</label><input class="inp" value="${rcEsc(st.id||'（儲存後自動生成）')}" readonly style="margin:0;background:var(--bg2);color:var(--ink2);"></div>
       <div class="fg"><label>狀態</label><select class="inp" oninput="rcState.status=this.value" style="margin:0;"><option${st.status==='進行中'?' selected':''}>進行中</option><option${st.status==='完成'?' selected':''}>完成</option></select></div>
       <div class="fg" style="display:flex;align-items:center;"><label class="rc-chk" style="font-size:12px;color:var(--ink1);"><input type="checkbox" ${st.labelFrontOk?'checked':''} onchange="rcState.labelFrontOk=this.checked">前標數量是否充足?</label></div>
       <div class="fg" style="display:flex;align-items:center;"><label class="rc-chk" style="font-size:12px;color:var(--ink1);"><input type="checkbox" ${st.labelBackOk?'checked':''} onchange="rcState.labelBackOk=this.checked">後標數量是否充足?</label></div>
