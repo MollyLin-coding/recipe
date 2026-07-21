@@ -260,6 +260,20 @@ tbody tr:hover td{background:#faf3e8;}
 .login-user-btn:active{transform:scale(.98);}
 .login-user-btn.sel{background:var(--gold-lt);border-color:var(--gold-dk);color:var(--gold-dk);}
 .login-user-label{text-align:center;font-size:14px;font-weight:600;color:var(--ink2);margin:2px 0 10px;}
+/* ── Run Card（v2.6）── */
+.rc-sec{margin-top:12px;font-size:13px;font-weight:700;color:var(--gold-dk);border-bottom:1px solid var(--border);padding-bottom:3px;}
+.rc-row{display:flex;gap:5px;align-items:center;padding:6px;border:1px solid var(--border);border-radius:8px;margin-top:5px;flex-wrap:wrap;transition:.2s;}
+.rc-row.fed{opacity:.5;background:var(--bg2);}
+.rc-row .rc-name{flex:1 1 130px;min-width:110px;}
+.rc-row input[type=number],.rc-row input[type=text]{padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--ink1);}
+.rc-num{width:58px;text-align:right;}
+.rc-chk{display:flex;align-items:center;gap:3px;font-size:11px;color:var(--ink3);white-space:nowrap;cursor:pointer;}
+.rc-chk input{width:17px;height:17px;accent-color:var(--gold-dk);}
+.rc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin-top:6px;}
+.rc-grid .fg{margin:0;}
+.rc-station{display:flex;gap:5px;align-items:center;padding:5px 6px;border:1px solid var(--border);border-radius:8px;margin-top:4px;flex-wrap:wrap;transition:.2s;}
+.rc-station.fed{opacity:.5;background:var(--bg2);}
+.rc-sno{flex:0 0 20px;font-weight:700;color:var(--gold-dk);text-align:center;}
 </style>
 </head>
 <body>
@@ -305,11 +319,11 @@ tbody tr:hover td{background:#faf3e8;}
   </div>
   <div id="mainContent"></div>
   <div id="navbar">
-    <div class="nav-tab active" data-tab="recipe"    onclick="switchTab('recipe')">   <span class="ni">📋</span><span>酒譜</span></div>
+    <div class="nav-tab active" data-tab="recipe"    onclick="switchTab('recipe')">   <span class="ni">📋</span><span>酒譜/run card</span></div>
     <div class="nav-tab"        data-tab="profit"    onclick="switchTab('profit')">   <span class="ni">📊</span><span>毛利分析</span></div>
     <div class="nav-tab"        data-tab="inventory" onclick="switchTab('inventory')"><span class="ni">🧪</span><span>原料/資材庫</span></div>
     <div class="nav-tab"        data-tab="rd"        onclick="switchTab('rd')">       <span class="ni">🔬</span><span>研發試算</span></div>
-    <div class="nav-tab"        data-tab="batch"     onclick="switchTab('batch')">    <span class="ni">📦</span><span>訂單/run card</span></div>
+    <div class="nav-tab"        data-tab="batch"     onclick="switchTab('batch')">    <span class="ni">📦</span><span>訂單</span></div>
     <div class="nav-tab"        data-tab="stock"     onclick="switchTab('stock')">    <span class="ni">🗄️</span><span>成品庫存</span></div>
     <div class="nav-tab admin-only" data-tab="apply" onclick="switchTab('apply')">   <span class="ni">✏️</span><span>審核</span></div>
   </div>
@@ -335,7 +349,7 @@ tbody tr:hover td{background:#faf3e8;}
 // 預覽環境：後端指向「測試部署 /exec」（沙盒資料），與正式站完全隔離。
 // promote.sh 升正式時會把此行 sed 換回正式 /exec，下方橫幅條件即自動失效（不出現在正式站）。
 const API='https://script.google.com/macros/s/AKfycbxfztod7KrsKBHW_5XZLrAhFEdw3qoNmaId6-TbsW8TM9w3mz3MlaZhq7t6I7ytkfOctw/exec';
-if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5N4uT9RBaqAHiqWBPseCrSvKV3QnC9NK9S2MGnHQvJg/exec') {
+if (API !== 'https://script.google.com/macros/s/AKfycbxfztod7KrsKBHW_5XZLrAhFEdw3qoNmaId6-TbsW8TM9w3mz3MlaZhq7t6I7ytkfOctw/exec') {
   window.addEventListener('DOMContentLoaded', function () {
     var b = document.createElement('div');
     b.textContent = '🧪 預覽／測試環境（沙盒資料，非正式站）';
@@ -617,6 +631,7 @@ function renderRecipePage(mc) {
     <div class="form-row">
       <div class="fg fld-client" style="flex:0 0 150px"><label>客戶</label><select id="selClient" onchange="onClientChange()">${cOpts}</select></div>
       <div class="fg"><label>酒款</label><select id="selRecipe" onchange="loadRecipe()"></select></div>
+      ${isFbViewer() ? '' : `<div class="fg" style="flex:0 0 auto;display:flex;align-items:flex-end;"><button class="btn btn-primary btn-sm" style="white-space:nowrap;" onclick="rcOpenFromRecipe()">📋 生成run card</button></div>`}
     </div>
     <div id="recipeArea"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">請選擇酒款</div></div>
   </div>`;
@@ -2278,6 +2293,7 @@ function showOrderDetail(orderNo) {
       <span style="color:var(--gold-dk);font-weight:700;">${i + 1}.</span>
       <span style="flex:1;">${it.product || '（未綁酒譜）'} · ${it.volume || ''} × ${it.qty} 瓶${it.bottleType ? (' · ' + it.bottleType) : ''}</span>
       <span class="badge ${it.status === '完成' ? 'bg-green' : 'bg-yellow'}" style="font-size:9px;">${it.status || '待製作'}</span>
+      <button class="btn btn-ghost btn-sm" style="padding:3px 7px;font-size:11px;" onclick="rcShowHistory(${idx},${i})">📋 Run Card</button>
       ${canAct && it.status !== '完成' && it.sheet ? `<button class="btn btn-success btn-sm" style="padding:3px 7px;font-size:11px;" onclick="this.closest('.modal-bg').remove();showCompleteModal(${idx},${i})">完成回報</button>` : ''}
     </div>`).join('');
   const row = (k, val) => `<div style="display:flex;gap:8px;font-size:12px;margin-top:3px;"><span style="flex:0 0 92px;color:var(--ink3);">${k}</span><span style="flex:1;">${val}</span></div>`;
@@ -2886,9 +2902,281 @@ function selectLoginUser(btn) {
   document.getElementById('loginErr').textContent = '';
   setTimeout(() => document.getElementById('loginPass').focus(), 50);
 }
+
+// ════════════════════════════════════════════════
+// Run Card（v2.6）：製酒各站點紀錄表
+// 入口①酒譜頁「生成run card」②訂單詳情各酒款「📋 Run Card」歷史
+// 一張訂單多酒款＝每酒款一張卡；同酒款多次生產＝多張卡（歷史）
+// ════════════════════════════════════════════════
+const RC_STATIONS_DEFAULT = ['調和','反光目檢','填充','3抽1目檢','鎖瓶','背光目檢','巴殺','貼標','防漏測試','裝箱'];
+let rcState = null;
+
+function rcEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+function rcToday(){ const d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+function rcNewState(){
+  return { id:'', orderNo:'', client:'', product:'', sheet:'', bottleType:'', prodDate:rcToday(),
+    pm:(curUser&&curUser.username)||'', lot:'', version:'V1', status:'進行中',
+    totalVol:0, bottles:'', labelFront:'', labelBack:'', processNote:'',
+    liquids:[], solids:[],
+    stations:RC_STATIONS_DEFAULT.map((n,i)=>({no:i+1,name:n,note:'',operator:'',done:false})) };
+}
+// 複合原料子料 → 備註文字（成本欄不進 run card）
+function rcSubNote(ing){
+  if(!ing||!ing.isCompound) return '';
+  const subs=(ing.subMaterials||[]).map(s=>s.name+'×'+(s.ratio!=null?s.ratio:(s.coef!=null?s.coef:''))).join('、');
+  return (subs?('子料：'+subs):'')+(ing.hasLoss?'（÷0.8 耗損）':'');
+}
+// 入口①：酒譜頁 → 以當前酒譜配方生成新卡
+function rcOpenFromRecipe(){
+  if(!rdata){ toast('請先選擇酒款'); return; }
+  const st=rcNewState();
+  st.client=curClient; st.product=rdata._dn||rdata.recipeName||''; st.sheet=curSheet;
+  st.totalVol=Math.round(Number(rdata.totalVol)||0);
+  st.processNote=rdata.processNote||'';
+  st.liquids=(rdata.ingredients||[]).map(ing=>({
+    name:ing.name, pct:Math.round((+ing.pct||0)*10)/10, abv:+ing.abv||0,
+    vol:Math.round(+ing.vol||0), fed:false, ordered:false, note:rcSubNote(ing) }));
+  rcOpenEditor(st);
+}
+// 入口②：訂單詳情 → 該酒款 Run Card 歷史清單
+async function rcShowHistory(oi, ii){
+  const o=(window._mgmtOrders||[])[oi]; if(!o) return;
+  const it=(o.items||[])[ii]; if(!it) return;
+  const modal=makeModal(`
+    <div class="modal-title">📋 Run Card 歷史</div>
+    <div style="font-size:12px;color:var(--ink3);margin-bottom:6px;">${o.orderNo} · ${clientLabel(o.client)} · ${it.product||'（未綁酒譜）'} × ${it.qty} 瓶</div>
+    <div id="rcHistList" style="font-size:12px;">載入中…</div>
+    <div class="fe" style="margin-top:10px;gap:6px;">
+      <button class="btn btn-primary btn-sm" onclick="rcNewFromOrder(${oi},${ii})">＋ 建新 Run Card</button>
+      <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">關閉</button>
+    </div>`);
+  const res=await api({ action:'getRunCards', orderNo:o.orderNo, product:it.product||'' });
+  const area=modal.querySelector('#rcHistList'); if(!area) return;
+  if(!res.ok){ area.textContent='載入失敗：'+(res.error||''); return; }
+  const cards=res.cards||[];
+  if(!cards.length){ area.innerHTML='<div style="color:var(--ink3);padding:8px 0;">此酒款尚無 Run Card，點下方「＋ 建新 Run Card」開始。</div>'; return; }
+  area.innerHTML=cards.map(c=>`
+    <div style="display:flex;gap:6px;align-items:center;padding:6px 8px;border:1px solid var(--border);border-radius:6px;margin-top:4px;flex-wrap:wrap;">
+      <span style="flex:1;min-width:150px;"><b>${c.id}</b> · 生產日 ${c.prodDate||'—'} <span class="badge ${c.status==='完成'?'bg-green':'bg-yellow'}" style="font-size:9px;">${c.status||'進行中'}</span></span>
+      <span style="color:var(--ink3);font-size:10px;">${c.updatedAt||''}${c.updater?(' '+c.updater):''}</span>
+      <button class="btn btn-primary btn-sm" style="padding:3px 8px;font-size:11px;" onclick="rcOpenCard('${c.id}')">開啟</button>
+      ${curUser&&curUser.role==='admin'?`<button class="del-btn" style="font-size:13px;" onclick="rcDelCard('${c.id}',${oi},${ii})">🗑</button>`:''}
+    </div>`).join('');
+}
+async function rcDelCard(id, oi, ii){
+  if(!confirm('確定刪除 '+id+'？不可復原。')) return;
+  const res=await api({ action:'deleteRunCard', id });
+  if(res.ok){
+    toast('已刪除 '+id);
+    document.querySelectorAll('.modal-bg').forEach(m=>{ if(m.querySelector('#rcHistList')) m.remove(); });
+    rcShowHistory(oi, ii);
+  } else toast('刪除失敗：'+(res.error||''));
+}
+// 開啟既有卡
+async function rcOpenCard(id){
+  const res=await api({ action:'getRunCard', id });
+  if(!res.ok){ toast('載入失敗：'+(res.error||'')); return; }
+  const c=res.card, d=c.data||{}, base=rcNewState();
+  const st=Object.assign(base,{
+    id:c.id, orderNo:c.orderNo, client:c.client, product:c.product, sheet:c.sheet,
+    bottleType:c.bottleType, prodDate:c.prodDate||rcToday(), pm:c.pm, lot:c.lot,
+    version:c.version, status:c.status||'進行中',
+    totalVol:Number(d.totalVol)||0, bottles:d.bottles||'', labelFront:d.labelFront||'',
+    labelBack:d.labelBack||'', processNote:d.processNote||'',
+    liquids:Array.isArray(d.liquids)?d.liquids:[], solids:Array.isArray(d.solids)?d.solids:[] });
+  if(Array.isArray(d.stations)&&d.stations.length) st.stations=d.stations;
+  rcOpenEditor(st);
+}
+// 由訂單酒款帶入（配方走 getRecipeForProduction：成本已剝除、整單放量）
+async function rcFillFromOrderItem(st, o, it){
+  st.orderNo=o.orderNo; st.client=o.client; st.product=it.product||''; st.sheet=it.sheet||'';
+  st.bottleType=it.bottleType||''; st.pm=o.pm||st.pm; st.lot=o.lot||''; st.bottles=it.qty||'';
+  if(!it.sheet){ toast('此酒款未綁酒譜，原料請手動填'); return st; }
+  const res=await api({ action:'getRecipeForProduction', client:(it.srcClient||o.client), sheet:it.sheet, volume:it.volume||'', qty:it.qty||0 });
+  if(res.ok){
+    st.totalVol=Math.round(res.orderTotalMl||0);
+    st.processNote=res.processNote||'';
+    st.liquids=(res.ingredients||[]).map(g=>({
+      name:g.name, pct:st.totalVol>0?Math.round((+g.orderVol||0)/st.totalVol*1000)/10:0,
+      abv:+g.abv||0, vol:Math.round(+g.orderVol||0), fed:false, ordered:false, note:rcSubNote(g) }));
+  } else toast('酒譜帶入失敗：'+(res.error||'')+'，請手動填原料');
+  return st;
+}
+async function rcNewFromOrder(oi, ii){
+  const o=(window._mgmtOrders||[])[oi]; if(!o) return;
+  const it=(o.items||[])[ii]; if(!it) return;
+  const st=await rcFillFromOrderItem(rcNewState(), o, it);
+  rcOpenEditor(st);
+}
+// ── 編輯 Run Card 頁面（鎖定式 modal，只能按鈕關）──
+function rcOpenEditor(st){
+  rcState=st;
+  const modal=makeModal(`
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
+      <div class="modal-title" id="rcTitle" style="margin:0;">📋 ${st.id?('編輯 Run Card '+st.id):'編輯 Run Card（新卡）'}</div>
+      <div style="display:flex;gap:6px;flex:0 0 auto;">
+        <button class="btn btn-primary btn-sm" id="rc_save_top">💾 儲存</button>
+        <button class="btn btn-ghost btn-sm" onclick="rcCloseEditor(this)">✖ 關閉</button>
+      </div>
+    </div>
+    <div class="fg" style="margin-bottom:6px;">
+      <label>請先選擇訂單編號或客戶名稱（自動帶入既有訂單基本資料，選填）</label>
+      <select id="rc_orderSel" onchange="rcPrefillFromOrderSel()"><option value="">— 不綁訂單／手動填寫 —</option></select>
+    </div>
+    <div id="rcBody"></div>
+    <div class="fe" style="margin-top:10px;gap:6px;">
+      <button class="btn btn-ghost btn-sm" onclick="rcCloseEditor(this)">關閉</button>
+      <button class="btn btn-primary btn-sm" id="rc_save">💾 儲存</button>
+    </div>`, { locked:true });
+  const bind=id=>{ const b=modal.querySelector(id); if(b) b.onclick=()=>lockRun(b, rcSave); };
+  bind('#rc_save'); bind('#rc_save_top');
+  rcRenderBody();
+  rcLoadOrderOptions();
+}
+function rcCloseEditor(btn){
+  if(!confirm('關閉 Run Card？未儲存的變更會遺失。')) return;
+  btn.closest('.modal-bg').remove(); rcState=null;
+}
+// 訂單下拉（bartender 視角：無金額、只列未完成單）
+async function rcLoadOrderOptions(){
+  const sel=document.getElementById('rc_orderSel'); if(!sel) return;
+  const res=await api({ action:'getOrders', view:'bartender' }, true);
+  if(!res||!res.ok) return;
+  window._rcOrders=res.orders||[];
+  const opts=[];
+  window._rcOrders.forEach((o,oi)=>{ (o.items||[]).forEach((it,ii)=>{
+    opts.push(`<option value="${oi}:${ii}">${o.orderNo}｜${clientLabel(o.client)}｜${it.product||'（未綁酒譜）'}×${it.qty}</option>`);
+  }); });
+  sel.innerHTML='<option value="">— 不綁訂單／手動填寫 —</option>'+opts.join('');
+  if(rcState&&rcState.orderNo){
+    const oi=window._rcOrders.findIndex(o=>o.orderNo===rcState.orderNo);
+    if(oi>=0){
+      const ii=(window._rcOrders[oi].items||[]).findIndex(it=>(it.product||'')===rcState.product);
+      if(ii>=0) sel.value=oi+':'+ii;
+    }
+  }
+}
+async function rcPrefillFromOrderSel(){
+  const sel=document.getElementById('rc_orderSel');
+  const v=sel&&sel.value; if(!v) return;
+  const parts=v.split(':'), oi=+parts[0], ii=+parts[1];
+  const o=(window._rcOrders||[])[oi]; if(!o) return;
+  const it=(o.items||[])[ii]; if(!it) return;
+  const keepId=rcState?rcState.id:'';
+  const st=await rcFillFromOrderItem(rcNewState(), o, it);
+  st.id=keepId;
+  rcState=st; rcRenderBody();
+  toast('已帶入 '+o.orderNo+'／'+(it.product||'')+' 基本資料');
+}
+function rcRenderBody(){
+  const b=document.getElementById('rcBody'); if(!b||!rcState) return;
+  const st=rcState;
+  const liq=st.liquids.map((g,i)=>`
+    <div class="rc-row${g.fed?' fed':''}" id="rcL_${i}">
+      <input type="text" class="rc-name" value="${rcEsc(g.name)}" oninput="rcState.liquids[${i}].name=this.value" placeholder="液體原料名稱">
+      <label style="font-size:10px;color:var(--ink3);">占比</label><input type="number" class="rc-num rc-pct" value="${g.pct}" step="0.1" min="0" oninput="rcLPct(${i},this.value)"><span style="font-size:10px;">%</span>
+      <label style="font-size:10px;color:var(--ink3);">ABV</label><input type="number" class="rc-num" style="width:48px;" value="${g.abv}" step="0.1" min="0" oninput="rcState.liquids[${i}].abv=+this.value||0"><span style="font-size:10px;">%</span>
+      <label style="font-size:10px;color:var(--ink3);">放量</label><input type="number" class="rc-num rc-vol" style="width:72px;" value="${g.vol}" step="1" min="0" oninput="rcLVol(${i},this.value)"><span style="font-size:10px;">ml</span>
+      <label class="rc-chk"><input type="checkbox" ${g.fed?'checked':''} onchange="rcState.liquids[${i}].fed=this.checked;document.getElementById('rcL_${i}').classList.toggle('fed',this.checked)">已投入</label>
+      <label class="rc-chk"><input type="checkbox" ${g.ordered?'checked':''} onchange="rcState.liquids[${i}].ordered=this.checked">已叫料</label>
+      <button class="del-btn" style="font-size:13px;" onclick="rcState.liquids.splice(${i},1);rcRenderBody()">🗑</button>
+      <input type="text" style="flex:1 1 100%;" value="${rcEsc(g.note||'')}" oninput="rcState.liquids[${i}].note=this.value" placeholder="備註（製法／子料）">
+    </div>`).join('');
+  const sol=st.solids.map((g,i)=>`
+    <div class="rc-row${g.fed?' fed':''}" id="rcS_${i}">
+      <input type="text" class="rc-name" value="${rcEsc(g.name)}" oninput="rcState.solids[${i}].name=this.value" placeholder="固體原料名稱">
+      <label style="font-size:10px;color:var(--ink3);">比例</label><input type="text" style="width:80px;" value="${rcEsc(g.ratio||'')}" oninput="rcState.solids[${i}].ratio=this.value" placeholder="如 1:1000">
+      <label class="rc-chk"><input type="checkbox" ${g.fed?'checked':''} onchange="rcState.solids[${i}].fed=this.checked;document.getElementById('rcS_${i}').classList.toggle('fed',this.checked)">已投入</label>
+      <button class="del-btn" style="font-size:13px;" onclick="rcState.solids.splice(${i},1);rcRenderBody()">🗑</button>
+      <input type="text" style="flex:1 1 100%;" value="${rcEsc(g.note||'')}" oninput="rcState.solids[${i}].note=this.value" placeholder="備註（製法）">
+    </div>`).join('');
+  const sta=st.stations.map((s,i)=>`
+    <div class="rc-station${s.done?' fed':''}" id="rcT_${i}">
+      <span class="rc-sno">${i+1}</span>
+      <input type="text" style="width:96px;" value="${rcEsc(s.name)}" oninput="rcState.stations[${i}].name=this.value" placeholder="站點">
+      <input type="text" style="flex:1;min-width:90px;" value="${rcEsc(s.note||'')}" oninput="rcState.stations[${i}].note=this.value" placeholder="備註">
+      <input type="text" style="width:76px;" value="${rcEsc(s.operator||'')}" oninput="rcState.stations[${i}].operator=this.value" placeholder="執行人員">
+      <label class="rc-chk"><input type="checkbox" ${s.done?'checked':''} onchange="rcState.stations[${i}].done=this.checked;document.getElementById('rcT_${i}').classList.toggle('fed',this.checked)">完成</label>
+      <button class="del-btn" style="font-size:13px;" onclick="rcState.stations.splice(${i},1);rcRenderBody()">🗑</button>
+    </div>`).join('');
+  b.innerHTML=`
+    <div class="rc-grid">
+      <div class="fg"><label>客戶名稱</label><input class="inp" value="${rcEsc(st.client)}" oninput="rcState.client=this.value" style="margin:0;"></div>
+      <div class="fg"><label>酒款名稱</label><input class="inp" value="${rcEsc(st.product)}" oninput="rcState.product=this.value" style="margin:0;"></div>
+      <div class="fg"><label>瓶型</label><input class="inp" value="${rcEsc(st.bottleType)}" oninput="rcState.bottleType=this.value" style="margin:0;"></div>
+      <div class="fg"><label>生產日期</label><input class="inp" type="date" value="${st.prodDate}" oninput="rcState.prodDate=this.value" style="margin:0;"></div>
+      <div class="fg"><label>產品PM</label><input class="inp" value="${rcEsc(st.pm)}" oninput="rcState.pm=this.value" style="margin:0;"></div>
+      <div class="fg"><label>Lot批號</label><input class="inp" value="${rcEsc(st.lot)}" oninput="rcState.lot=this.value" style="margin:0;"></div>
+      <div class="fg"><label>版本</label><input class="inp" value="${rcEsc(st.version)}" oninput="rcState.version=this.value" style="margin:0;"></div>
+      <div class="fg"><label>狀態</label><select class="inp" oninput="rcState.status=this.value" style="margin:0;"><option${st.status==='進行中'?' selected':''}>進行中</option><option${st.status==='完成'?' selected':''}>完成</option></select></div>
+      <div class="fg"><label>酒標前標</label><input class="inp" value="${rcEsc(st.labelFront)}" oninput="rcState.labelFront=this.value" style="margin:0;"></div>
+      <div class="fg"><label>酒標後標</label><input class="inp" value="${rcEsc(st.labelBack)}" oninput="rcState.labelBack=this.value" style="margin:0;"></div>
+    </div>
+    ${st.orderNo?`<div style="font-size:11px;color:var(--ink3);margin-top:5px;">🔗 綁定訂單：${st.orderNo}</div>`:''}
+    <div class="fg" style="margin-top:6px;"><label>製程備註</label><textarea class="inp" rows="2" oninput="rcState.processNote=this.value" style="margin:0;width:100%;resize:vertical;">${rcEsc(st.processNote)}</textarea></div>
+    <div class="rc-sec">🧪 液體原料</div>
+    <div style="display:flex;gap:12px;align-items:center;margin-top:6px;font-size:12px;flex-wrap:wrap;">
+      <label>本批總液體體積 <input type="number" class="rc-num" style="width:88px;" value="${st.totalVol}" min="0" step="100" oninput="rcTv(this.value)"> ml</label>
+      <label>瓶數 <input type="number" class="rc-num" style="width:64px;" value="${st.bottles}" min="0" oninput="rcState.bottles=this.value"> 瓶</label>
+      <span id="rcPctSum" style="color:var(--ink3);"></span>
+    </div>
+    ${liq||'<div style="color:var(--ink3);font-size:12px;padding:6px 0;">尚無液體原料——可由上方選訂單帶入，或點下方新增。</div>'}
+    <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.liquids.push({name:'',pct:0,abv:0,vol:0,fed:false,ordered:false,note:''});rcRenderBody()">＋ 加液體原料</button>
+    <div class="rc-sec">🧂 固體原料</div>
+    ${sol||'<div style="color:var(--ink3);font-size:12px;padding:6px 0;">尚無固體原料。</div>'}
+    <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.solids.push({name:'',ratio:'',fed:false,note:''});rcRenderBody()">＋ 加固體原料</button>
+    <div class="rc-sec">🏭 製程站點與備註</div>
+    ${sta||'<div style="color:var(--ink3);font-size:12px;padding:6px 0;">尚無站點。</div>'}
+    <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.stations.push({no:rcState.stations.length+1,name:'',note:'',operator:'',done:false});rcRenderBody()">＋ 加站點</button>`;
+  rcPctSum();
+}
+// 占比 ↔ 放量互算（總體積為基準；直接改 input 值、不整段重繪避免失焦）
+function rcTv(v){
+  if(!rcState) return;
+  rcState.totalVol=+v||0;
+  rcState.liquids.forEach((g,i)=>{
+    g.vol=Math.round(rcState.totalVol*(+g.pct||0)/100);
+    const el=document.querySelector('#rcL_'+i+' .rc-vol'); if(el) el.value=g.vol;
+  });
+}
+function rcLPct(i,v){
+  const g=rcState.liquids[i]; if(!g) return;
+  g.pct=+v||0; g.vol=Math.round((rcState.totalVol||0)*g.pct/100);
+  const el=document.querySelector('#rcL_'+i+' .rc-vol'); if(el) el.value=g.vol;
+  rcPctSum();
+}
+function rcLVol(i,v){
+  const g=rcState.liquids[i]; if(!g) return;
+  g.vol=+v||0;
+  if(rcState.totalVol>0){
+    g.pct=Math.round(g.vol/rcState.totalVol*1000)/10;
+    const el=document.querySelector('#rcL_'+i+' .rc-pct'); if(el) el.value=g.pct;
+  }
+  rcPctSum();
+}
+function rcPctSum(){
+  const el=document.getElementById('rcPctSum'); if(!el||!rcState) return;
+  const s=rcState.liquids.reduce((a,g)=>a+(+g.pct||0),0);
+  const r=Math.round(s*10)/10;
+  el.textContent='占比合計 '+r+'%';
+  el.style.color=(rcState.liquids.length&&Math.abs(r-100)>=0.5)?'#c0392b':'var(--ink3)';
+}
+async function rcSave(){
+  const st=rcState; if(!st) return;
+  if(!String(st.client||'').trim()||!String(st.product||'').trim()){ toast('客戶名稱與酒款名稱必填'); return; }
+  const data={ totalVol:st.totalVol, bottles:st.bottles, labelFront:st.labelFront, labelBack:st.labelBack,
+    processNote:st.processNote, liquids:st.liquids, solids:st.solids, stations:st.stations };
+  const res=await api({ action:'saveRunCard', id:st.id||'', orderNo:st.orderNo||'',
+    client:String(st.client).trim(), product:String(st.product).trim(), sheet:st.sheet||'',
+    bottleType:st.bottleType||'', prodDate:st.prodDate||'', pm:st.pm||'', lot:st.lot||'',
+    version:st.version||'', status:st.status||'進行中',
+    user:(curUser&&curUser.username)||'', data:JSON.stringify(data) });
+  if(res.ok){
+    if(!st.id) st.id=res.id;
+    const t=document.getElementById('rcTitle'); if(t) t.textContent='📋 編輯 Run Card '+st.id;
+    toast('已儲存 '+st.id);
+  } else toast('儲存失敗：'+(res.error||''));
+}
 </script>
 </body>
 </html>
-
-
-

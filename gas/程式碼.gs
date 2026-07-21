@@ -135,6 +135,10 @@ function doGet(e) {
       case 'bottleOut':              result = bottleOut(p); break;               // 玻璃瓶庫存
       case 'getBottleLedger':        result = getBottleLedger(p); break;         // 玻璃瓶庫存
       case 'addBottleItem':          result = addBottleItem(p); break;           // 新增玻璃瓶品項(ledger 派生)
+      case 'saveRunCard':            result = saveRunCard(p); break;             // Run Card(v2.6)
+      case 'getRunCards':            result = getRunCards(p); break;             // Run Card(v2.6)
+      case 'getRunCard':             result = getRunCard(p); break;              // Run Card(v2.6)
+      case 'deleteRunCard':          result = deleteRunCard(p); break;           // Run Card(v2.6, admin 限定)
       case 'getSafetyLevels':        result = getSafetyLevels(); break;          // 安全水位
       case 'setSafetyLevel':         result = setSafetyLevel(p); break;          // 安全水位
       case 'getStockAlerts':         result = getStockAlerts(); break;           // 安全水位警告(登入用)
@@ -762,10 +766,12 @@ function getOrders(p) {
     if (view === 'bartender') {
       if (base.status === '已完成') continue; // 不回完成單
       base.items = items.map(function (it) {
-        return {
+        const o = {
           product: it.product, sheet: it.sheet, volume: it.volume,
           bottleType: it.bottleType, qty: it.qty, status: it.status || '待製作'
         };
+        if (it.srcClient) o.srcClient = it.srcClient; // 公版酒配方來源（Run Card 預填要用，非金額欄）
+        return o;
       });
       orders.push(base); // 刻意不含 total/balance/depositStatus(決議：調酒師不看金額)
     } else {
@@ -2165,4 +2171,152 @@ function getStockAlerts() {
     if (stock < level) alerts.push({ category: cat, client: client, item: item, stock: stock, level: level });
   });
   return { ok: true, count: alerts.length, alerts: alerts };
+}
+
+// ============================================================
+// Run Card 模組（v2.6）：製酒各站點紀錄表
+//   分頁：RunCard（於 MAIN_SHEET_ID，表頭自動建立）
+//   欄位 A卡號 B訂單編號 C客戶 D酒款 E酒譜sheet F瓶型 G生產日期 H產品PM
+//        I Lot批號 J版本 K資料JSON L狀態 M建立人 N建立時間 O更新人 P更新時間
+//   資料JSON = { totalVol, bottles, labelFront, labelBack, processNote,
+//     liquids:[{name,pct,abv,vol,fed,ordered,note}],
+//     solids:[{name,ratio,fed,note}],
+//     stations:[{no,name,note,operator,done}] }
+//   一張訂單多酒款＝每酒款一張卡；同酒款可多次生產＝多張卡（歷史）。
+// ============================================================
+const RUNCARD_SHEET_NAME = 'RunCard';
+const RUNCARD_HEADERS = ['卡號', '訂單編號', '客戶', '酒款', '酒譜sheet', '瓶型', '生產日期',
+  '產品PM', 'Lot批號', '版本', '資料JSON', '狀態', '建立人', '建立時間', '更新人', '更新時間'];
+
+function _runcardSheet_() {
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  let ws = ss.getSheetByName(RUNCARD_SHEET_NAME);
+  if (!ws) {
+    ws = ss.insertSheet(RUNCARD_SHEET_NAME);
+    ws.getRange(1, 1, 1, RUNCARD_HEADERS.length).setValues([RUNCARD_HEADERS]);
+    ws.setFrozenRows(1);
+    // Lot批號欄文字格式，防開頭 0 被吃掉
+    var mr = ws.getMaxRows() - 1;
+    if (mr > 0) ws.getRange(2, 9, mr, 1).setNumberFormat('@');
+  } else if (ws.getLastRow() === 0) {
+    ws.getRange(1, 1, 1, RUNCARD_HEADERS.length).setValues([RUNCARD_HEADERS]);
+  }
+  return ws;
+}
+function _genRunCardNo_(ws) {
+  const datePart = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyyMMdd');
+  const prefix = 'RC-' + datePart + '-';
+  const data = ws.getDataRange().getValues();
+  let maxSeq = 0;
+  for (let i = 1; i < data.length; i++) {
+    const no = String(data[i][0] || '');
+    if (no.indexOf(prefix) === 0) {
+      const seq = parseInt(no.slice(prefix.length), 10);
+      if (seq > maxSeq) maxSeq = seq;
+    }
+  }
+  return prefix + ('00' + (maxSeq + 1)).slice(-3);
+}
+function _runcardRowToObj_(r) {
+  let data = {};
+  try { data = r[10] ? JSON.parse(r[10]) : {}; } catch (e) { data = {}; }
+  return {
+    id: String(r[0]), orderNo: String(r[1] == null ? '' : r[1]),
+    client: String(r[2] == null ? '' : r[2]), product: String(r[3] == null ? '' : r[3]),
+    sheet: String(r[4] == null ? '' : r[4]), bottleType: String(r[5] == null ? '' : r[5]),
+    prodDate: _fmtDate_(r[6]), pm: String(r[7] == null ? '' : r[7]),
+    lot: String(r[8] == null ? '' : r[8]), version: String(r[9] == null ? '' : r[9]),
+    data: data, status: String(r[11] == null ? '' : r[11]),
+    creator: String(r[12] == null ? '' : r[12]), createdAt: _fmtDateTime_(r[13]),
+    updater: String(r[14] == null ? '' : r[14]), updatedAt: _fmtDateTime_(r[15])
+  };
+}
+// 儲存（id 空＝新建；有 id＝整卡覆寫更新）
+function saveRunCard(p) {
+  if (!p.client || !p.product) return { ok: false, error: '缺少 客戶 或 酒款' };
+  let dataStr = String(p.data || '{}');
+  try { JSON.parse(dataStr); } catch (e) { return { ok: false, error: 'Run Card 資料 JSON 解析失敗' }; }
+  const ws = _runcardSheet_();
+  const now = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss');
+  const user = String(p._user || p.user || '');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    if (p.id) {
+      const data = ws.getDataRange().getValues();
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]) === String(p.id)) {
+          ws.getRange(i + 1, 2, 1, 11).setValues([[
+            String(p.orderNo || ''), String(p.client), String(p.product),
+            String(p.sheet || ''), String(p.bottleType || ''), String(p.prodDate || ''),
+            String(p.pm || ''), String(p.lot || ''), String(p.version || ''),
+            dataStr, String(p.status || '進行中')
+          ]]);
+          ws.getRange(i + 1, 15, 1, 2).setValues([[user, now]]);
+          if (p.orderNo) _logOrderChange_(p.orderNo, user, 'Run Card', '更新 ' + p.id + '（' + p.product + '）');
+          return { ok: true, id: String(p.id) };
+        }
+      }
+      return { ok: false, error: '找不到 Run Card：' + p.id };
+    }
+    const id = _genRunCardNo_(ws);
+    ws.appendRow([id, String(p.orderNo || ''), String(p.client), String(p.product),
+      String(p.sheet || ''), String(p.bottleType || ''), String(p.prodDate || ''),
+      String(p.pm || ''), String(p.lot || ''), String(p.version || ''),
+      dataStr, String(p.status || '進行中'), user, now, user, now]);
+    ws.getRange(ws.getLastRow(), 9).setNumberFormat('@').setValue(String(p.lot || ''));
+    if (p.orderNo) _logOrderChange_(p.orderNo, user, 'Run Card', '建立 ' + id + '（' + p.product + '）');
+    return { ok: true, id: id };
+  } finally { lock.releaseLock(); }
+}
+// 查詢：可依 orderNo、client、product 過濾（都給就 AND），新→舊排序
+function getRunCards(p) {
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName(RUNCARD_SHEET_NAME);
+  if (!ws) return { ok: true, cards: [] };
+  const data = ws.getDataRange().getValues();
+  const cards = [];
+  for (let i = 1; i < data.length; i++) {
+    const r = data[i];
+    if (!r[0]) continue;
+    if (p && p.orderNo && String(r[1]) !== String(p.orderNo)) continue;
+    if (p && p.client && String(r[2]) !== String(p.client)) continue;
+    if (p && p.product && String(r[3]) !== String(p.product)) continue;
+    cards.push(_runcardRowToObj_(r));
+  }
+  cards.sort(function (a, b) { return a.id < b.id ? 1 : -1; });
+  return { ok: true, cards: cards };
+}
+function getRunCard(p) {
+  if (!p || !p.id) return { ok: false, error: '缺少 id' };
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName(RUNCARD_SHEET_NAME);
+  if (!ws) return { ok: false, error: '尚無 Run Card 資料' };
+  const data = ws.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(p.id)) return { ok: true, card: _runcardRowToObj_(data[i]) };
+  }
+  return { ok: false, error: '找不到 Run Card：' + p.id };
+}
+// 刪除（admin 限定；比照 deleteOrder）
+function deleteRunCard(p) {
+  if (p._role !== 'admin') return { ok: false, error: '僅管理員可刪除 Run Card' };
+  if (!p.id) return { ok: false, error: '缺少 id' };
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName(RUNCARD_SHEET_NAME);
+  if (!ws) return { ok: false, error: '尚無 Run Card 資料' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const data = ws.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(p.id)) {
+        const orderNo = String(data[i][1] || '');
+        ws.deleteRow(i + 1);
+        if (orderNo) _logOrderChange_(orderNo, p._user || '', 'Run Card', '刪除 ' + p.id);
+        return { ok: true, id: String(p.id) };
+      }
+    }
+    return { ok: false, error: '找不到 Run Card：' + p.id };
+  } finally { lock.releaseLock(); }
 }
