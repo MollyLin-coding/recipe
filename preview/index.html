@@ -389,7 +389,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v2.7.7';
+const APP_VERSION='v2.7.8';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2105,8 +2105,8 @@ function orderBottleList() { return [...Object.keys(BSPEC), '山形香水瓶', '
 const CLIENT_LABELS = { '南坡萬v.2': '南坡萬自有品牌酒' };
 const HIDDEN_CLIENTS = ['Feeling Bar Cafe', '南坡萬公版'];
 // OEM 客戶（前端補充；無後端酒譜，酒款為建單用名稱、sheet 留空）
+// v2.8：OEM-Babyface 已轉正式客戶（後端 CLIENTS 供應 5 款 BF_ 真酒譜），自此清單移除
 const EXTRA_CLIENT_RECIPES = {
-  'OEM-Babyface': ['Babyface-泰奶焙火蘭姆酒', 'Babyface-玫瑰夏多內琴酒', 'Babyface-茉莉檸檬茶琴酒'],
   'OEM-好野吧': ['好野吧-玫開二度', '好野吧-老鷹教父', '好野吧-灌籃高手', '好野吧-蝴蝶魔球'],
   'OEM-Lane72': ['茉莉香片琴酒(利口酒)', '焙火烏龍威士忌(利口酒)', '玫瑰烏龍威士忌', '桂花烏龍威士忌'],
 };
