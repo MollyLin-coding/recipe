@@ -263,7 +263,7 @@ tbody tr:hover td{background:#faf3e8;}
 /* ── Run Card（v2.6）── */
 .rc-sec{margin-top:12px;font-size:13px;font-weight:700;color:var(--gold-dk);border-bottom:1px solid var(--border);padding-bottom:3px;}
 .rc-row{display:flex;gap:5px;align-items:center;padding:6px;border:1px solid var(--border);border-radius:8px;margin-top:5px;flex-wrap:wrap;transition:.2s;}
-.rc-row.fed{opacity:.5;background:var(--bg2);}
+.rc-row.fed,.ing-row.fed{opacity:.5;background:var(--bg2);}
 .rc-row .rc-name{flex:1 1 130px;min-width:110px;}
 .rc-row input[type=number],.rc-row input[type=text]{padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--ink1);}
 .rc-num{width:58px;text-align:right;}
@@ -2903,8 +2903,9 @@ function selectLoginUser(btn) {
   setTimeout(() => document.getElementById('loginPass').focus(), 50);
 }
 
+
 // ════════════════════════════════════════════════
-// Run Card（v2.6）：製酒各站點紀錄表
+// Run Card（v2.6，v2.6.1 液體原料改酒譜頁架構）：製酒各站點紀錄表
 // 入口①酒譜頁「生成run card」②訂單詳情各酒款「📋 Run Card」歷史
 // 一張訂單多酒款＝每酒款一張卡；同酒款多次生產＝多張卡（歷史）
 // ════════════════════════════════════════════════
@@ -2920,11 +2921,10 @@ function rcNewState(){
     liquids:[], solids:[],
     stations:RC_STATIONS_DEFAULT.map((n,i)=>({no:i+1,name:n,note:'',operator:'',done:false})) };
 }
-// 複合原料子料 → 備註文字（成本欄不進 run card）
-function rcSubNote(ing){
-  if(!ing||!ing.isCompound) return '';
-  const subs=(ing.subMaterials||[]).map(s=>s.name+'×'+(s.ratio!=null?s.ratio:(s.coef!=null?s.coef:''))).join('、');
-  return (subs?('子料：'+subs):'')+(ing.hasLoss?'（÷0.8 耗損）':'');
+// 複合原料子料 → 結構化 subs（成本欄不進 run card）
+function rcSubs(ing){
+  if(!ing||!ing.isCompound) return [];
+  return (ing.subMaterials||[]).map(s=>({ name:s.name, ratio:(s.ratio!=null?s.ratio:(s.coef!=null?s.coef:'')) }));
 }
 // 入口①：酒譜頁 → 以當前酒譜配方生成新卡
 function rcOpenFromRecipe(){
@@ -2935,7 +2935,8 @@ function rcOpenFromRecipe(){
   st.processNote=rdata.processNote||'';
   st.liquids=(rdata.ingredients||[]).map(ing=>({
     name:ing.name, pct:Math.round((+ing.pct||0)*10)/10, abv:+ing.abv||0,
-    vol:Math.round(+ing.vol||0), fed:false, ordered:false, note:rcSubNote(ing) }));
+    vol:Math.round(+ing.vol||0), fed:false, ordered:false, note:'',
+    subs:rcSubs(ing), hasLoss:!!ing.hasLoss }));
   rcOpenEditor(st);
 }
 // 入口②：訂單詳情 → 該酒款 Run Card 歷史清單
@@ -2998,7 +2999,8 @@ async function rcFillFromOrderItem(st, o, it){
     st.processNote=res.processNote||'';
     st.liquids=(res.ingredients||[]).map(g=>({
       name:g.name, pct:st.totalVol>0?Math.round((+g.orderVol||0)/st.totalVol*1000)/10:0,
-      abv:+g.abv||0, vol:Math.round(+g.orderVol||0), fed:false, ordered:false, note:rcSubNote(g) }));
+      abv:+g.abv||0, vol:Math.round(+g.orderVol||0), fed:false, ordered:false, note:'',
+      subs:rcSubs(g), hasLoss:!!g.hasLoss }));
   } else toast('酒譜帶入失敗：'+(res.error||'')+'，請手動填原料');
   return st;
 }
@@ -3071,17 +3073,38 @@ async function rcPrefillFromOrderSel(){
 function rcRenderBody(){
   const b=document.getElementById('rcBody'); if(!b||!rcState) return;
   const st=rcState;
-  const liq=st.liquids.map((g,i)=>`
-    <div class="rc-row${g.fed?' fed':''}" id="rcL_${i}">
-      <input type="text" class="rc-name" value="${rcEsc(g.name)}" oninput="rcState.liquids[${i}].name=this.value" placeholder="液體原料名稱">
-      <label style="font-size:10px;color:var(--ink3);">占比</label><input type="number" class="rc-num rc-pct" value="${g.pct}" step="0.1" min="0" oninput="rcLPct(${i},this.value)"><span style="font-size:10px;">%</span>
-      <label style="font-size:10px;color:var(--ink3);">ABV</label><input type="number" class="rc-num" style="width:48px;" value="${g.abv}" step="0.1" min="0" oninput="rcState.liquids[${i}].abv=+this.value||0"><span style="font-size:10px;">%</span>
-      <label style="font-size:10px;color:var(--ink3);">放量</label><input type="number" class="rc-num rc-vol" style="width:72px;" value="${g.vol}" step="1" min="0" oninput="rcLVol(${i},this.value)"><span style="font-size:10px;">ml</span>
-      <label class="rc-chk"><input type="checkbox" ${g.fed?'checked':''} onchange="rcState.liquids[${i}].fed=this.checked;document.getElementById('rcL_${i}').classList.toggle('fed',this.checked)">已投入</label>
-      <label class="rc-chk"><input type="checkbox" ${g.ordered?'checked':''} onchange="rcState.liquids[${i}].ordered=this.checked">已叫料</label>
-      <button class="del-btn" style="font-size:13px;" onclick="rcState.liquids.splice(${i},1);rcRenderBody()">🗑</button>
-      <input type="text" style="flex:1 1 100%;" value="${rcEsc(g.note||'')}" oninput="rcState.liquids[${i}].note=this.value" placeholder="備註（製法／子料）">
-    </div>`).join('');
+  // 液體原料：酒譜頁架構（占比↔體積互算、複合子料展開、已投入反灰；成本欄一律不進 run card）
+  const liq=st.liquids.map((g,i)=>{
+    const subs=(g.subs||[]);
+    const subHtml=subs.length?`
+      <div class="cpd-expand">
+        <div class="cpd-sub-hd">複合原料子料${g.hasLoss?'　<span class="cpd-loss-tag">÷0.8 耗損</span>':''}</div>
+        ${subs.map(s=>`<div class="cpd-sub-row"><span class="cpd-sub-name">${rcEsc(s.name)}</span><span style="font-size:11px;color:var(--ink3);white-space:nowrap;">× ${rcEsc(s.ratio)}</span></div>`).join('')}
+      </div>`:'';
+    return `
+    <div class="ing-row${g.fed?' fed':''}" id="rcL_${i}">
+      <div class="ing-r1" style="gap:6px;">
+        <input type="text" class="rc-name" style="flex:1;min-width:100px;" value="${rcEsc(g.name)}" oninput="rcState.liquids[${i}].name=this.value" placeholder="液體原料名稱">
+        ${subs.length?'<span class="cpd-badge">複合</span>':''}
+        <label class="rc-chk"><input type="checkbox" ${g.fed?'checked':''} onchange="rcState.liquids[${i}].fed=this.checked;document.getElementById('rcL_${i}').classList.toggle('fed',this.checked)">已投入</label>
+        <label class="rc-chk"><input type="checkbox" ${g.ordered?'checked':''} onchange="rcState.liquids[${i}].ordered=this.checked">已叫料</label>
+        <button class="del-btn" style="font-size:13px;" onclick="rcState.liquids.splice(${i},1);rcRenderBody()">🗑</button>
+      </div>
+      <div class="ing-r2">
+        <label class="ing-lbl">占比</label>
+        <input type="number" class="ing-inp rc-pct" value="${g.pct}" min="0" step="0.1" oninput="rcLPct(${i},this.value)">
+        <span class="ing-unit">%</span>
+        <span class="ing-sep">↔</span>
+        <label class="ing-lbl">體積</label>
+        <input type="number" class="ing-inp rc-vol" style="width:76px;" value="${g.vol}" min="0" step="1" oninput="rcLVol(${i},this.value)">
+        <span class="ing-unit">ml</span>
+        <label class="ing-lbl" style="margin-left:auto;">ABV</label>
+        <input type="number" class="ing-inp" style="width:52px;" value="${g.abv}" min="0" step="0.1" oninput="rcState.liquids[${i}].abv=+this.value||0;rcAbvUpd()">
+        <span class="ing-unit">%</span>
+      </div>
+      ${subHtml}
+      <input type="text" style="width:100%;margin-top:6px;padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--ink1);" value="${rcEsc(g.note||'')}" oninput="rcState.liquids[${i}].note=this.value" placeholder="備註（製法）">
+    </div>`; }).join('');
   const sol=st.solids.map((g,i)=>`
     <div class="rc-row${g.fed?' fed':''}" id="rcS_${i}">
       <input type="text" class="rc-name" value="${rcEsc(g.name)}" oninput="rcState.solids[${i}].name=this.value" placeholder="固體原料名稱">
@@ -3115,20 +3138,29 @@ function rcRenderBody(){
     ${st.orderNo?`<div style="font-size:11px;color:var(--ink3);margin-top:5px;">🔗 綁定訂單：${st.orderNo}</div>`:''}
     <div class="fg" style="margin-top:6px;"><label>製程備註</label><textarea class="inp" rows="2" oninput="rcState.processNote=this.value" style="margin:0;width:100%;resize:vertical;">${rcEsc(st.processNote)}</textarea></div>
     <div class="rc-sec">🧪 液體原料</div>
-    <div style="display:flex;gap:12px;align-items:center;margin-top:6px;font-size:12px;flex-wrap:wrap;">
-      <label>本批總液體體積 <input type="number" class="rc-num" style="width:88px;" value="${st.totalVol}" min="0" step="100" oninput="rcTv(this.value)"> ml</label>
-      <label>瓶數 <input type="number" class="rc-num" style="width:64px;" value="${st.bottles}" min="0" oninput="rcState.bottles=this.value"> 瓶</label>
-      <span id="rcPctSum" style="color:var(--ink3);"></span>
+    <div class="recipe-meta" style="margin:8px 0 4px;">
+      <div class="rm"><div class="lb">預估酒精濃度</div><div class="vl" id="rcAbv">—</div></div>
+      <div class="rm"><div class="lb">本批總液體體積</div>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <input type="number" id="rcTvInp" value="${st.totalVol}" min="0" step="100" style="width:84px;padding:3px 6px;font-size:14px;font-weight:600;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--ink1);text-align:right;" oninput="rcTv(this.value)">
+          <span style="font-size:12px;color:var(--ink3);">ml</span>
+        </div></div>
+      <div class="rm"><div class="lb">瓶數</div>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <input type="number" value="${st.bottles}" min="0" style="width:70px;padding:3px 6px;font-size:14px;font-weight:600;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--ink1);text-align:right;" oninput="rcState.bottles=this.value">
+          <span style="font-size:12px;color:var(--ink3);">瓶</span>
+        </div></div>
+      <div class="rm"><div class="lb">占比合計</div><div class="vl" id="rcPctSum">—</div></div>
     </div>
     ${liq||'<div style="color:var(--ink3);font-size:12px;padding:6px 0;">尚無液體原料——可由上方選訂單帶入，或點下方新增。</div>'}
-    <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.liquids.push({name:'',pct:0,abv:0,vol:0,fed:false,ordered:false,note:''});rcRenderBody()">＋ 加液體原料</button>
+    <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.liquids.push({name:'',pct:0,abv:0,vol:0,fed:false,ordered:false,note:'',subs:[]});rcRenderBody()">＋ 加液體原料</button>
     <div class="rc-sec">🧂 固體原料</div>
     ${sol||'<div style="color:var(--ink3);font-size:12px;padding:6px 0;">尚無固體原料。</div>'}
     <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.solids.push({name:'',ratio:'',fed:false,note:''});rcRenderBody()">＋ 加固體原料</button>
     <div class="rc-sec">🏭 製程站點與備註</div>
     ${sta||'<div style="color:var(--ink3);font-size:12px;padding:6px 0;">尚無站點。</div>'}
     <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.stations.push({no:rcState.stations.length+1,name:'',note:'',operator:'',done:false});rcRenderBody()">＋ 加站點</button>`;
-  rcPctSum();
+  rcPctSum(); rcAbvUpd();
 }
 // 占比 ↔ 放量互算（總體積為基準；直接改 input 值、不整段重繪避免失焦）
 function rcTv(v){
@@ -3143,7 +3175,7 @@ function rcLPct(i,v){
   const g=rcState.liquids[i]; if(!g) return;
   g.pct=+v||0; g.vol=Math.round((rcState.totalVol||0)*g.pct/100);
   const el=document.querySelector('#rcL_'+i+' .rc-vol'); if(el) el.value=g.vol;
-  rcPctSum();
+  rcPctSum(); rcAbvUpd();
 }
 function rcLVol(i,v){
   const g=rcState.liquids[i]; if(!g) return;
@@ -3152,14 +3184,19 @@ function rcLVol(i,v){
     g.pct=Math.round(g.vol/rcState.totalVol*1000)/10;
     const el=document.querySelector('#rcL_'+i+' .rc-pct'); if(el) el.value=g.pct;
   }
-  rcPctSum();
+  rcPctSum(); rcAbvUpd();
 }
 function rcPctSum(){
   const el=document.getElementById('rcPctSum'); if(!el||!rcState) return;
   const s=rcState.liquids.reduce((a,g)=>a+(+g.pct||0),0);
   const r=Math.round(s*10)/10;
-  el.textContent='占比合計 '+r+'%';
-  el.style.color=(rcState.liquids.length&&Math.abs(r-100)>=0.5)?'#c0392b':'var(--ink3)';
+  el.textContent=r+'%';
+  el.style.color=(rcState.liquids.length&&Math.abs(r-100)>=0.5)?'#c0392b':'';
+}
+function rcAbvUpd(){
+  const el=document.getElementById('rcAbv'); if(!el||!rcState) return;
+  const a=rcState.liquids.reduce((s,g)=>s+(+g.abv||0)*(+g.pct||0)/100,0);
+  el.textContent=(Math.round(a*10)/10)+'%';
 }
 async function rcSave(){
   const st=rcState; if(!st) return;
