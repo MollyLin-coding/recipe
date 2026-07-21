@@ -349,7 +349,7 @@ tbody tr:hover td{background:#faf3e8;}
 // 預覽環境：後端指向「測試部署 /exec」（沙盒資料），與正式站完全隔離。
 // promote.sh 升正式時會把此行 sed 換回正式 /exec，下方橫幅條件即自動失效（不出現在正式站）。
 const API='https://script.google.com/macros/s/AKfycbxfztod7KrsKBHW_5XZLrAhFEdw3qoNmaId6-TbsW8TM9w3mz3MlaZhq7t6I7ytkfOctw/exec';
-if (API !== 'https://script.google.com/macros/s/AKfycbxfztod7KrsKBHW_5XZLrAhFEdw3qoNmaId6-TbsW8TM9w3mz3MlaZhq7t6I7ytkfOctw/exec') {
+if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5N4uT9RBaqAHiqWBPseCrSvKV3QnC9NK9S2MGnHQvJg/exec') {
   window.addEventListener('DOMContentLoaded', function () {
     var b = document.createElement('div');
     b.textContent = '🧪 預覽／測試環境（沙盒資料，非正式站）';
