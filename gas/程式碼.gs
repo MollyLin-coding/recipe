@@ -123,6 +123,7 @@ function doGet(e) {
       case 'updateOrderDelivery':    result = updateOrderDelivery(p); break;     // 配送資訊 W~AD 欄(v1.7)
       case 'getOrderHistory':        result = getOrderHistory(p); break;         // 訂單修改歷史(v1.8)
       case 'updateOrder':            result = updateOrder(p); break;             // 編輯整張訂單(v2.0)
+      case 'deleteOrder':            result = deleteOrder(p); break;             // 刪除整張訂單(v2.5, admin 限定)
       case 'getFinanceSummary':      result = getFinanceSummary(p); break;       // 當月金流摘要(v1.6, 財務名單限定)
       case 'getStockOverview':       result = getStockOverview(p); break;        // 成品庫存
       case 'stockIn':                result = stockIn(p); break;                 // 成品庫存
@@ -864,6 +865,30 @@ function updateOrder(p) {
         p.client + '／' + items.length + ' 款／總 NT$' + (Number(p.total) || 0) + '／表訂 ' + (p.deliveryDate || '—')
         + (String(p.lot || '').trim() ? '／Lot ' + String(p.lot).trim() : ''));
       return { ok: true, orderNo: orderNo };
+    }
+    return { ok: false, error: '找不到訂單：' + orderNo };
+  } finally { lock.releaseLock(); }
+}
+
+// ── v2.5 刪除訂單（admin 限定，不可復原；刪前記異動紀錄）──
+function deleteOrder(p) {
+  if (p._role !== 'admin') return { ok: false, error: '僅管理員可刪除訂單' };
+  const orderNo = p && p.orderNo;
+  if (!orderNo) return { ok: false, error: '缺少 orderNo' };
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('訂單主表');
+  if (!ws) return { ok: false, error: '找不到訂單主表分頁' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const data = ws.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(orderNo)) {
+        const client = String(data[i][1] || '');
+        ws.deleteRow(i + 1);
+        _logOrderChange_(orderNo, p._user || '', '刪除訂單', client + '（整張刪除，不可復原）');
+        return { ok: true, orderNo: orderNo };
+      }
     }
     return { ok: false, error: '找不到訂單：' + orderNo };
   } finally { lock.releaseLock(); }
