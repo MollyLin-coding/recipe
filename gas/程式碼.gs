@@ -32,6 +32,12 @@ const CLIENTS = {
     prefix: /^NO1\.V2_/i, strip: /^NO1\.V2_/i,
     profitSheet: 'NO1.V2_報價', profitFmt: 'two-bottle',
   },
+  // v2.8 OEM-Babyface 轉正式客戶（主公提供酒譜表，link 分享讀取；5 款 BF_ 前綴）
+  'OEM-Babyface': {
+    id: '1BLZREU_iCSij55jLApYZgPawISYF3reF2rsilqz3K6s',
+    prefix: /^BF_/i, strip: /^BF_/i,
+    profitSheet: 'BF_報價毛利分析', profitFmt: 'bf-2row',
+  },
 };
 // 主表 ID：優先讀 Script Property 'SHEET_ID'（測試部署指向沙盒副本用），
 // 找不到時 fallback 正式硬編碼 ID（向後相容：正式部署不設此屬性，行為與改版前完全一致）。
@@ -48,6 +54,8 @@ const MAIN_SHEET_ID = (function () {
 const PROFIT_COLS = {
   '4L':         { price: 1, cost: 3 },
   'two-bottle': { price: 3, cost: 4, twoRow: true },
+  // OEM-Babyface：A酒款 B售價 C容量 D總成本，一酒款兩列(100ml/500ml)、無 ABV 欄
+  'bf-2row':    { price: 1, cost: 3, twoRow: true, noAbv: true },
 };
 
 // 取得客戶設定（唯一入口，未知客戶直接擋下）
@@ -1172,7 +1180,7 @@ function getProfitData(p) {
       const nm = String(row[0] || '').trim() || lastNm;
       if (!nm) continue;
       if (String(row[0]).trim()) lastNm = nm;
-      const abv = parseFloat(row[1]) || 0;
+      const abv = pc.noAbv ? 0 : (parseFloat(row[1]) || 0);
       const capStr = String(row[2] || '').trim();
       const cap = parseInt(capStr) || 0;
       if (!cap) continue; // 無容量 = 空白/padding 列，跳過
