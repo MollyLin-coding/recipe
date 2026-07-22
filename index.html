@@ -389,7 +389,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.1.4';
+const APP_VERSION='v3.1.5';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2058,10 +2058,10 @@ async function renderRuncardPage(mc) {
       <div style="font-size:11px;color:var(--ink3);margin-bottom:2px;">依出貨日排序・點卡片看詳情與操作（完成回報／確認出貨／編輯）</div>
       <div id="monthOrderArea"><div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">載入中…</div></div>
     </div>
-    <div id="runcardArea"><div class="card"><div style="text-align:center;color:var(--ink3);padding:16px;font-size:13px;">載入 run card…</div></div></div>`;
+    <div id="runcardArea" style="display:none"></div>`; // v3.1.5 製作記錄區隱藏(主公指示，程式保留可復原)
   if (isFinanceUser()) loadFinanceSummary();
   loadOrderMgmt();
-  C.batch = null; renderBatchPage(document.getElementById('runcardArea'));
+  // v3.1.5 製作記錄區隱藏：不再初始渲染 renderBatchPage（函式保留；完成回報處的呼叫無害）
 }
 
 // v1.6 當月金流總覽（僅 FINANCE_USERS：Kevin/Molly/Lulu）

@@ -2058,10 +2058,10 @@ async function renderRuncardPage(mc) {
       <div style="font-size:11px;color:var(--ink3);margin-bottom:2px;">依出貨日排序・點卡片看詳情與操作（完成回報／確認出貨／編輯）</div>
       <div id="monthOrderArea"><div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">載入中…</div></div>
     </div>
-    <div id="runcardArea"><div class="card"><div style="text-align:center;color:var(--ink3);padding:16px;font-size:13px;">載入 run card…</div></div></div>`;
+    <div id="runcardArea" style="display:none"></div>`; // v3.1.5 製作記錄區隱藏(主公指示，程式保留可復原)
   if (isFinanceUser()) loadFinanceSummary();
   loadOrderMgmt();
-  C.batch = null; renderBatchPage(document.getElementById('runcardArea'));
+  // v3.1.5 製作記錄區隱藏：不再初始渲染 renderBatchPage（函式保留；完成回報處的呼叫無害）
 }
 
 // v1.6 當月金流總覽（僅 FINANCE_USERS：Kevin/Molly/Lulu）
