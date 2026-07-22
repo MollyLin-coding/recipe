@@ -389,7 +389,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v2.9';
+const APP_VERSION='v2.9.1';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2367,7 +2367,10 @@ function renderMonthOrders(orders) {
   if (!list.length) { area.innerHTML = `<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">${_orderScopeAll ? '尚無訂單' : `本月（${ym}）尚無出貨訂單`}</div>`; return; }
   area.innerHTML = list.map(o => {
     const itemsTxt = (o.items || []).map(it => `${it.product}×${it.qty}`).join('、');
-    return `<div onclick="showOrderDetail('${o.orderNo}')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;background:var(--card);">
+    // v2.9.1 每酒款一顆「查看 run card」鈕（stopPropagation 避免觸發整卡點擊開詳情）
+    const rcBtns = (o.items || []).map((it, i) => `<button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;" onclick="event.stopPropagation();rcShowHistoryByNo('${o.orderNo}',${i})">📋 ${it.product || ('酒款' + (i + 1))}</button>`).join('');
+    return `<div onclick="showOrderDetail('${o.orderNo}')" style="cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;background:var(--card);">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <div style="flex:1;min-width:0;">
         <div style="font-weight:600;font-size:13px;">${clientLabel(o.client)} <span style="color:var(--ink3);font-weight:400;font-size:11px;">${o.orderNo}</span></div>
         <div style="font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${itemsTxt || '—'}</div>
@@ -2376,6 +2379,8 @@ function renderMonthOrders(orders) {
         <div style="font-size:12px;font-weight:600;">${o.deliveryDate || '—'}</div>
         <span class="badge ${o.status === '已完成' ? 'bg-green' : 'bg-yellow'}" style="font-size:9px;">${o.status || '製作中'}</span>
       </div>
+      </div>
+      ${rcBtns ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--border);" onclick="event.stopPropagation()">${rcBtns}</div>` : ''}
     </div>`;
   }).join('');
 }
@@ -3054,6 +3059,12 @@ function rcOpenFromRecipe(){
   rcOpenEditor(st);
 }
 // 入口②：訂單詳情 → 該酒款 Run Card 歷史清單
+// v2.9.1 訂單列表卡片鈕入口：以訂單編號找回 _mgmtOrders 索引再開歷史
+function rcShowHistoryByNo(orderNo, ii){
+  const oi = (window._mgmtOrders || []).findIndex(o => o.orderNo === orderNo);
+  if (oi < 0) { toast('找不到訂單 ' + orderNo + '，請重新整理'); return; }
+  rcShowHistory(oi, ii);
+}
 async function rcShowHistory(oi, ii){
   const o=(window._mgmtOrders||[])[oi]; if(!o) return;
   const it=(o.items||[])[ii]; if(!it) return;
