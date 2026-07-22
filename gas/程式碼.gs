@@ -145,6 +145,7 @@ function doGet(e) {
       case 'addBottleItem':          result = addBottleItem(p); break;           // 新增玻璃瓶品項(ledger 派生)
       case 'saveRunCard':            result = saveRunCard(p); break;             // Run Card(v2.6)
       case 'getRunCards':            result = getRunCards(p); break;             // Run Card(v2.6)
+      case 'getRunCardIndex':        result = getRunCardIndex(); break;          // Run Card 輕量索引(v2.9.3, 訂單列表鈕條件顯示)
       case 'getRunCard':             result = getRunCard(p); break;              // Run Card(v2.6)
       case 'deleteRunCard':          result = deleteRunCard(p); break;           // Run Card(v2.6, admin 限定)
       case 'migrateOrderNos':        result = migrateOrderNos(p); break;         // 訂單編號遷移(v2.7, admin 限定, 冪等)
@@ -2403,6 +2404,20 @@ function getRunCards(p) {
   }
   cards.sort(function (a, b) { return a.id < b.id ? 1 : -1; });
   return { ok: true, cards: cards };
+}
+// v2.9.3 輕量索引：只回 訂單編號+酒款（不含明細 JSON），供訂單列表判斷哪些酒款已建卡
+function getRunCardIndex() {
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName(RUNCARD_SHEET_NAME);
+  if (!ws) return { ok: true, index: [] };
+  const data = ws.getDataRange().getValues();
+  const index = [];
+  for (let i = 1; i < data.length; i++) {
+    const r = data[i];
+    if (!r[0]) continue;
+    index.push({ orderNo: String(r[1] || ''), product: String(r[3] || '') });
+  }
+  return { ok: true, index: index };
 }
 function getRunCard(p) {
   if (!p || !p.id) return { ok: false, error: '缺少 id' };
