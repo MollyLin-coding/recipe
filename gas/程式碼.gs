@@ -1067,6 +1067,7 @@ function completeOrderItem(p) {
     try { items = JSON.parse(r[4] || '[]'); } catch (e) { return { ok: false, error: '酒款明細解析失敗' }; }
     if (idx < 0 || idx >= items.length) return { ok: false, error: 'itemIndex 超出範圍' };
     const item = items[idx];
+    if (item.status === '完成') return { ok: false, error: '此酒款已完成回報過，勿重複回報（避免重複扣瓶）' };
     // 1) 寫製作記錄(共用同一筆；addBatchRecord 不變，18 欄、F=orderId)
     const today = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }).split(' ')[0];
     const batch = addBatchRecord({
@@ -1090,7 +1091,21 @@ function completeOrderItem(p) {
     const orderStatus = allDone ? '已完成' : '製作中';
     ws.getRange(rowIdx + 1, 5).setValue(JSON.stringify(items)); // E 酒款明細
     ws.getRange(rowIdx + 1, 9).setValue(orderStatus);           // I 製作狀態
-    return { ok: true, batchId: batch.id, orderStatus: orderStatus, item: item.product };
+    // 3) v2.9 玻璃瓶理論扣除：瓶型對得上庫存品名 → 自動寫「出庫」（允許負庫存＝帳差訊號；實際值以倉管盤點為準）
+    var bottleDeduct = null;
+    try {
+      var bNames = {};
+      BOTTLE_TYPES.forEach(function (n) { bNames[n] = true; });
+      _bottleRows_().forEach(function (rr) { if (rr[BK.item]) bNames[String(rr[BK.item])] = true; });
+      var invItem = _bottleKeyOf_(String(p.bottle || item.bottleType || ''), bNames);
+      var dq = Math.floor(Number(p.bottleCount)) || Math.floor(Number(item.qty)) || 0;
+      if (invItem && dq > 0) {
+        _bottleSheet_().appendRow([_stockGenId_(), _stockToday_(), invItem, '出庫', dq,
+          p.creator || p.pm || '', _stockNow_(), '訂單 ' + orderNo + ' 完成自動扣瓶(理論)']);
+        bottleDeduct = { item: invItem, qty: dq, stock: _bottleStockOf_(_bottleRows_(), invItem) };
+      }
+    } catch (e) { /* 扣瓶失敗不影響完成回報 */ }
+    return { ok: true, batchId: batch.id, orderStatus: orderStatus, item: item.product, bottleDeduct: bottleDeduct };
   } finally { lock.releaseLock(); }
 }
 
@@ -1995,6 +2010,41 @@ const BOTTLE_SHEET_NAME = '玻璃瓶庫存異動';
 const BOTTLE_TYPES = ['100ml江小白', '100ml山形香水瓶', '100ml平底香水瓶', '500ml伏特加瓶', '500ml大香水瓶'];
 const BOTTLE_HEADERS = ['異動ID', '日期', '瓶品名', '異動類型', '數量', '操作人', '建立時間', '備註'];
 const BK = { id: 0, date: 1, item: 2, type: 3, qty: 4, operator: 5, createdAt: 6, note: 7 };
+// v2.9 建單瓶型↔玻璃瓶庫存連動：舊訂單瓶型別名 → 庫存品名（新單前端直接存庫存品名）
+const BOTTLE_ALIAS = { '江小白': '100ml江小白', '伏特加': '500ml伏特加瓶', '山形香水瓶': '100ml山形香水瓶', '大香水瓶': '500ml大香水瓶' };
+function _bottleKeyOf_(name, namesMap) {
+  const n = String(name || '').trim();
+  if (!n) return null;
+  if (namesMap[n]) return n;
+  if (BOTTLE_ALIAS[n] && namesMap[BOTTLE_ALIAS[n]]) return BOTTLE_ALIAS[n];
+  return null;
+}
+// 未完成訂單的玻璃瓶預佔量（item 狀態≠完成者依瓶型彙總；失敗不影響庫存總覽）
+function _bottleReserved_(namesMap) {
+  const map = {};
+  try {
+    const ws = SpreadsheetApp.openById(MAIN_SHEET_ID).getSheetByName('訂單主表');
+    if (!ws || ws.getLastRow() < 2) return map;
+    const data = ws.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      const orderNo = String(data[i][0] || '');
+      if (!orderNo) continue;
+      let items;
+      try { items = JSON.parse(data[i][4] || '[]'); } catch (e) { continue; }
+      items.forEach(function (it) {
+        if (!it || it.status === '完成') return;
+        const inv = _bottleKeyOf_(it.bottleType, namesMap);
+        if (!inv) return;
+        const q = Number(it.qty) || 0;
+        if (!(q > 0)) return;
+        if (!map[inv]) map[inv] = { qty: 0, detail: [] };
+        map[inv].qty += q;
+        map[inv].detail.push(orderNo + '×' + q);
+      });
+    }
+  } catch (e) { }
+  return map;
+}
 
 function _bottleSheet_() {
   const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
@@ -2036,6 +2086,7 @@ function getBottleOverview() {
   rows.forEach(function (r) { if (r[BK.item]) names[String(r[BK.item])] = true; });
   const ordered = BOTTLE_TYPES.slice();
   Object.keys(names).forEach(function (n) { if (ordered.indexOf(n) < 0) ordered.push(n); });
+  const reserved = _bottleReserved_(names); // v2.9 未完成訂單預佔
   const list = ordered.map(function (item) {
     let inQty = 0, outQty = 0;
     rows.forEach(function (r) {
@@ -2044,8 +2095,10 @@ function getBottleOverview() {
       if (String(r[BK.type]) === '入庫') inQty += q;
       else if (String(r[BK.type]) === '出庫') outQty += q;
     });
+    const rsv = reserved[item] || { qty: 0, detail: [] };
     return { item: item, inQty: inQty, outQty: outQty, stock: inQty - outQty,
-      safety: smap['玻璃瓶||' + item] || 0 };
+      safety: smap['玻璃瓶||' + item] || 0,
+      reserved: rsv.qty, reservedDetail: rsv.detail.join('、') };
   });
   return { ok: true, list: list };
 }
