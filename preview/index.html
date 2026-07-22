@@ -2046,8 +2046,11 @@ async function renderRuncardPage(mc) {
     ${isFinanceUser() ? '<div id="financeSummaryCard"></div>' : ''}
     <div class="card" style="margin-bottom:10px;">
       <div class="sec-hd"><div class="card-title" style="margin:0">📦 訂單列表</div>
-        <div style="display:flex;gap:6px;">
-          <button class="btn btn-ghost btn-sm" id="ordScopeBtn" onclick="toggleOrderScope()">${_orderScopeAll ? '只看本月' : '顯示全部'}</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;">
+          <button class="btn btn-ghost btn-sm" id="ordMonPrev" onclick="shiftOrderMonth(-1)" title="上個月">◀</button>
+          <input type="month" id="ordMonthPick" value="${_orderMonth}" onchange="setOrderMonth(this.value)" style="font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);">
+          <button class="btn btn-ghost btn-sm" id="ordMonNext" onclick="shiftOrderMonth(1)" title="下個月">▶</button>
+          <button class="btn btn-ghost btn-sm" id="ordScopeBtn" onclick="toggleOrderScope()">${_orderScopeAll ? '看單月' : '顯示全部'}</button>
           <button class="btn btn-ghost btn-sm" onclick="loadOrderMgmt()">↻</button>
           ${isAdmin ? '<button class="btn btn-primary btn-sm" onclick="showOrderModal()">＋ 建單</button>' : ''}
         </div>
@@ -2350,22 +2353,40 @@ function showDeliveryModal(orderNo) {
     else toast('更新失敗：' + (res.error || ''));
   });
 }
-// 📦 訂單列表（依表訂出貨日排序；點卡片看完整詳情＋操作）。v2.0：本月/全部切換
+// 📦 訂單列表（依表訂出貨日排序；點卡片看完整詳情＋操作）。v2.0：本月/全部切換；v2.9.4：◀▶ 按月份查詢
 let _orderScopeAll = false;
+let _orderMonth = _localDate().slice(0, 7); // 目前檢視月份 YYYY-MM（預設當月）
+function _syncOrderScopeUI() {
+  const b = document.getElementById('ordScopeBtn');
+  if (b) b.textContent = _orderScopeAll ? '看單月' : '顯示全部';
+  const pick = document.getElementById('ordMonthPick');
+  if (pick) { pick.value = _orderMonth; pick.disabled = _orderScopeAll; pick.style.opacity = _orderScopeAll ? '.4' : '1'; }
+  ['ordMonPrev', 'ordMonNext'].forEach(id => { const el = document.getElementById(id); if (el) { el.disabled = _orderScopeAll; el.style.opacity = _orderScopeAll ? '.4' : '1'; } });
+}
 function toggleOrderScope() {
   _orderScopeAll = !_orderScopeAll;
-  const b = document.getElementById('ordScopeBtn');
-  if (b) b.textContent = _orderScopeAll ? '只看本月' : '顯示全部';
+  _syncOrderScopeUI();
   renderMonthOrders(window._mgmtOrders || []);
+}
+function setOrderMonth(v) {
+  if (!v || !/^\d{4}-\d{2}$/.test(v)) return;
+  _orderMonth = v; _orderScopeAll = false;
+  _syncOrderScopeUI();
+  renderMonthOrders(window._mgmtOrders || []);
+}
+function shiftOrderMonth(d) {
+  const parts = _orderMonth.split('-');
+  const dt = new Date(Number(parts[0]), Number(parts[1]) - 1 + d, 1);
+  setOrderMonth(dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0'));
 }
 function renderMonthOrders(orders) {
   const area = document.getElementById('monthOrderArea'); if (!area) return;
-  const ym = _localDate().slice(0, 7);
+  const ym = _orderMonth; // v2.9.4 依選定月份（依表訂出貨日歸月）
   const list = (orders || []).filter(o => _orderScopeAll || (o.deliveryDate || '').slice(0, 7) === ym)
     .sort((a, b) => _orderScopeAll
       ? (b.deliveryDate || '').localeCompare(a.deliveryDate || '')
       : (a.deliveryDate || '').localeCompare(b.deliveryDate || ''));
-  if (!list.length) { area.innerHTML = `<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">${_orderScopeAll ? '尚無訂單' : `本月（${ym}）尚無出貨訂單`}</div>`; return; }
+  if (!list.length) { area.innerHTML = `<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">${_orderScopeAll ? '尚無訂單' : `${ym.replace('-', ' 年 ')} 月尚無出貨訂單`}</div>`; return; }
   area.innerHTML = list.map(o => {
     const itemsTxt = (o.items || []).map(it => `${it.product}×${it.qty}`).join('、');
     // v2.9.1 每酒款一顆「查看 run card」鈕；v2.9.3 只顯示已建過卡的酒款（未開工酒款一目了然），索引未載入前不顯示
