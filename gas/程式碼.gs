@@ -2011,7 +2011,7 @@ const BOTTLE_TYPES = ['100ml江小白', '100ml山形香水瓶', '100ml平底香�
 const BOTTLE_HEADERS = ['異動ID', '日期', '瓶品名', '異動類型', '數量', '操作人', '建立時間', '備註'];
 const BK = { id: 0, date: 1, item: 2, type: 3, qty: 4, operator: 5, createdAt: 6, note: 7 };
 // v2.9 建單瓶型↔玻璃瓶庫存連動：舊訂單瓶型別名 → 庫存品名（新單前端直接存庫存品名）
-const BOTTLE_ALIAS = { '江小白': '100ml江小白', '伏特加': '500ml伏特加瓶', '山形香水瓶': '100ml山形香水瓶', '大香水瓶': '500ml大香水瓶' };
+const BOTTLE_ALIAS = { '江小白': '100ml江小白', '伏特加': '500ml伏特加瓶', '山形香水瓶': '100ml山形香水瓶', '山形瓶': '100ml山形香水瓶', '大香水瓶': '500ml大香水瓶' };
 function _bottleKeyOf_(name, namesMap) {
   const n = String(name || '').trim();
   if (!n) return null;
