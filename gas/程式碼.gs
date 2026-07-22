@@ -149,6 +149,7 @@ function doGet(e) {
       case 'getRunCard':             result = getRunCard(p); break;              // Run Card(v2.6)
       case 'deleteRunCard':          result = deleteRunCard(p); break;           // Run Card(v2.6, admin 限定)
       case 'migrateOrderNos':        result = migrateOrderNos(p); break;         // 訂單編號遷移(v2.7, admin 限定, 冪等)
+      case 'migrateOrderTypes':      result = migrateOrderTypes(p); break;       // 訂單類型改制遷移(v3.0, admin 限定, 冪等)
       case 'getSafetyLevels':        result = getSafetyLevels(); break;          // 安全水位
       case 'setSafetyLevel':         result = setSafetyLevel(p); break;          // 安全水位
       case 'getStockAlerts':         result = getStockAlerts(); break;           // 安全水位警告(登入用)
@@ -692,6 +693,31 @@ function _genOrderNo(ws) {
 
 // v2.7 一次性遷移（admin 限定、可重複執行=冪等）：舊 NPW-YYYYMMDD-NNN → 新 YYMMDD-NNN
 // 連動五分頁：訂單主表A／訂單異動紀錄B／成品庫存異動H(關聯訂單)／製作記錄F(關聯訂單)／RunCard B
+// v3.0 訂單類型改制一次性遷移（admin/冪等）：換前標公版酒、OEM客戶訂單 → 代工訂單(全客製/換前標)；南坡萬自有品牌 → 南坡萬自有酒款投產單，無金流
+function migrateOrderTypes(p) {
+  if (p._role !== 'admin') return { ok: false, error: '僅管理員可執行' };
+  const MAP = { '換前標公版酒': '代工訂單(全客製/換前標)', 'OEM客戶訂單': '代工訂單(全客製/換前標)', '南坡萬自有品牌': '南坡萬自有酒款投產單，無金流' };
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('訂單主表');
+  if (!ws || ws.getLastRow() < 2) return { ok: true, changed: 0, detail: [] };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const rng = ws.getRange(2, 3, ws.getLastRow() - 1, 1); // C 訂單類型
+    const vals = rng.getValues();
+    let changed = 0;
+    const detail = [];
+    for (let i = 0; i < vals.length; i++) {
+      const cur = String(vals[i][0] || '').trim();
+      if (MAP[cur]) {
+        vals[i][0] = MAP[cur]; changed++;
+        detail.push(String(ws.getRange(i + 2, 1).getValue()) + '：' + cur + '→' + MAP[cur]);
+      }
+    }
+    if (changed) rng.setValues(vals);
+    return { ok: true, changed: changed, detail: detail };
+  } finally { lock.releaseLock(); }
+}
 function migrateOrderNos(p) {
   if (p._role !== 'admin') return { ok: false, error: '僅管理員可執行編號遷移' };
   const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
@@ -2350,6 +2376,35 @@ function _runcardRowToObj_(r) {
   };
 }
 // 儲存（id 空＝新建；有 id＝整卡覆寫更新）
+// v3.0 投產單完工自動入庫：卡綁訂單類型=南坡萬自有酒款投產單，無金流 且 第11站(final)完成+瓶數>0
+// → 成品庫存自動寫「入庫」（備註記卡號；冪等：卡片 JSON 記 autoStockedIn 後不再重複入庫）
+function _rcAutoStockIn_(p, cardId, dataStr) {
+  const out = { dataStr: dataStr, autoStockIn: null };
+  try {
+    if (!p.orderNo) return out;
+    const data = JSON.parse(dataStr);
+    if (data.autoStockedIn) return out; // 已入過庫（冪等）
+    const fin = (data.stations || []).find(function (s) { return s && s.type === 'final'; });
+    const qty = fin ? Math.floor(Number(fin.count)) : 0;
+    if (!fin || !fin.done || !(qty > 0)) return out;
+    const ows = SpreadsheetApp.openById(MAIN_SHEET_ID).getSheetByName('訂單主表');
+    if (!ows) return out;
+    const orows = ows.getDataRange().getValues();
+    let orderType = '', orderClient = '';
+    for (let i = 1; i < orows.length; i++) {
+      if (String(orows[i][0]) === String(p.orderNo)) { orderClient = String(orows[i][1] || ''); orderType = String(orows[i][2] || ''); break; }
+    }
+    if (orderType !== '南坡萬自有酒款投產單，無金流') return out;
+    const client = orderClient || '南坡萬v.2';
+    _stockSheet_().appendRow([_stockGenId_(), _stockToday_(), client, String(p.product), '入庫', qty,
+      String(p.lot || ''), String(p.orderNo), String(p._user || p.user || ''), _stockNow_(),
+      'Run Card ' + cardId + ' 完工自動入庫']);
+    data.autoStockedIn = { qty: qty, at: _stockNow_() };
+    out.dataStr = JSON.stringify(data);
+    out.autoStockIn = { item: String(p.product), qty: qty, client: client };
+  } catch (e) { }
+  return out;
+}
 function saveRunCard(p) {
   if (!p.client || !p.product) return { ok: false, error: '缺少 客戶 或 酒款' };
   let dataStr = String(p.data || '{}');
@@ -2364,6 +2419,7 @@ function saveRunCard(p) {
       const data = ws.getDataRange().getValues();
       for (let i = 1; i < data.length; i++) {
         if (String(data[i][0]) === String(p.id)) {
+          const asi = _rcAutoStockIn_(p, String(p.id), dataStr); dataStr = asi.dataStr; // v3.0 投產單完工自動入庫
           ws.getRange(i + 1, 2, 1, 11).setValues([[
             String(p.orderNo || ''), String(p.client), String(p.product),
             String(p.sheet || ''), String(p.bottleType || ''), String(p.prodDate || ''),
@@ -2372,19 +2428,20 @@ function saveRunCard(p) {
           ]]);
           ws.getRange(i + 1, 15, 1, 2).setValues([[user, now]]);
           if (p.orderNo) _logOrderChange_(p.orderNo, user, 'Run Card', '更新 ' + p.id + '（' + p.product + '）');
-          return { ok: true, id: String(p.id) };
+          return { ok: true, id: String(p.id), autoStockIn: asi.autoStockIn };
         }
       }
       return { ok: false, error: '找不到 Run Card：' + p.id };
     }
     const id = _genRunCardNo_(ws, p.orderNo);
+    const asi = _rcAutoStockIn_(p, id, dataStr); dataStr = asi.dataStr; // v3.0 投產單完工自動入庫
     ws.appendRow([id, String(p.orderNo || ''), String(p.client), String(p.product),
       String(p.sheet || ''), String(p.bottleType || ''), String(p.prodDate || ''),
       String(p.pm || ''), String(p.lot || ''), String(p.version || ''),
       dataStr, String(p.status || '進行中'), user, now, user, now]);
     ws.getRange(ws.getLastRow(), 9).setNumberFormat('@').setValue(String(p.lot || ''));
     if (p.orderNo) _logOrderChange_(p.orderNo, user, 'Run Card', '建立 ' + id + '（' + p.product + '）');
-    return { ok: true, id: id };
+    return { ok: true, id: id, autoStockIn: asi.autoStockIn };
   } finally { lock.releaseLock(); }
 }
 // 查詢：可依 orderNo、client、product 過濾（都給就 AND），新→舊排序
