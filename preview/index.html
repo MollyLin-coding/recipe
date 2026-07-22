@@ -2483,7 +2483,7 @@ function renderMonthOrders(orders) {
     return `<div onclick="showOrderDetail('${o.orderNo}')" style="cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;background:var(--card);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <div style="flex:1;min-width:0;">
-        <div style="font-weight:600;font-size:13px;">${clientLabel(o.client)} <span style="color:var(--ink3);font-weight:400;font-size:11px;">${o.orderNo}</span> <span style="font-weight:400;font-size:11px;${o.lot ? 'color:var(--gold-dk);' : 'color:var(--red);opacity:.7;'}">${o.lot ? ('Lot ' + o.lot) : '未填寫Lot數'}</span></div>
+        <div style="font-weight:600;font-size:13px;">${clientLabel(o.client)} <span style="color:var(--ink3);font-weight:400;font-size:11px;">${o.orderNo}</span> <span style="font-weight:400;font-size:11px;${o.lot ? 'color:var(--gold-dk);' : 'color:var(--red);opacity:.7;'}">${o.lot ? ('Lot ' + o.lot) : '未填寫Lot數'}</span>${o.orderCreator ? ` <span style="font-weight:400;font-size:11px;color:var(--ink3);">建單:${o.orderCreator}</span>` : ''}</div>
         <div style="font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${itemsTxt || '—'}</div>
       </div>
       <div style="text-align:right;flex:0 0 auto;">
@@ -2617,6 +2617,11 @@ function showOrderModal(edit) {
   if (isEdit && edit.client && !clients.includes(edit.client)) clients = [edit.client, ...clients];
   const c0 = isEdit ? edit.client : (clients[0] || '');
   const t0 = isEdit ? (ORDER_TYPES.includes(edit.orderType) ? edit.orderType : (edit.orderType ? '自行keyin' : '')) : '';
+  // v3.2 建單人員：預設=登入者（在名單內），編輯帶舊值（不在名單自動補列；舊單無值給空白）
+  const CREATORS = ['Kevin', 'Molly', 'Vic', '阿軒'];
+  const creator0 = isEdit ? (edit.orderCreator || '') : ((curUser && CREATORS.includes(curUser.username)) ? curUser.username : 'Kevin');
+  const creatorList = (creator0 && !CREATORS.includes(creator0)) ? [creator0].concat(CREATORS) : (creator0 ? CREATORS : [''].concat(CREATORS));
+  const creatorOpts = creatorList.map(n => `<option value="${n}"${n === creator0 ? ' selected' : ''}>${n || '—未指定—'}</option>`).join('');
   const modal = makeModal(`
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
       <div class="modal-title" style="margin:0;">${isEdit ? ('✏️ 編輯訂單 ' + edit.orderNo) : '＋ 新增出貨訂單'}</div>
@@ -2637,6 +2642,7 @@ function showOrderModal(edit) {
     <div class="form-row">
       <div class="fg"><label>PM</label><input class="inp" id="om_pm" value="${isEdit ? (edit.pm || '') : ((curUser && curUser.username) || '')}" style="margin:0;"></div>
       <div class="fg"><label>Lot批號（選填）</label><input class="inp" id="om_lot" type="text" inputmode="numeric" value="${isEdit ? (edit.lot || '') : ''}" placeholder="純數字，可留空" style="margin:0;"></div>
+      <div class="fg"><label>建單人員</label><select class="inp" id="om_creator" style="margin:0;">${creatorOpts}</select></div>
     </div>
     <div style="margin:4px 0 6px;font-size:13px;font-weight:600;color:var(--gold-dk);">酒款明細（已 key <span id="olineCount">0</span> 款）</div>
     <div id="orderItemLines"></div>
@@ -2743,6 +2749,7 @@ function showOrderModal(edit) {
       items: JSON.stringify(items),
       total: document.getElementById('om_total').value || 0, balance: document.getElementById('om_balance').value || 0,
       depositStatus: document.getElementById('om_deposit').value || '', pm: document.getElementById('om_pm').value || '', lot: lot,
+      orderCreator: (document.getElementById('om_creator') || {}).value || '',
       ...collectFinanceFields(), ...collectDeliveryFields()
     });
     if (res.ok) { toast(isEdit ? ('訂單已更新 ' + edit.orderNo) : ('已建立訂單 ' + res.orderNo)); modal.remove(); loadOrderMgmt(); if (isFinanceUser()) loadFinanceSummary(); }
