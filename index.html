@@ -389,7 +389,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.1';
+const APP_VERSION='v3.1.1';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2617,7 +2617,10 @@ function showOrderModal(edit) {
   const modal = makeModal(`
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
       <div class="modal-title" style="margin:0;">${isEdit ? ('✏️ 編輯訂單 ' + edit.orderNo) : '＋ 新增出貨訂單'}</div>
-      <button class="btn btn-primary btn-sm" id="om_sub_top" style="flex:0 0 auto;white-space:nowrap;">💾 儲存並關閉</button>
+      <div style="display:flex;gap:6px;flex:0 0 auto;">
+        <button class="btn btn-ghost btn-sm" style="white-space:nowrap;" onclick="if(confirm('放棄未儲存的變更？')) this.closest('.modal-bg').remove()">✕ 取消編輯</button>
+        <button class="btn btn-primary btn-sm" id="om_sub_top" style="white-space:nowrap;">💾 儲存並關閉</button>
+      </div>
     </div>
     <div id="om_warn" style="display:none;margin:0 0 8px;padding:8px 10px;background:#fdecea;border:1px solid #e74c3c;border-radius:8px;color:#c0392b;font-size:13px;font-weight:700;">⚠️ 請先至少選擇一款酒（酒款＋數量），才能儲存並關閉</div>
     <div class="form-row">
@@ -2642,7 +2645,7 @@ function showOrderModal(edit) {
     <div class="fg" style="margin-bottom:12px;"><label>訂金狀態</label><input class="inp" id="om_deposit" list="omDepList" value="${isEdit ? (edit.depositStatus || '') : ''}" placeholder="未收 / 已收訂 / 已結清（可自填如 已收訂金 NT$3,000）" style="margin:0;"><datalist id="omDepList"><option>未收</option><option>已收訂</option><option>已結清</option></datalist></div>
     <div id="omFinWrap">${financeFieldsHtml(isEdit ? edit : null)}</div>
     <div id="omDeliveryWrap">${deliveryFieldsHtml(isEdit ? edit : null)}</div>
-    <div class="fe" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="if(confirm('放棄未儲存的變更？')) this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="om_sub">💾 儲存並關閉</button></div>`, { locked: true });
+    <div class="fe" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="if(confirm('放棄未儲存的變更？')) this.closest('.modal-bg').remove()">✕ 取消編輯</button><button class="btn btn-primary btn-sm" id="om_sub">💾 儲存並關閉</button></div>`, { locked: true });
   if (isEdit) {
     document.getElementById('om_client').value = edit.client;
     if (t0 === '自行keyin') { const c = document.getElementById('om_type_custom'); if (c) { c.style.display = ''; c.value = edit.orderType || ''; } }
