@@ -2157,7 +2157,7 @@ function checkBottleWarn() {
   });
 }
 // 客戶顯示名（只改顯示、資料鍵不變）與隱藏清單
-const CLIENT_LABELS = { '南坡萬v.2': '南坡萬自有品牌酒' };
+const CLIENT_LABELS = { '南坡萬v.2': '南坡萬自有品牌酒', 'OEM-Babyface': '全客製-Babyface', 'OEM-好野吧': '全客製-好野吧', 'OEM-Lane72': '全客製-Lane72' };
 const HIDDEN_CLIENTS = ['Feeling Bar Cafe', '南坡萬公版'];
 // OEM 客戶（前端補充；無後端酒譜，酒款為建單用名稱、sheet 留空）
 // v2.8：OEM-Babyface 已轉正式客戶（後端 CLIENTS 供應 5 款 BF_ 真酒譜），自此清單移除
@@ -2170,35 +2170,72 @@ function clientLabel(key) { return CLIENT_LABELS[key] || key; }
 // v1.6 金流可見名單（僅此三人看得到金流總覽與訂單金流欄；後端 getFinanceSummary 同名單雙重把關）
 const FINANCE_USERS = ['Kevin', 'Molly', 'Lulu'];
 function isFinanceUser() { return !!(curUser && FINANCE_USERS.includes(curUser.username)); }
-// 訂單類型欄：南坡萬自有品牌酒(南坡萬v.2) → 定期生產/自行keyin(選後展開自由輸入生產目的)；OEM 客戶預填「OEM客戶訂單」；其餘 → 一般建議清單
-function orderTypeFieldHtml(client) {
-  if (client === '南坡萬v.2') {
-    return '<select class="inp" id="om_type" style="margin:0;" onchange="omTypeSelChange(this);refreshOrderLineDatalists()"><option>定期生產</option><option>自行keyin</option></select>'
-      + '<input class="inp" id="om_type_custom" placeholder="輸入此訂單的生產目的（如：中秋禮盒限定）" style="margin:6px 0 0;display:none;font-size:13px;">';
+// v3.0 訂單類型改「類型先行」（主公 2026-07-22 拍板）：先選類型 → 客戶名稱下拉隨類型連動
+const ORDER_TYPES = ['代工訂單(全客製/換前標)', '南坡萬自有酒款投產單，無金流', '自有酒款庫存出貨訂單', '自行keyin'];
+const TYPE_NO_FINANCE = '南坡萬自有酒款投產單，無金流'; // 此類型建單隱藏金流＋配送區塊
+// 各類型的客戶名稱選單：[資料鍵(存訂單B欄), 顯示文字]；未列類型＝沿用完整客戶清單
+const TYPE_CLIENTS = {
+  '代工訂單(全客製/換前標)': [
+    ['OEM-Babyface', '全客製-Babyface'], ['OEM-Lane72', '全客製-Lane72'], ['OEM-好野吧', '全客製-好野吧'],
+    ['全客製-雋荖&拾山', '全客製-雋荖&拾山'], ['全客製-酒肉朋友', '全客製-酒肉朋友'],
+    ['Feeling Bar', '全客製-Feeling Bar'], ['全客製-滿枝枒', '全客製-滿枝枒']
+  ],
+  '南坡萬自有酒款投產單，無金流': [['南坡萬v.2', '補充自廠酒款水位']],
+  '自有酒款庫存出貨訂單': [['經銷商－日光貳參', '經銷商－日光貳參'], ['經銷商－文博會', '經銷商－文博會']]
+};
+function orderTypeSelectHtml(selected) {
+  const opts = ['<option value="">—選擇訂單類型—</option>'].concat(ORDER_TYPES.map(t => `<option${t === selected ? ' selected' : ''}>${t}</option>`)).join('');
+  return '<select class="inp" id="om_type" style="margin:0;" onchange="omTypeChange()">' + opts + '</select>'
+    + '<input class="inp" id="om_type_custom" placeholder="輸入此訂單的類型/生產目的（如：中秋禮盒限定）" style="margin:6px 0 0;display:none;font-size:13px;">';
+}
+function omClientFieldHtml(type, selected) {
+  const spec = TYPE_CLIENTS[type];
+  let opts;
+  if (spec) {
+    opts = spec.map(pair => `<option value="${pair[0]}"${pair[0] === selected ? ' selected' : ''}>${pair[1]}</option>`).join('');
+    if (selected && !spec.some(pair => pair[0] === selected)) opts = `<option value="${selected}" selected>${clientLabel(selected)}</option>` + opts;
+  } else {
+    const allClients = clientList.length ? clientList.map(c => c.name) : ['Feeling Bar', '南坡萬v.2'];
+    let clients = allClients.filter(c => !HIDDEN_CLIENTS.includes(c)).concat(EXTRA_CLIENTS.filter(c => !allClients.includes(c)));
+    if (selected && !clients.includes(selected)) clients = [selected, ...clients];
+    opts = clients.map(c => `<option value="${c}"${c === selected ? ' selected' : ''}>${clientLabel(c)}</option>`).join('');
   }
-  const preset = EXTRA_CLIENTS.includes(client) ? 'OEM客戶訂單' : '';
-  return '<input class="inp" id="om_type" list="omTypeList" placeholder="如：換前標公版酒" value="' + preset + '" onchange="refreshOrderLineDatalists()" style="margin:0;"><datalist id="omTypeList"><option>換前標公版酒</option><option>南坡萬自有品牌</option><option>OEM客戶訂單</option></datalist>';
+  return `<div style="display:flex;gap:4px;">
+    <select class="inp" id="om_client" style="margin:0;flex:1;min-width:0;" onchange="orderModalClientChange()">${opts}</select>
+    <button class="btn btn-ghost btn-sm" style="flex:0 0 auto;white-space:nowrap;" onclick="addOrderClient()">✎ 自行輸入</button></div>`;
 }
-// 選「自行keyin」→ 展開生產目的輸入框
-function omTypeSelChange(sel) {
+// 類型改變：自行keyin展開＋重建客戶下拉＋金流/配送顯隱＋酒款建議清單重整
+function omTypeChange() {
+  const t = document.getElementById('om_type');
   const c = document.getElementById('om_type_custom');
-  if (c) c.style.display = sel.value === '自行keyin' ? '' : 'none';
+  if (c) c.style.display = (t && t.value === '自行keyin') ? '' : 'none';
+  const cw = document.getElementById('omClientWrap');
+  if (cw) cw.innerHTML = omClientFieldHtml(t ? t.value : '', ''); // 切類型即重置客戶清單（避免殘留上一類型的選擇）
+  _syncFinanceVis();
+  orderModalClientChange();
 }
-// 取訂單類型送出值：自行keyin＋有輸入 → 存輸入的生產目的文字
+// 投產單（無金流）→ 隱藏金流＋配送區塊
+function _syncFinanceVis() {
+  const t = document.getElementById('om_type');
+  const hide = !!(t && t.value === TYPE_NO_FINANCE);
+  ['omFinWrap', 'omDeliveryWrap'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = hide ? 'none' : ''; });
+}
+// 取訂單類型送出值：自行keyin＋有輸入 → 存輸入的類型/生產目的文字
 function getOrderTypeValue() {
   const el = document.getElementById('om_type');
   if (!el) return '';
-  if (el.tagName === 'SELECT' && el.value === '自行keyin') {
+  if (el.value === '自行keyin') {
     const c = document.getElementById('om_type_custom');
     const t = c ? c.value.trim() : '';
     return t || '自行keyin';
   }
   return el.value || '';
 }
-// 訂單類型含「公版酒」→ 建單酒款自動帶入南坡萬自有品牌(資料鍵 南坡萬v.2)全酒款
+// 代工訂單(全客製/換前標)/舊「公版酒」類型 → 建單酒款建議帶入南坡萬自有品牌(南坡萬v.2)全酒款
 function _isGongbanType() {
   const el = document.getElementById('om_type');
-  return !!(el && String(el.value || '').includes('公版酒'));
+  const v = el ? String(el.value || '') : '';
+  return v === '代工訂單(全客製/換前標)' || v.includes('公版酒');
 }
 function orderLineRecipeNames(client) {
   return [...new Set([
@@ -2249,9 +2286,6 @@ function orderModalAddLine() {
 function orderModalClientChange() {
   document.getElementById('orderItemLines').innerHTML = '';
   orderModalAddLine();
-  const client = document.getElementById('om_client').value;
-  const wrap = document.getElementById('omTypeWrap');
-  if (wrap) wrap.innerHTML = orderTypeFieldHtml(client);
   refillDeliveryDefaults();
 }
 // v1.6 金流紀錄欄位（建單 modal 與 💰金流編輯 modal 共用；id 固定 fin_*，同時只會有一個 modal）
@@ -2426,13 +2460,13 @@ function showOrderDetail(orderNo) {
   const finShown = o.finalAdjusted && o.finalAdjustedAmount !== '' && o.finalAdjustedAmount != null
     ? `<s style="opacity:.6;">NT$${o.finalAmount !== '' ? o.finalAmount : (o.balance || 0)}</s> → NT$${o.finalAdjustedAmount}（特殊調整）`
     : (o.finalAmount !== '' ? 'NT$' + o.finalAmount : (o.balance ? 'NT$' + o.balance : '—'));
-  const moneyHtml = canSeeMoney ? `
+  const moneyHtml = (canSeeMoney && o.orderType !== TYPE_NO_FINANCE) ? `
     <div style="margin:8px 0 2px;font-size:13px;font-weight:600;color:var(--gold-dk);">金流</div>
     ${row('總金額', 'NT$' + (o.total || 0) + '（訂金狀態 ' + (o.depositStatus || '—') + '）')}
     ${row('訂金', (o.depositAmount !== '' && o.depositAmount != null ? 'NT$' + o.depositAmount : '—') + '（預計 ' + (o.depositDueDate || '—') + '｜實收 ' + (o.depositPaidDate || '未收') + '）')}
     ${row('尾款', finShown + '（預計 ' + (o.finalDueDate || '—') + '｜實收 ' + (o.finalPaidDate || '未收') + '）')}
     ${o.finalAdjustNote ? row('調整備註', o.finalAdjustNote) : ''}` : '';
-  const dlvHtml = `
+  const dlvHtml = o.orderType === TYPE_NO_FINANCE ? '' : `
     <div style="margin:8px 0 2px;font-size:13px;font-weight:600;color:var(--gold-dk);">配送資訊</div>
     ${row('配送方式', (o.shipMethod || '—') + (o.shipFee !== '' && o.shipFee != null ? '（運費 NT$' + o.shipFee + '）' : ''))}
     ${row('收件人', (o.recvName || '—') + (o.recvPhone ? ' · ' + o.recvPhone : ''))}
@@ -2526,8 +2560,8 @@ function showOrderModal(edit) {
   const allClients = clientList.length ? clientList.map(c => c.name) : ['Feeling Bar', '南坡萬公版', '南坡萬v.2', 'Feeling Bar Cafe'];
   let clients = allClients.filter(c => !HIDDEN_CLIENTS.includes(c)).concat(EXTRA_CLIENTS.filter(c => !allClients.includes(c)));
   if (isEdit && edit.client && !clients.includes(edit.client)) clients = [edit.client, ...clients];
-  const cOpts = clients.map(c => `<option value="${c}">${clientLabel(c)}</option>`).join('');
   const c0 = isEdit ? edit.client : (clients[0] || '');
+  const t0 = isEdit ? (ORDER_TYPES.includes(edit.orderType) ? edit.orderType : (edit.orderType ? '自行keyin' : '')) : '';
   const modal = makeModal(`
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
       <div class="modal-title" style="margin:0;">${isEdit ? ('✏️ 編輯訂單 ' + edit.orderNo) : '＋ 新增出貨訂單'}</div>
@@ -2535,10 +2569,8 @@ function showOrderModal(edit) {
     </div>
     <div id="om_warn" style="display:none;margin:0 0 8px;padding:8px 10px;background:#fdecea;border:1px solid #e74c3c;border-radius:8px;color:#c0392b;font-size:13px;font-weight:700;">⚠️ 請先至少選擇一款酒（酒款＋數量），才能儲存並關閉</div>
     <div class="form-row">
-      <div class="fg"><label>客戶</label><div style="display:flex;gap:4px;">
-        <select class="inp" id="om_client" style="margin:0;flex:1;min-width:0;" onchange="orderModalClientChange()">${cOpts}</select>
-        <button class="btn btn-ghost btn-sm" style="flex:0 0 auto;white-space:nowrap;" onclick="addOrderClient()">＋新客戶</button></div></div>
-      <div class="fg"><label>訂單類型</label><div id="omTypeWrap">${orderTypeFieldHtml(c0)}</div></div>
+      <div class="fg"><label>訂單類型</label><div id="omTypeWrap">${orderTypeSelectHtml(t0)}</div></div>
+      <div class="fg"><label>客戶名稱</label><div id="omClientWrap">${omClientFieldHtml(t0, c0)}</div></div>
     </div>
     <div class="form-row">
       <div class="fg"><label>表訂出貨日</label><input class="inp" id="om_ship" type="date" style="margin:0;" onchange="const a=document.getElementById('om_actual'); if(a) a.value=this.value;"></div>
@@ -2556,17 +2588,13 @@ function showOrderModal(edit) {
       <div class="fg"><label>尾款</label><input class="inp" id="om_balance" type="number" min="0" value="${isEdit ? (edit.balance || 0) : 0}" style="margin:0;"></div>
     </div>
     <div class="fg" style="margin-bottom:12px;"><label>訂金狀態</label><input class="inp" id="om_deposit" list="omDepList" value="${isEdit ? (edit.depositStatus || '') : ''}" placeholder="未收 / 已收訂 / 已結清（可自填如 已收訂金 NT$3,000）" style="margin:0;"><datalist id="omDepList"><option>未收</option><option>已收訂</option><option>已結清</option></datalist></div>
-    ${financeFieldsHtml(isEdit ? edit : null)}
+    <div id="omFinWrap">${financeFieldsHtml(isEdit ? edit : null)}</div>
     <div id="omDeliveryWrap">${deliveryFieldsHtml(isEdit ? edit : null)}</div>
     <div class="fe" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="if(confirm('放棄未儲存的變更？')) this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="om_sub">💾 儲存並關閉</button></div>`, { locked: true });
   if (isEdit) {
     document.getElementById('om_client').value = edit.client;
-    const t = document.getElementById('om_type');
-    if (t && t.tagName === 'SELECT') {
-      const topts = [...t.options].map(x => x.value);
-      if (topts.includes(edit.orderType)) { t.value = edit.orderType; }
-      else if (edit.orderType) { t.value = '自行keyin'; omTypeSelChange(t); const c = document.getElementById('om_type_custom'); if (c) c.value = edit.orderType; }
-    } else if (t) { t.value = edit.orderType || ''; }
+    if (t0 === '自行keyin') { const c = document.getElementById('om_type_custom'); if (c) { c.style.display = ''; c.value = edit.orderType || ''; } }
+    _syncFinanceVis();
     document.getElementById('om_ship').value = edit.deliveryDate || _localDate();
     document.getElementById('om_actual').value = edit.actualDeliveryDate || edit.deliveryDate || _localDate();
     _orderLineSeq = 0;
@@ -3474,7 +3502,7 @@ async function rcSave(){
     const t=document.getElementById('rcTitle'); if(t) t.textContent='📋 編輯 Run Card '+st.id;
     rcDraftClear(); _rcLastSnap=JSON.stringify(rcState);
     const di=document.getElementById('rcDraftInfo'); if(di) di.textContent='';
-    toast('已儲存 '+st.id);
+    toast('已儲存 '+st.id+(res.autoStockIn?('｜📦 成品自動入庫 '+res.autoStockIn.item+'×'+res.autoStockIn.qty):''));
     ensureRcIndex(true).then(() => { if (window._mgmtOrders) renderMonthOrders(window._mgmtOrders); }); // v2.9.3 新卡即時亮鈕
   } else toast('儲存失敗：'+(res.error||''));
 }
