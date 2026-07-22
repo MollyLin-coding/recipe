@@ -349,11 +349,11 @@ tbody tr:hover td{background:#faf3e8;}
   </div>
   <div id="mainContent"></div>
   <div id="navbar">
+    <div class="nav-tab"        data-tab="batch"     onclick="switchTab('batch')">    <span class="ni">📦</span><span>訂單</span></div>
     <div class="nav-tab active" data-tab="recipe"    onclick="switchTab('recipe')">   <span class="ni">📋</span><span>酒譜/run card</span></div>
     <div class="nav-tab"        data-tab="profit"    onclick="switchTab('profit')">   <span class="ni">📊</span><span>毛利分析</span></div>
     <div class="nav-tab"        data-tab="inventory" onclick="switchTab('inventory')"><span class="ni">🧪</span><span>原料/資材庫</span></div>
     <div class="nav-tab"        data-tab="rd"        onclick="switchTab('rd')">       <span class="ni">🔬</span><span>研發試算</span></div>
-    <div class="nav-tab"        data-tab="batch"     onclick="switchTab('batch')">    <span class="ni">📦</span><span>訂單</span></div>
     <div class="nav-tab"        data-tab="stock"     onclick="switchTab('stock')">    <span class="ni">🗄️</span><span>成品庫存</span></div>
     <div class="nav-tab admin-only" data-tab="apply" onclick="switchTab('apply')">   <span class="ni">✏️</span><span>審核</span></div>
   </div>
@@ -389,7 +389,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.1.1';
+const APP_VERSION='v3.1.2';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
