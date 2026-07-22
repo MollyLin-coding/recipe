@@ -389,7 +389,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v2.8.1';
+const APP_VERSION='v2.9';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -1163,6 +1163,7 @@ async function loadBottleOverview() {
   if (!area) return;
   if (!res.ok) { area.innerHTML = `<div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${res.error || ''}</div>`; return; }
   const list = res.list || [];
+  window._bottleOv = list; window._bottleOvAt = Date.now(); // 同步建單警告快取
   area.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>瓶品名</th><th class="tr">現有庫存(個)</th><th class="tr">安全水位</th></tr></thead><tbody>'
     + list.map(x => safetyRow(x, '玻璃瓶', '')).join('')
     + '</tbody></table></div>';
@@ -2095,12 +2096,62 @@ async function loadOrderMgmt() {
   if (!res.ok) { if (area) area.innerHTML = `<div class="warn" style="padding:10px;">${res.error || '讀取失敗'}</div>`; return; }
   window._mgmtOrders = res.orders || [];
   renderMonthOrders(window._mgmtOrders);
+  ensureBottleCache(); // 建單玻璃瓶警告用（背景預載）
 }
 
 // 建單表單（admin）：接 createOrder，欄位對齊訂單主表 11 欄
 let _orderLineSeq = 0;
-// 瓶型清單（BSPEC 既有 + 香水瓶兩款）；建單/完成回報共用
-function orderBottleList() { return [...Object.keys(BSPEC), '山形香水瓶', '大香水瓶', '10L Keg桶', '20公升無龍頭PP桶', '20公升有水龍頭桶']; }
+// v2.9 瓶型清單與玻璃瓶庫存對齊：玻璃瓶庫存品名（動態）＋非玻璃庫存容器；建單/完成回報/Run Card 共用
+const BOTTLE_STOCK_FALLBACK = ['100ml江小白', '100ml山形香水瓶', '100ml平底香水瓶', '500ml伏特加瓶', '500ml大香水瓶'];
+const NON_STOCK_CONTAINERS = ['波士頓', '4L桶', '山形瓶', '雷神瓶', '10L Keg桶', '20公升無龍頭PP桶', '20公升有水龍頭桶'];
+// 舊訂單瓶型 → 庫存品名 別名（新單直接存庫存品名）；BSPEC 成本表仍用舊鍵，查詢一律走 _bspecOf
+const BOTTLE_ALIAS = { '江小白': '100ml江小白', '伏特加': '500ml伏特加瓶', '山形香水瓶': '100ml山形香水瓶', '大香水瓶': '500ml大香水瓶' };
+function _bspecOf(bt) { if (BSPEC[bt]) return BSPEC[bt]; const legacy = Object.keys(BOTTLE_ALIAS).find(k => BOTTLE_ALIAS[k] === bt); return (legacy && BSPEC[legacy]) || {}; }
+function orderBottleList() {
+  const glass = (window._bottleOv && window._bottleOv.length) ? window._bottleOv.map(x => x.item) : BOTTLE_STOCK_FALLBACK;
+  return [...glass, ...NON_STOCK_CONTAINERS];
+}
+// 玻璃瓶庫存快取（建單警告／瓶型下拉用；60 秒內不重抓）
+async function ensureBottleCache(force) {
+  if (!force && window._bottleOv && Date.now() - (window._bottleOvAt || 0) < 60000) return;
+  try { const r = await api({ action: 'getBottleOverview' }); if (r && r.ok) { window._bottleOv = r.list || []; window._bottleOvAt = Date.now(); } } catch (e) { }
+}
+function bottleInvName(bt) {
+  const n = String(bt || '').trim(); if (!n) return null;
+  const ov = window._bottleOv || [];
+  if (ov.some(x => x.item === n)) return n;
+  if (BOTTLE_ALIAS[n] && ov.some(x => x.item === BOTTLE_ALIAS[n])) return BOTTLE_ALIAS[n];
+  return null;
+}
+// 建單酒款列：玻璃瓶可用量（庫存−其他訂單預佔）不足 → 即時紅字警告（同瓶型多款合計；僅提醒不擋單，實際以倉管盤點為準）
+function checkBottleWarn() {
+  const ov = window._bottleOv; if (!ov || !ov.length) return;
+  const lines = [...document.querySelectorAll('#orderItemLines .order-line')];
+  if (!lines.length) return;
+  const need = {};
+  const rows = lines.map(el => {
+    const idx = el.id.replace('oline_', '');
+    const btEl = document.getElementById('oi_' + idx + '_bt');
+    const qEl = document.getElementById('oi_' + idx + '_qty');
+    const inv = btEl ? bottleInvName(btEl.value) : null;
+    const q = qEl ? (parseInt(qEl.value, 10) || 0) : 0;
+    if (inv && q > 0) need[inv] = (need[inv] || 0) + q;
+    return { idx, inv, q };
+  });
+  rows.forEach(r => {
+    const w = document.getElementById('oi_' + r.idx + '_btwarn'); if (!w) return;
+    if (!r.inv || r.q <= 0) { w.style.display = 'none'; return; }
+    const rec = ov.find(x => x.item === r.inv) || { stock: 0, reserved: 0 };
+    const rsv = Math.max(0, (rec.reserved || 0) - ((window._omEditOffset || {})[r.inv] || 0));
+    const avail = (rec.stock || 0) - rsv;
+    const total = need[r.inv] || 0;
+    if (total > avail) {
+      w.style.display = 'block';
+      w.innerHTML = '⚠ <b>' + r.inv + '</b> 可用僅 ' + avail + ' 個（庫存 ' + (rec.stock || 0) + '−其他訂單預佔 ' + rsv + '），本單需 ' + total + ' 個，缺 <b>' + (total - avail) + '</b> 個——仍可建單，請留意補瓶',
+      w.style.color = 'var(--red)';
+    } else { w.style.display = 'none'; }
+  });
+}
 // 客戶顯示名（只改顯示、資料鍵不變）與隱藏清單
 const CLIENT_LABELS = { '南坡萬v.2': '南坡萬自有品牌酒' };
 const HIDDEN_CLIENTS = ['Feeling Bar Cafe', '南坡萬公版'];
@@ -2169,13 +2220,14 @@ function orderLineHtml(idx, client) {
     <div style="font-size:11px;font-weight:700;color:var(--gold-dk);margin-bottom:2px;">酒款 <span class="oline-no">?</span></div>
     <div class="form-row" style="gap:6px;">
       <div class="fg" style="flex:2 1 140px"><label>酒款</label><input class="inp" id="oi_${idx}_rec" list="oidl_${idx}" placeholder="選或輸入酒款" style="margin:0;font-size:13px;" oninput="var w=document.getElementById('om_warn'); if(w&&this.value.trim())w.style.display='none';"><datalist id="oidl_${idx}">${recOpts}</datalist></div>
-      <div class="fg" style="flex:1 1 70px"><label>數量</label><input class="inp" id="oi_${idx}_qty" type="number" min="1" value="1" style="margin:0;font-size:13px;"></div>
+      <div class="fg" style="flex:1 1 70px"><label>數量</label><input class="inp" id="oi_${idx}_qty" type="number" min="1" value="1" style="margin:0;font-size:13px;" oninput="checkBottleWarn()"></div>
     </div>
     <div class="form-row" style="gap:6px;">
       <div class="fg" style="flex:1 1 90px"><label>規格</label><input class="inp" id="oi_${idx}_vol" value="100ml" style="margin:0;font-size:13px;"></div>
-      <div class="fg" style="flex:1 1 100px"><label>瓶型</label><select class="inp" id="oi_${idx}_bt" style="margin:0;font-size:13px;">${btOpts}</select></div>
+      <div class="fg" style="flex:1 1 100px"><label>瓶型</label><select class="inp" id="oi_${idx}_bt" style="margin:0;font-size:13px;" onchange="checkBottleWarn()">${btOpts}</select></div>
       <div class="fg" style="flex:0 0 auto;display:flex;align-items:flex-end;"><button class="btn btn-ghost btn-sm" onclick="document.getElementById('oline_${idx}').remove();renumberOrderLines()">✕</button></div>
     </div>
+    <div id="oi_${idx}_btwarn" style="display:none;font-size:12px;color:var(--red);margin-top:4px;line-height:1.5;"></div>
   </div>`;
 }
 // 酒款編號：加/刪一款後重編 1..n，並更新「已 key N 款」計數
@@ -2183,6 +2235,7 @@ function renumberOrderLines() {
   const lines = document.querySelectorAll('#orderItemLines .order-line');
   lines.forEach((el, i) => { const n = el.querySelector('.oline-no'); if (n) n.textContent = i + 1; });
   const c = document.getElementById('olineCount'); if (c) c.textContent = lines.length;
+  checkBottleWarn();
 }
 function orderModalAddLine() {
   const client = document.getElementById('om_client').value;
@@ -2499,10 +2552,11 @@ function showOrderModal(edit) {
       document.getElementById('oi_' + li + '_qty').value = it.qty || 1;
       document.getElementById('oi_' + li + '_vol').value = it.volume || '';
       const btSel = document.getElementById('oi_' + li + '_bt');
-      if (it.bottleType && ![...btSel.options].some(x => x.value === it.bottleType)) {
-        const op = document.createElement('option'); op.textContent = it.bottleType; btSel.appendChild(op);
+      const btShow = it.bottleType ? (BOTTLE_ALIAS[it.bottleType] || it.bottleType) : ''; // 舊名順手遷移成庫存品名
+      if (btShow && ![...btSel.options].some(x => x.value === btShow)) {
+        const op = document.createElement('option'); op.textContent = btShow; btSel.appendChild(op);
       }
-      if (it.bottleType) btSel.value = it.bottleType;
+      if (btShow) btSel.value = btShow;
       el.dataset.status = it.status || '待製作';
       el.dataset.batchId = it.batchId || '';
     });
@@ -2514,6 +2568,16 @@ function showOrderModal(edit) {
     _orderLineSeq = 0; orderModalAddLine();
     refillDeliveryDefaults();
   }
+  // v2.9 玻璃瓶警告：載入快取後檢查；編輯模式先扣掉本單自身的預佔避免重複計
+  ensureBottleCache().then(() => {
+    window._omEditOffset = {};
+    if (isEdit) (edit.items || []).forEach(it => {
+      if (it.status === '完成') return;
+      const inv = bottleInvName(it.bottleType); if (!inv) return;
+      window._omEditOffset[inv] = (window._omEditOffset[inv] || 0) + (Number(it.qty) || 0);
+    });
+    checkBottleWarn();
+  });
   const doCreate = async () => {
     const client = document.getElementById('om_client').value;
     const items = [];
@@ -2565,13 +2629,13 @@ function showOrderModal(edit) {
 function showCompleteModal(oi, ii) {
   const o = window._mgmtOrders[oi]; if (!o) return;
   const it = o.items[ii]; if (!it) return;
-  const bt = it.bottleType || Object.keys(BSPEC)[0];
+  const bt = it.bottleType ? (BOTTLE_ALIAS[it.bottleType] || it.bottleType) : orderBottleList()[0];
   const modal = makeModal(`
     <div class="modal-title">✓ 完成回報：${it.product}</div>
     <div style="font-size:12px;color:var(--ink3);margin-bottom:8px;">${o.orderNo} · ${o.client} · ${it.volume || ''}×${it.qty}瓶</div>
     <div class="form-row">
       <div class="fg"><label>實際裝瓶數</label><input class="inp" type="number" id="ct_cnt" value="${it.qty}" style="margin:0;"></div>
-      <div class="fg"><label>瓶型</label><select id="ct_bt">${orderBottleList().map(b => `<option${b === bt ? ' selected' : ''}>${b}</option>`).join('')}</select></div>
+      <div class="fg"><label>瓶型</label><select id="ct_bt">${(function(){ const bl = orderBottleList(); if (bt && bl.indexOf(bt) < 0) bl.push(bt); return bl.map(b => `<option${b === bt ? ' selected' : ''}>${b}</option>`).join(''); })()}</select></div>
     </div>
     <div style="display:flex;gap:16px;margin:8px 0;">
       <label style="display:flex;gap:6px;align-items:center;font-size:13px;"><input type="checkbox" id="ct_front" checked style="width:auto;"> 前標</label>
@@ -2584,7 +2648,7 @@ function showCompleteModal(oi, ii) {
     const count = parseInt(document.getElementById('ct_cnt').value, 10) || it.qty;
     const btv = document.getElementById('ct_bt').value;
     const front = document.getElementById('ct_front').checked, back = document.getElementById('ct_back').checked;
-    const spec = BSPEC[btv] || {};
+    const spec = _bspecOf(btv);
     const labor = count * ((spec.labor || 0) + (front ? 1.5 : 0) + (back ? 1.5 : 0));
     const res = await api({
       action: 'completeOrderItem', orderNo: o.orderNo, itemIndex: ii, bottleCount: count, bottle: btv,
@@ -2592,8 +2656,8 @@ function showCompleteModal(oi, ii) {
       pm: (curUser && curUser.username) || '', creator: (curUser && curUser.username) || '', note: document.getElementById('ct_note').value
     });
     if (res.ok) {
-      toast(`已完成：${it.product}（訂單${res.orderStatus}）`); modal.remove();
-      loadOrderMgmt(); C.batch = null; renderBatchPage(document.getElementById('runcardArea'));
+      toast(`已完成：${it.product}（訂單${res.orderStatus}）` + (res.bottleDeduct ? `｜🍾 自動扣瓶 ${res.bottleDeduct.item}×${res.bottleDeduct.qty}（理論，剩 ${res.bottleDeduct.stock}）` : '')); modal.remove();
+      loadOrderMgmt(); ensureBottleCache(true); C.batch = null; renderBatchPage(document.getElementById('runcardArea'));
     } else toast('回報失敗：' + (res.error || ''));
   });
 }
@@ -2664,7 +2728,7 @@ function safetyRow(x, category, client) {
     ? `<input type="number" min="0" step="1" value="${x.safety || 0}" data-item="${x.item}" style="width:56px;padding:4px;font-size:13px;text-align:right;border:1px solid var(--border);border-radius:4px;" onchange="saveSafety('${category}','${client}',this.dataset.item,this.value,this)">`
     : (x.safety || 0);
   return `<tr${low ? ' style="background:#fbeaea;"' : ''}>`
-    + `<td>${x.item}${low ? ' <span style="color:var(--red);font-size:11px;">⚠低於水位</span>' : ''}<div style="font-size:11px;color:var(--ink3);">累計入 ${x.inQty} / 出 ${x.outQty}</div></td>`
+    + `<td>${x.item}${low ? ' <span style="color:var(--red);font-size:11px;">⚠低於水位</span>' : ''}<div style="font-size:11px;color:var(--ink3);">累計入 ${x.inQty} / 出 ${x.outQty}</div>${x.reserved != null ? `<div style="font-size:11px;${(x.stock - x.reserved) < 0 ? 'color:var(--red);font-weight:700;' : 'color:var(--gold-dk);'}" title="${x.reservedDetail || ''}">訂單預佔 ${x.reserved}｜可用 ${x.stock - x.reserved}</div>` : ''}</td>`
     + `<td class="tr" style="font-weight:600;font-size:16px;${x.stock <= 0 ? 'color:var(--ink3);' : (low ? 'color:var(--red);' : '')}">${x.stock}</td>`
     + `<td class="tr">${safeCell}</td></tr>`;
 }
