@@ -2279,11 +2279,11 @@ function _isGongbanType() {
   }
   return false;
 }
-// v3.1 換前標客戶／v3.1.3 自有酒款庫存出貨訂單：瓶型預設 100ml山形香水瓶（南坡萬自有品牌酒瓶型）
+// v3.1 換前標客戶／v3.1.3 庫存出貨／v3.1.4 投產單：瓶型預設 100ml山形香水瓶（南坡萬自有品牌酒瓶型）
 function _defaultBottleFor(client) {
   if (String(client || '').startsWith('換前標-')) return '100ml山形香水瓶';
   const t = document.getElementById('om_type');
-  if (t && t.value === '自有酒款庫存出貨訂單') return '100ml山形香水瓶';
+  if (t && (t.value === '自有酒款庫存出貨訂單' || t.value === TYPE_NO_FINANCE)) return '100ml山形香水瓶';
   return '';
 }
 function orderLineRecipeNames(client) {
