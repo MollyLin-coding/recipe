@@ -389,7 +389,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v2.9.1';
+const APP_VERSION='v2.9.2';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2103,10 +2103,10 @@ async function loadOrderMgmt() {
 let _orderLineSeq = 0;
 // v2.9 瓶型清單與玻璃瓶庫存對齊：玻璃瓶庫存品名（動態）＋非玻璃庫存容器；建單/完成回報/Run Card 共用
 const BOTTLE_STOCK_FALLBACK = ['100ml江小白', '100ml山形香水瓶', '100ml平底香水瓶', '500ml伏特加瓶', '500ml大香水瓶'];
-const NON_STOCK_CONTAINERS = ['波士頓', '4L桶', '山形瓶', '雷神瓶', '10L Keg桶', '20公升無龍頭PP桶', '20公升有水龍頭桶'];
+const NON_STOCK_CONTAINERS = ['波士頓', '4L桶', '雷神瓶', '10L Keg桶', '20公升無龍頭PP桶', '20公升有水龍頭桶'];
 // 舊訂單瓶型 → 庫存品名 別名（新單直接存庫存品名）；BSPEC 成本表仍用舊鍵，查詢一律走 _bspecOf
-const BOTTLE_ALIAS = { '江小白': '100ml江小白', '伏特加': '500ml伏特加瓶', '山形香水瓶': '100ml山形香水瓶', '大香水瓶': '500ml大香水瓶' };
-function _bspecOf(bt) { if (BSPEC[bt]) return BSPEC[bt]; const legacy = Object.keys(BOTTLE_ALIAS).find(k => BOTTLE_ALIAS[k] === bt); return (legacy && BSPEC[legacy]) || {}; }
+const BOTTLE_ALIAS = { '江小白': '100ml江小白', '伏特加': '500ml伏特加瓶', '山形香水瓶': '100ml山形香水瓶', '山形瓶': '100ml山形香水瓶', '大香水瓶': '500ml大香水瓶' };
+function _bspecOf(bt) { if (BSPEC[bt]) return BSPEC[bt]; const legacy = Object.keys(BOTTLE_ALIAS).find(k => BOTTLE_ALIAS[k] === bt && BSPEC[k]); return (legacy && BSPEC[legacy]) || {}; }
 function orderBottleList() {
   const glass = (window._bottleOv && window._bottleOv.length) ? window._bottleOv.map(x => x.item) : BOTTLE_STOCK_FALLBACK;
   return [...glass, ...NON_STOCK_CONTAINERS];
