@@ -2127,8 +2127,42 @@ function bottleInvName(bt) {
   if (BOTTLE_ALIAS[n] && ov.some(x => x.item === BOTTLE_ALIAS[n])) return BOTTLE_ALIAS[n];
   return null;
 }
+// v3.1 南坡萬自有酒款成品庫存快取（自有酒款庫存出貨訂單 用；60 秒內不重抓）
+async function ensureNpwStockCache(force) {
+  if (!force && window._npwStock && Date.now() - (window._npwStockAt || 0) < 60000) return;
+  try {
+    const r = await api({ action: 'getStockOverview', client: '南坡萬v.2' }, true);
+    if (r && r.ok) { window._npwStock = {}; (r.list || []).forEach(x => { window._npwStock[x.item] = Number(x.stock) || 0; }); window._npwStockAt = Date.now(); }
+  } catch (e) { }
+}
+// v3.1 自有酒款庫存出貨：即時比對成品庫存（南坡萬v.2），超量紅字＋告知最大可下量（doCreate 會硬擋）
+function checkShipStockWarn() {
+  const lines = [...document.querySelectorAll('#orderItemLines .order-line')];
+  if (!lines.length) return;
+  const st = window._npwStock;
+  const need = {};
+  const rows = lines.map(el => {
+    const idx = el.id.replace('oline_', '');
+    const pd = ((document.getElementById('oi_' + idx + '_rec') || {}).value || '').trim();
+    const q = parseInt((document.getElementById('oi_' + idx + '_qty') || {}).value, 10) || 0;
+    if (pd && q > 0) need[pd] = (need[pd] || 0) + q;
+    return { idx, pd, q };
+  });
+  rows.forEach(r => {
+    const w = document.getElementById('oi_' + r.idx + '_btwarn'); if (!w) return;
+    if (!st || !r.pd || r.q <= 0) { w.style.display = 'none'; return; }
+    const have = Number(st[r.pd]) || 0;
+    const total = need[r.pd] || 0;
+    if (total > have) {
+      w.style.display = 'block';
+      w.innerHTML = '⚠ 「<b>' + r.pd + '</b>」成品庫存僅 <b>' + have + '</b> 瓶，本單需 ' + total + ' 瓶——<b>最多可下 ' + have + ' 瓶</b>（超過無法儲存）';
+    } else { w.style.display = 'none'; }
+  });
+}
 // 建單酒款列：玻璃瓶可用量（庫存−其他訂單預佔）不足 → 即時紅字警告（同瓶型多款合計；僅提醒不擋單，實際以倉管盤點為準）
 function checkBottleWarn() {
+  const tEl = document.getElementById('om_type');
+  if (tEl && tEl.value === '自有酒款庫存出貨訂單') { checkShipStockWarn(); return; } // v3.1 出貨單改比對成品庫存
   const ov = window._bottleOv; if (!ov || !ov.length) return;
   const lines = [...document.querySelectorAll('#orderItemLines .order-line')];
   if (!lines.length) return;
@@ -2178,7 +2212,7 @@ const TYPE_CLIENTS = {
   '代工訂單(全客製/換前標)': [
     ['OEM-Babyface', '全客製-Babyface'], ['OEM-Lane72', '全客製-Lane72'], ['OEM-好野吧', '全客製-好野吧'],
     ['全客製-雋荖&拾山', '全客製-雋荖&拾山'], ['全客製-酒肉朋友', '全客製-酒肉朋友'],
-    ['Feeling Bar', '全客製-Feeling Bar'], ['全客製-滿枝枒', '全客製-滿枝枒']
+    ['Feeling Bar', '全客製-Feeling Bar'], ['換前標-滿枝枒', '換前標-滿枝枒']
   ],
   '南坡萬自有酒款投產單，無金流': [['南坡萬v.2', '補充自廠酒款水位']],
   '自有酒款庫存出貨訂單': [['經銷商－日光貳參', '經銷商－日光貳參'], ['經銷商－文博會', '經銷商－文博會']]
@@ -2213,6 +2247,7 @@ function omTypeChange() {
   if (cw) cw.innerHTML = omClientFieldHtml(t ? t.value : '', ''); // 切類型即重置客戶清單（避免殘留上一類型的選擇）
   _syncFinanceVis();
   orderModalClientChange();
+  if (t && t.value === '自有酒款庫存出貨訂單') ensureNpwStockCache().then(() => checkBottleWarn()); // v3.1
 }
 // 投產單（無金流）→ 隱藏金流＋配送區塊
 function _syncFinanceVis() {
@@ -2231,11 +2266,22 @@ function getOrderTypeValue() {
   }
   return el.value || '';
 }
-// 代工訂單(全客製/換前標)/舊「公版酒」類型 → 建單酒款建議帶入南坡萬自有品牌(南坡萬v.2)全酒款
+// v3.1 酒款帶入南坡萬自有品牌(南坡萬v.2)全酒款的時機：
+//   ①舊「公版酒」類型 ②庫存出貨(出的就是自有酒款成品) ③代工訂單且客戶=換前標-*(公版酒貼客標；全客製-* 只帶該客戶自己的酒譜)
 function _isGongbanType() {
   const el = document.getElementById('om_type');
   const v = el ? String(el.value || '') : '';
-  return v === '代工訂單(全客製/換前標)' || v.includes('公版酒');
+  if (v.includes('公版酒')) return true;
+  if (v === '自有酒款庫存出貨訂單') return true;
+  if (v === '代工訂單(全客製/換前標)') {
+    const c = document.getElementById('om_client');
+    return !!(c && String(c.value || '').startsWith('換前標-'));
+  }
+  return false;
+}
+// v3.1 換前標客戶：瓶型預設 100ml山形香水瓶（南坡萬自有品牌酒瓶型）
+function _defaultBottleFor(client) {
+  return String(client || '').startsWith('換前標-') ? '100ml山形香水瓶' : '';
 }
 function orderLineRecipeNames(client) {
   return [...new Set([
@@ -2256,11 +2302,12 @@ function refreshOrderLineDatalists() {
 function orderLineHtml(idx, client) {
   const names = orderLineRecipeNames(client);
   const recOpts = names.map(n => `<option>${n}</option>`).join('');
-  const btOpts = orderBottleList().map(b => `<option>${b}</option>`).join('');
+  const defBt = _defaultBottleFor(client);
+  const btOpts = orderBottleList().map(b => `<option${b === defBt ? ' selected' : ''}>${b}</option>`).join('');
   return `<div class="order-line" id="oline_${idx}" style="border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:8px;">
     <div style="font-size:11px;font-weight:700;color:var(--gold-dk);margin-bottom:2px;">酒款 <span class="oline-no">?</span></div>
     <div class="form-row" style="gap:6px;">
-      <div class="fg" style="flex:2 1 140px"><label>酒款</label><input class="inp" id="oi_${idx}_rec" list="oidl_${idx}" placeholder="選或輸入酒款" style="margin:0;font-size:13px;" oninput="var w=document.getElementById('om_warn'); if(w&&this.value.trim())w.style.display='none';"><datalist id="oidl_${idx}">${recOpts}</datalist></div>
+      <div class="fg" style="flex:2 1 140px"><label>酒款</label><input class="inp" id="oi_${idx}_rec" list="oidl_${idx}" placeholder="選或輸入酒款" style="margin:0;font-size:13px;" oninput="var w=document.getElementById('om_warn'); if(w&&this.value.trim())w.style.display='none'; checkBottleWarn();"><datalist id="oidl_${idx}">${recOpts}</datalist></div>
       <div class="fg" style="flex:1 1 70px"><label>數量</label><input class="inp" id="oi_${idx}_qty" type="number" min="1" value="1" style="margin:0;font-size:13px;" oninput="checkBottleWarn()"></div>
     </div>
     <div class="form-row" style="gap:6px;">
@@ -2423,12 +2470,17 @@ function renderMonthOrders(orders) {
   if (!list.length) { area.innerHTML = `<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">${_orderScopeAll ? '尚無訂單' : `${ym.replace('-', ' 年 ')} 月尚無出貨訂單`}</div>`; return; }
   area.innerHTML = list.map(o => {
     const itemsTxt = (o.items || []).map(it => `${it.product}×${it.qty}`).join('、');
-    // v2.9.1 每酒款一顆「查看 run card」鈕；v2.9.3 只顯示已建過卡的酒款（未開工酒款一目了然），索引未載入前不顯示
-    const rcBtns = window._rcIdx ? (o.items || []).map((it, i) => window._rcIdx.has(o.orderNo + '||' + (it.product || '')) ? `<button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;" onclick="event.stopPropagation();rcShowHistoryByNo('${o.orderNo}',${i})">📋 ${it.product || ('酒款' + (i + 1))}</button>` : '').join('') : '';
+    // v2.9.1 每酒款一顆「查看 run card」鈕；v2.9.3 只顯示已建過卡的酒款；v3.1 有卡完成→反灰標示已完工
+    const rcBtns = window._rcIdx ? (o.items || []).map((it, i) => {
+      const rcSt = window._rcIdx.get(o.orderNo + '||' + (it.product || ''));
+      if (!rcSt) return '';
+      const doneStyle = rcSt.done ? 'opacity:.55;background:var(--bg);color:var(--ink2);' : '';
+      return `<button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;${doneStyle}" onclick="event.stopPropagation();rcShowHistoryByNo('${o.orderNo}',${i})">${rcSt.done ? '✔' : '📋'} ${it.product || ('酒款' + (i + 1))}${rcSt.done ? '（已完工）' : ''}</button>`;
+    }).join('') : '';
     return `<div onclick="showOrderDetail('${o.orderNo}')" style="cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;background:var(--card);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <div style="flex:1;min-width:0;">
-        <div style="font-weight:600;font-size:13px;">${clientLabel(o.client)} <span style="color:var(--ink3);font-weight:400;font-size:11px;">${o.orderNo}</span></div>
+        <div style="font-weight:600;font-size:13px;">${clientLabel(o.client)} <span style="color:var(--ink3);font-weight:400;font-size:11px;">${o.orderNo}</span> <span style="font-weight:400;font-size:11px;${o.lot ? 'color:var(--gold-dk);' : 'color:var(--red);opacity:.7;'}">${o.lot ? ('Lot ' + o.lot) : '未填寫Lot數'}</span></div>
         <div style="font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${itemsTxt || '—'}</div>
       </div>
       <div style="text-align:right;flex:0 0 auto;">
@@ -2660,6 +2712,22 @@ function showOrderModal(edit) {
     }
     const lot = (document.getElementById('om_lot').value || '').trim();
     if (lot && !/^\d+$/.test(lot)) { toast('Lot批號需為純數字（可留空）'); return; }
+    // v3.1 自有酒款庫存出貨：出貨量不可超過成品庫存（南坡萬v.2）
+    const tShip = document.getElementById('om_type');
+    if (tShip && tShip.value === '自有酒款庫存出貨訂單') {
+      await ensureNpwStockCache(true);
+      const stMap = window._npwStock || {};
+      const needMap = {};
+      items.forEach(it => { needMap[it.product] = (needMap[it.product] || 0) + (Number(it.qty) || 0); });
+      const over = Object.keys(needMap).filter(pd => needMap[pd] > (Number(stMap[pd]) || 0));
+      if (over.length) {
+        const msg = over.map(pd => '「' + pd + '」庫存 ' + (Number(stMap[pd]) || 0) + '，本單 ' + needMap[pd] + '（最多可下 ' + (Number(stMap[pd]) || 0) + '）').join('；');
+        toast('❌ 出貨量超過成品庫存：' + msg);
+        checkBottleWarn();
+        const il = document.getElementById('orderItemLines'); if (il) il.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+    }
     const res = await api({
       action: isEdit ? 'updateOrder' : 'createOrder',
       ...(isEdit ? { orderNo: edit.orderNo, user: (curUser && curUser.username) || '' } : {}),
@@ -3114,7 +3182,16 @@ async function ensureRcIndex(force) {
   if (!force && window._rcIdx && Date.now() - (window._rcIdxAt || 0) < 60000) return;
   try {
     const r = await api({ action: 'getRunCardIndex' }, true);
-    if (r && r.ok) { window._rcIdx = new Set((r.index || []).map(x => x.orderNo + '||' + x.product)); window._rcIdxAt = Date.now(); }
+    if (r && r.ok) {
+      const m = new Map(); // key → {done:任一卡狀態=完成}
+      (r.index || []).forEach(x => {
+        const k = x.orderNo + '||' + x.product;
+        const cur = m.get(k) || { done: false };
+        if (x.status === '完成') cur.done = true;
+        m.set(k, cur);
+      });
+      window._rcIdx = m; window._rcIdxAt = Date.now();
+    }
   } catch (e) { }
 }
 // v2.9.1 訂單列表卡片鈕入口：以訂單編號找回 _mgmtOrders 索引再開歷史
