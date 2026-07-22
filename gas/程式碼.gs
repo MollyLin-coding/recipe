@@ -2472,7 +2472,7 @@ function getRunCardIndex() {
   for (let i = 1; i < data.length; i++) {
     const r = data[i];
     if (!r[0]) continue;
-    index.push({ orderNo: String(r[1] || ''), product: String(r[3] || '') });
+    index.push({ orderNo: String(r[1] || ''), product: String(r[3] || ''), status: String(r[11] || '') }); // v3.1 status 供列表完工反灰
   }
   return { ok: true, index: index };
 }
