@@ -632,6 +632,10 @@ function _ensureOrderFinanceHeaders_(ws) {
     var mrL = ws.getMaxRows() - 1;
     if (mrL > 0) ws.getRange(2, 31, mrL, 1).setNumberFormat('@');
   }
+  // v3.2 建單人員（AF=32 欄）
+  if (String(ws.getRange(1, 32).getValue() || '') === '') {
+    ws.getRange(1, 32).setValue('建單人員');
+  }
 }
 // 金額欄：空=未填(保留空字串)，有值才轉數字
 function _numOrBlank_(v) { return (v == null || v === '') ? '' : (Number(v) || 0); }
@@ -799,6 +803,10 @@ function createOrder(p) {
     if (p.lot != null && String(p.lot).trim() !== '') {
       ws.getRange(ws.getLastRow(), 31).setNumberFormat('@').setValue(String(p.lot).trim());
     }
+    // AF 建單人員（v3.2）
+    if (p.orderCreator != null && String(p.orderCreator).trim() !== '') {
+      ws.getRange(ws.getLastRow(), 32).setValue(String(p.orderCreator).trim());
+    }
     _logOrderChange_(orderNo, p.pm || p.user || '', '建立訂單',
       p.client + '／' + items.length + ' 款／總 NT$' + (Number(p.total) || 0) + (p.orderType ? '／' + p.orderType : '')
       + (String(p.lot || '').trim() ? '／Lot ' + String(p.lot).trim() : ''));
@@ -839,7 +847,8 @@ function getOrders(p) {
       taxId: String(r[27] == null ? '' : r[27]),
       invoiceSent: (String(r[28]).toUpperCase() === 'TRUE' || r[28] === true),
       invoiceLast5: String(r[29] == null ? '' : r[29]),
-      lot: String(r[30] == null ? '' : r[30])
+      lot: String(r[30] == null ? '' : r[30]),
+      orderCreator: String(r[31] == null ? '' : r[31]) // v3.2 建單人員（兩種 view 皆回，非金額）
     };
     if (view === 'bartender') {
       if (base.status === '已完成') continue; // 不回完成單
@@ -945,6 +954,8 @@ function updateOrder(p) {
       ]]);
       // AE Lot批號（字串+文字格式，防開頭 0 被吃掉；空=清除）
       ws.getRange(i + 1, 31).setNumberFormat('@').setValue(p.lot == null ? '' : String(p.lot).trim());
+      // AF 建單人員（v3.2；有帶參數才覆寫，舊呼叫不清空）
+      if (p.orderCreator != null) ws.getRange(i + 1, 32).setValue(String(p.orderCreator).trim());
       _logOrderChange_(orderNo, p.user || p.pm || '', '編輯訂單',
         p.client + '／' + items.length + ' 款／總 NT$' + (Number(p.total) || 0) + '／表訂 ' + (p.deliveryDate || '—')
         + (String(p.lot || '').trim() ? '／Lot ' + String(p.lot).trim() : ''));
