@@ -389,7 +389,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v2.9.2';
+const APP_VERSION='v2.9.3';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2097,6 +2097,7 @@ async function loadOrderMgmt() {
   window._mgmtOrders = res.orders || [];
   renderMonthOrders(window._mgmtOrders);
   ensureBottleCache(); // 建單玻璃瓶警告用（背景預載）
+  ensureRcIndex().then(() => renderMonthOrders(window._mgmtOrders || [])); // v2.9.3 索引到手後重繪 run card 鈕
 }
 
 // 建單表單（admin）：接 createOrder，欄位對齊訂單主表 11 欄
@@ -2367,8 +2368,8 @@ function renderMonthOrders(orders) {
   if (!list.length) { area.innerHTML = `<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">${_orderScopeAll ? '尚無訂單' : `本月（${ym}）尚無出貨訂單`}</div>`; return; }
   area.innerHTML = list.map(o => {
     const itemsTxt = (o.items || []).map(it => `${it.product}×${it.qty}`).join('、');
-    // v2.9.1 每酒款一顆「查看 run card」鈕（stopPropagation 避免觸發整卡點擊開詳情）
-    const rcBtns = (o.items || []).map((it, i) => `<button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;" onclick="event.stopPropagation();rcShowHistoryByNo('${o.orderNo}',${i})">📋 ${it.product || ('酒款' + (i + 1))}</button>`).join('');
+    // v2.9.1 每酒款一顆「查看 run card」鈕；v2.9.3 只顯示已建過卡的酒款（未開工酒款一目了然），索引未載入前不顯示
+    const rcBtns = window._rcIdx ? (o.items || []).map((it, i) => window._rcIdx.has(o.orderNo + '||' + (it.product || '')) ? `<button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;" onclick="event.stopPropagation();rcShowHistoryByNo('${o.orderNo}',${i})">📋 ${it.product || ('酒款' + (i + 1))}</button>` : '').join('') : '';
     return `<div onclick="showOrderDetail('${o.orderNo}')" style="cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;background:var(--card);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <div style="flex:1;min-width:0;">
@@ -3059,6 +3060,14 @@ function rcOpenFromRecipe(){
   rcOpenEditor(st);
 }
 // 入口②：訂單詳情 → 該酒款 Run Card 歷史清單
+// v2.9.3 Run Card 索引快取（訂單列表鈕條件顯示；60 秒內不重抓）
+async function ensureRcIndex(force) {
+  if (!force && window._rcIdx && Date.now() - (window._rcIdxAt || 0) < 60000) return;
+  try {
+    const r = await api({ action: 'getRunCardIndex' }, true);
+    if (r && r.ok) { window._rcIdx = new Set((r.index || []).map(x => x.orderNo + '||' + x.product)); window._rcIdxAt = Date.now(); }
+  } catch (e) { }
+}
 // v2.9.1 訂單列表卡片鈕入口：以訂單編號找回 _mgmtOrders 索引再開歷史
 function rcShowHistoryByNo(orderNo, ii){
   const oi = (window._mgmtOrders || []).findIndex(o => o.orderNo === orderNo);
@@ -3095,6 +3104,7 @@ async function rcDelCard(id, oi, ii){
   if(res.ok){
     toast('已刪除 '+id);
     document.querySelectorAll('.modal-bg').forEach(m=>{ if(m.querySelector('#rcHistList')) m.remove(); });
+    ensureRcIndex(true).then(() => { if (window._mgmtOrders) renderMonthOrders(window._mgmtOrders); }); // v2.9.3 刪卡即時滅鈕
     rcShowHistory(oi, ii);
   } else toast('刪除失敗：'+(res.error||''));
 }
@@ -3444,6 +3454,7 @@ async function rcSave(){
     rcDraftClear(); _rcLastSnap=JSON.stringify(rcState);
     const di=document.getElementById('rcDraftInfo'); if(di) di.textContent='';
     toast('已儲存 '+st.id);
+    ensureRcIndex(true).then(() => { if (window._mgmtOrders) renderMonthOrders(window._mgmtOrders); }); // v2.9.3 新卡即時亮鈕
   } else toast('儲存失敗：'+(res.error||''));
 }
 </script>
