@@ -150,6 +150,7 @@ function doGet(e) {
       case 'deleteRunCard':          result = deleteRunCard(p); break;           // Run Card(v2.6, admin 限定)
       case 'migrateOrderNos':        result = migrateOrderNos(p); break;         // 訂單編號遷移(v2.7, admin 限定, 冪等)
       case 'migrateOrderTypes':      result = migrateOrderTypes(p); break;       // 訂單類型改制遷移(v3.0, admin 限定, 冪等)
+      case 'backfillOrderCreators':  result = backfillOrderCreators(p); break;   // 建單人員一次性回填(v3.2.1, admin, 冪等只填空白)
       case 'getSafetyLevels':        result = getSafetyLevels(); break;          // 安全水位
       case 'setSafetyLevel':         result = setSafetyLevel(p); break;          // 安全水位
       case 'getStockAlerts':         result = getStockAlerts(); break;           // 安全水位警告(登入用)
@@ -697,6 +698,32 @@ function _genOrderNo(ws) {
 
 // v2.7 一次性遷移（admin 限定、可重複執行=冪等）：舊 NPW-YYYYMMDD-NNN → 新 YYMMDD-NNN
 // 連動五分頁：訂單主表A／訂單異動紀錄B／成品庫存異動H(關聯訂單)／製作記錄F(關聯訂單)／RunCard B
+// v3.2.1 一次性回填：既有訂單 AF 建單人員（admin/冪等；只填空白列，已有值不動）
+function backfillOrderCreators(p) {
+  if (p._role !== 'admin') return { ok: false, error: '僅管理員可執行' };
+  const name = String(p.name || '').trim();
+  if (!name) return { ok: false, error: '缺少 name' };
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('訂單主表');
+  if (!ws || ws.getLastRow() < 2) return { ok: true, filled: 0, detail: [] };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    _ensureOrderFinanceHeaders_(ws);
+    const n = ws.getLastRow() - 1;
+    const rng = ws.getRange(2, 32, n, 1);
+    const vals = rng.getValues();
+    const nos = ws.getRange(2, 1, n, 1).getValues();
+    let filled = 0; const detail = [];
+    for (let i = 0; i < n; i++) {
+      if (!String(nos[i][0] || '')) continue;
+      if (String(vals[i][0] || '').trim() !== '') continue;
+      vals[i][0] = name; filled++; detail.push(String(nos[i][0]));
+    }
+    if (filled) rng.setValues(vals);
+    return { ok: true, filled: filled, detail: detail };
+  } finally { lock.releaseLock(); }
+}
 // v3.0 訂單類型改制一次性遷移（admin/冪等）：換前標公版酒、OEM客戶訂單 → 代工訂單(全客製/換前標)；南坡萬自有品牌 → 南坡萬自有酒款投產單，無金流
 function migrateOrderTypes(p) {
   if (p._role !== 'admin') return { ok: false, error: '僅管理員可執行' };
