@@ -2155,7 +2155,7 @@ function checkShipStockWarn() {
     const total = need[r.pd] || 0;
     if (total > have) {
       w.style.display = 'block';
-      w.innerHTML = '⚠ 「<b>' + r.pd + '</b>」成品庫存僅 <b>' + have + '</b> 瓶，本單需 ' + total + ' 瓶——<b>最多可下 ' + have + ' 瓶</b>（超過無法儲存）';
+      w.innerHTML = '⚠ 「<b>' + r.pd + '</b>」成品庫存僅 <b>' + have + '</b> 瓶，本單需 ' + total + ' 瓶——仍可建單，請於實際出貨前補足庫存（確認出貨時仍會擋負庫存）';
     } else { w.style.display = 'none'; }
   });
 }
@@ -2725,22 +2725,7 @@ function showOrderModal(edit) {
     }
     const lot = (document.getElementById('om_lot').value || '').trim();
     if (lot && !/^\d+$/.test(lot)) { toast('Lot批號需為純數字（可留空）'); return; }
-    // v3.1 自有酒款庫存出貨：出貨量不可超過成品庫存（南坡萬v.2）
-    const tShip = document.getElementById('om_type');
-    if (tShip && tShip.value === '自有酒款庫存出貨訂單') {
-      await ensureNpwStockCache(true);
-      const stMap = window._npwStock || {};
-      const needMap = {};
-      items.forEach(it => { needMap[it.product] = (needMap[it.product] || 0) + (Number(it.qty) || 0); });
-      const over = Object.keys(needMap).filter(pd => needMap[pd] > (Number(stMap[pd]) || 0));
-      if (over.length) {
-        const msg = over.map(pd => '「' + pd + '」庫存 ' + (Number(stMap[pd]) || 0) + '，本單 ' + needMap[pd] + '（最多可下 ' + (Number(stMap[pd]) || 0) + '）').join('；');
-        toast('❌ 出貨量超過成品庫存：' + msg);
-        checkBottleWarn();
-        const il = document.getElementById('orderItemLines'); if (il) il.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return;
-      }
-    }
+    // v3.3.1 主公拍板：庫存出貨建單不再硬擋超量（保留 checkShipStockWarn 紅字警示；實際出貨前會補庫存，shipOrder 確認出貨仍擋負）
     const res = await api({
       action: isEdit ? 'updateOrder' : 'createOrder',
       ...(isEdit ? { orderNo: edit.orderNo, user: (curUser && curUser.username) || '' } : {}),
