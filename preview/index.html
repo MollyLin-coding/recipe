@@ -325,7 +325,7 @@ tbody tr:hover td{background:#faf3e8;}
         <button type="button" class="login-user-btn" onclick="selectLoginUser(this)">小李</button>
         <button type="button" class="login-user-btn" onclick="selectLoginUser(this)">Vic</button>
         <button type="button" class="login-user-btn" onclick="selectLoginUser(this)" style="display:none;">小捲</button><!-- 2026-07-21 主公指示隱藏（帳號資料未刪，要復原拿掉 display:none 即可） -->
-        <button type="button" class="login-user-btn" onclick="selectLoginUser(this)">上海Jason</button>
+        <button type="button" class="login-user-btn" onclick="selectLoginUser(this)" style="display:none;">上海Jason</button><!-- v3.3 主公指示隱藏（帳號資料未刪，要復原拿掉 display:none 即可） -->
       </div>
       <input type="hidden" id="loginUser" value="">
       <input class="inp" id="loginPass" type="password" placeholder="密碼" inputmode="numeric">
@@ -582,7 +582,7 @@ async function doLogin() {
   // admin 才顯示審核
   document.querySelectorAll('.admin-only').forEach(el => el.style.display = res.role === 'admin' ? '' : 'none');
   // 角色分頁分流：倉管=run card+庫存；財務(Lulu)=只看訂單/run card(含金流總覽)；FB觀看(上海Jason)=只看酒譜；其餘角色維持原本可見範圍
-  const ROLE_TABS = { '倉管': ['batch', 'stock', 'inventory'], '財務': ['batch'], 'FB觀看': ['recipe'] };
+  const ROLE_TABS = { '倉管': ['batch', 'recipe', 'stock', 'inventory'], '財務': ['batch'], 'FB觀看': ['recipe'] }; // v3.3 主公指示：小李(倉管)加開 酒譜/run card
   const allowed = ROLE_TABS[res.role];
   if (allowed) {
     document.querySelectorAll('#navbar .nav-tab').forEach(el =>
@@ -2485,6 +2485,7 @@ function renderMonthOrders(orders) {
       <div style="flex:1;min-width:0;">
         <div style="font-weight:600;font-size:13px;">${clientLabel(o.client)} <span style="color:var(--ink3);font-weight:400;font-size:11px;">${o.orderNo}</span> <span style="font-weight:400;font-size:11px;${o.lot ? 'color:var(--gold-dk);' : 'color:var(--red);opacity:.7;'}">${o.lot ? ('Lot ' + o.lot) : '未填寫Lot數'}</span>${o.orderCreator ? ` <span style="font-weight:400;font-size:11px;color:var(--ink3);">建單:${o.orderCreator}</span>` : ''}</div>
         <div style="font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${itemsTxt || '—'}</div>
+        ${(o.orderType !== TYPE_NO_FINANCE && o.depositPaidDate !== undefined) ? `<div style="font-size:11px;margin-top:2px;"><span style="color:${o.depositPaidDate ? 'var(--green)' : 'var(--yellow)'};font-weight:600;">訂金${o.depositPaidDate ? ' ✓已收' : ' 未收'}</span><span style="margin:0 6px;color:var(--border);">|</span><span style="color:${o.finalPaidDate ? 'var(--green)' : 'var(--yellow)'};font-weight:600;">尾款${o.finalPaidDate ? ' ✓已收' : ' 未收'}</span></div>` : ''}
       </div>
       <div style="text-align:right;flex:0 0 auto;">
         <div style="font-size:12px;font-weight:600;">${o.deliveryDate || '—'}</div>
