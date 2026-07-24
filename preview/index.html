@@ -170,7 +170,8 @@ tbody tr:hover td{background:#faf3e8;}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:500;}
 @media(min-width:600px){.modal-bg{align-items:center;}}
 .modal-box{background:var(--card);border-radius:20px 20px 0 0;padding:20px;width:100%;max-height:92vh;overflow-y:auto;}
-@media(min-width:600px){.modal-box{border-radius:var(--r);max-width:560px;max-height:85vh;}}
+@media(min-width:600px){.modal-box{border-radius:var(--r);max-width:640px;max-height:88vh;}}
+@media(min-width:1100px){.modal-box{max-width:1080px;}} /* v3.4 桌機建單視野加大(主公指示) */
 .modal-title{font-family:'Noto Serif TC',serif;font-size:16px;font-weight:600;margin-bottom:14px;color:var(--gold-dk);}
 .mhandle{width:38px;height:4px;background:var(--border);border-radius:99px;margin:0 auto 14px;}
 
@@ -2318,6 +2319,16 @@ function orderLineHtml(idx, client) {
       <div class="fg" style="flex:1 1 100px"><label>瓶型</label><select class="inp" id="oi_${idx}_bt" style="margin:0;font-size:13px;" onchange="checkBottleWarn()">${btOpts}</select></div>
       <div class="fg" style="flex:0 0 auto;display:flex;align-items:flex-end;"><button class="btn btn-ghost btn-sm" onclick="document.getElementById('oline_${idx}').remove();renumberOrderLines()">✕</button></div>
     </div>
+    <label style="display:flex;gap:6px;align-items:center;font-size:12px;margin-top:6px;color:var(--gold-dk);font-weight:600;">
+      <input type="checkbox" id="oi_${idx}_smp" style="width:auto;" onchange="document.getElementById('oi_${idx}_smpWrap').style.display=this.checked?'':'none'"> 是否需要製作試飲(或SGS)酒品？
+    </label>
+    <div id="oi_${idx}_smpWrap" style="display:none;">
+      <div class="form-row" style="gap:6px;">
+        <div class="fg" style="flex:1 1 120px"><label>試飲瓶型</label><select class="inp" id="oi_${idx}_smpbt" style="margin:0;font-size:13px;">${btOpts}</select></div>
+        <div class="fg" style="flex:1 1 70px"><label>試飲瓶數</label><input class="inp" id="oi_${idx}_smpqty" type="number" min="1" value="1" style="margin:0;font-size:13px;"></div>
+        <div class="fg" style="flex:2 1 150px"><label>試飲備註</label><input class="inp" id="oi_${idx}_smpnote" placeholder="選填（如 SGS 檢驗用）" style="margin:0;font-size:13px;"></div>
+      </div>
+    </div>
     <div id="oi_${idx}_btwarn" style="display:none;font-size:12px;color:var(--red);margin-top:4px;line-height:1.5;"></div>
   </div>`;
 }
@@ -2383,6 +2394,7 @@ function deliveryFieldsHtml(v) {
     <div style="margin:8px 0 6px;font-size:13px;font-weight:600;color:var(--gold-dk);">配送資訊</div>
     <div class="form-row" style="gap:6px;">
       <div class="fg" style="flex:1 1 140px"><label>配送方式</label><select class="inp" id="dlv_method" style="margin:0;font-size:13px;"><option value="">—</option>${mOpts}</select></div>
+      <div class="fg" style="flex:1 1 120px"><label>運費支付方</label><select class="inp" id="dlv_feepayer" style="margin:0;font-size:13px;"><option value="">—</option><option${v.shipFeePayer === '南坡萬付運費' ? ' selected' : ''}>南坡萬付運費</option><option${v.shipFeePayer === '客戶付運費' ? ' selected' : ''}>客戶付運費</option></select></div>
       <div class="fg" style="flex:1 1 90px"><label>運費金額</label><input class="inp" id="dlv_fee" type="number" min="0" value="${(v.shipFee === '' || v.shipFee == null) ? '' : v.shipFee}" style="margin:0;font-size:13px;"></div>
     </div>
     <div class="form-row" style="gap:6px;">
@@ -2401,7 +2413,7 @@ function deliveryFieldsHtml(v) {
 function collectDeliveryFields() {
   const gv = id => { const el = document.getElementById(id); return el ? el.value : ''; };
   return {
-    shipMethod: gv('dlv_method'), shipFee: gv('dlv_fee'), recvName: gv('dlv_name'),
+    shipMethod: gv('dlv_method'), shipFeePayer: gv('dlv_feepayer'), shipFee: gv('dlv_fee'), recvName: gv('dlv_name'),
     recvPhone: gv('dlv_phone'), recvAddr: gv('dlv_addr'), taxId: gv('dlv_taxid'),
     invoiceSent: document.getElementById('dlv_sent') && document.getElementById('dlv_sent').checked ? 'true' : '',
     invoiceLast5: gv('dlv_last5')
@@ -2421,6 +2433,22 @@ function refillDeliveryDefaults() {
   const client = document.getElementById('om_client').value;
   const d = clientDeliveryDefaults(client);
   wrap.innerHTML = deliveryFieldsHtml(d ? { ...d, invoiceSent: false, invoiceLast5: '' } : {});
+  // v3.4 Lot 自動遞增：同客戶前一張 lot+1（保留前導零位數）；編輯模式或使用者手改過就不動
+  const lotEl = document.getElementById('om_lot');
+  if (lotEl && !lotEl.dataset.userEdited) lotEl.value = _nextClientLot(client);
+}
+function _nextClientLot(client) {
+  const list = window._mgmtOrders || [];
+  for (let i = list.length - 1; i >= 0; i--) {
+    const o = list[i];
+    if (o.client !== client) continue;
+    const s = String(o.lot || '').trim();
+    if (s && /^\d+$/.test(s)) {
+      const nxt = String(Number(s) + 1);
+      return nxt.length < s.length ? nxt.padStart(s.length, '0') : nxt;
+    }
+  }
+  return '';
 }
 // 🚚 配送編輯（admin）：整組覆寫 W~AD 欄
 function showDeliveryModal(orderNo) {
@@ -2472,7 +2500,7 @@ function renderMonthOrders(orders) {
       : (a.deliveryDate || '').localeCompare(b.deliveryDate || ''));
   if (!list.length) { area.innerHTML = `<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">${_orderScopeAll ? '尚無訂單' : `${ym.replace('-', ' 年 ')} 月尚無出貨訂單`}</div>`; return; }
   area.innerHTML = list.map(o => {
-    const itemsTxt = (o.items || []).map(it => `${it.product}×${it.qty}`).join('、');
+    const itemsTxt = (o.items || []).map(it => `${it.product}×${it.qty}` + (it.sample && it.sample.qty ? `〔🧪試飲${it.sample.bottleType || ''}×${it.sample.qty}〕` : '')).join('、');
     // v2.9.1 每酒款一顆「查看 run card」鈕；v2.9.3 只顯示已建過卡的酒款；v3.1 有卡完成→反灰標示已完工
     const rcBtns = window._rcIdx ? (o.items || []).map((it, i) => {
       const rcSt = window._rcIdx.get(o.orderNo + '||' + (it.product || ''));
@@ -2507,7 +2535,7 @@ function showOrderDetail(orderNo) {
   const items = (o.items || []).map((it, i) =>
     `<div style="display:flex;gap:6px;align-items:center;padding:6px 8px;border:1px solid var(--border);border-radius:6px;margin-top:4px;font-size:12px;">
       <span style="color:var(--gold-dk);font-weight:700;">${i + 1}.</span>
-      <span style="flex:1;">${it.product || '（未綁酒譜）'} · ${it.volume || ''} × ${it.qty} 瓶${it.bottleType ? (' · ' + it.bottleType) : ''}</span>
+      <span style="flex:1;">${it.product || '（未綁酒譜）'} · ${it.volume || ''} × ${it.qty} 瓶${it.bottleType ? (' · ' + it.bottleType) : ''}${it.sample && it.sample.qty ? `<div style="font-size:11px;color:var(--gold-dk);">🧪 試飲：${it.sample.bottleType || '—'} × ${it.sample.qty}${it.sample.note ? ('（' + it.sample.note + '）') : ''}</div>` : ''}</span>
       <span class="badge ${it.status === '完成' ? 'bg-green' : 'bg-yellow'}" style="font-size:9px;">${it.status || '待製作'}</span>
       <button class="btn btn-ghost btn-sm" style="padding:3px 7px;font-size:11px;" onclick="rcShowHistory(${idx},${i})">📋 Run Card</button>
       ${canAct && it.status !== '完成' && it.sheet ? `<button class="btn btn-success btn-sm" style="padding:3px 7px;font-size:11px;" onclick="this.closest('.modal-bg').remove();showCompleteModal(${idx},${i})">完成回報</button>` : ''}
@@ -2524,7 +2552,7 @@ function showOrderDetail(orderNo) {
     ${o.finalAdjustNote ? row('調整備註', o.finalAdjustNote) : ''}` : '';
   const dlvHtml = o.orderType === TYPE_NO_FINANCE ? '' : `
     <div style="margin:8px 0 2px;font-size:13px;font-weight:600;color:var(--gold-dk);">配送資訊</div>
-    ${row('配送方式', (o.shipMethod || '—') + (o.shipFee !== '' && o.shipFee != null ? '（運費 NT$' + o.shipFee + '）' : ''))}
+    ${row('配送方式', (o.shipMethod || '—') + (o.shipFee !== '' && o.shipFee != null ? '（運費 NT$' + o.shipFee + '）' : '') + (o.shipFeePayer ? '｜' + o.shipFeePayer : ''))}
     ${row('收件人', (o.recvName || '—') + (o.recvPhone ? ' · ' + o.recvPhone : ''))}
     ${row('收件地址', o.recvAddr || '—')}
     ${row('公司統編', o.taxId || '—')}
@@ -2642,7 +2670,7 @@ function showOrderModal(edit) {
     </div>
     <div class="form-row">
       <div class="fg"><label>PM</label><input class="inp" id="om_pm" value="${isEdit ? (edit.pm || '') : ((curUser && curUser.username) || '')}" style="margin:0;"></div>
-      <div class="fg"><label>Lot批號（選填）</label><input class="inp" id="om_lot" type="text" inputmode="numeric" value="${isEdit ? (edit.lot || '') : ''}" placeholder="純數字，可留空" style="margin:0;"></div>
+      <div class="fg"><label>Lot批號（選填）</label><input class="inp" id="om_lot" type="text" inputmode="numeric" value="${isEdit ? (edit.lot || '') : ''}" ${isEdit ? 'data-user-edited="1"' : ''} oninput="this.dataset.userEdited='1'" placeholder="純數字，可留空（同客戶自動遞增）" style="margin:0;"></div>
       <div class="fg"><label>建單人員</label><select class="inp" id="om_creator" style="margin:0;">${creatorOpts}</select></div>
     </div>
     <div style="margin:4px 0 6px;font-size:13px;font-weight:600;color:var(--gold-dk);">酒款明細（已 key <span id="olineCount">0</span> 款）</div>
@@ -2677,6 +2705,15 @@ function showOrderModal(edit) {
         const op = document.createElement('option'); op.textContent = btShow; btSel.appendChild(op);
       }
       if (btShow) btSel.value = btShow;
+      // v3.4 試飲(SGS)還原
+      if (it.sample && it.sample.qty) {
+        const sc = document.getElementById('oi_' + li + '_smp');
+        if (sc) { sc.checked = true; const sw = document.getElementById('oi_' + li + '_smpWrap'); if (sw) sw.style.display = ''; }
+        const sb = document.getElementById('oi_' + li + '_smpbt');
+        if (sb) { if (it.sample.bottleType && ![...sb.options].some(x => x.value === it.sample.bottleType)) { const op = document.createElement('option'); op.textContent = it.sample.bottleType; sb.appendChild(op); } sb.value = it.sample.bottleType || ''; }
+        const sq = document.getElementById('oi_' + li + '_smpqty'); if (sq) sq.value = it.sample.qty;
+        const sn = document.getElementById('oi_' + li + '_smpnote'); if (sn) sn.value = it.sample.note || '';
+      }
       el.dataset.status = it.status || '待製作';
       el.dataset.batchId = it.batchId || '';
     });
@@ -2715,6 +2752,11 @@ function showOrderModal(edit) {
       }
       const item = { product, sheet: rec ? rec.sheet : '', volume: document.getElementById('oi_' + idx + '_vol').value || '', bottleType: document.getElementById('oi_' + idx + '_bt').value || '', qty, status: (isEdit && line.dataset.status) ? line.dataset.status : '待製作' };
       if (srcClient) item.srcClient = srcClient;
+      // v3.4 試飲(SGS)酒品
+      const smpChk = document.getElementById('oi_' + idx + '_smp');
+      if (smpChk && smpChk.checked) {
+        item.sample = { bottleType: (document.getElementById('oi_' + idx + '_smpbt') || {}).value || '', qty: parseInt((document.getElementById('oi_' + idx + '_smpqty') || {}).value, 10) || 0, note: (document.getElementById('oi_' + idx + '_smpnote') || {}).value || '' };
+      }
       if (isEdit && line.dataset.batchId) item.batchId = line.dataset.batchId;
       items.push(item);
     });
