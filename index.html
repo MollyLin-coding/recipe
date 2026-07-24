@@ -390,7 +390,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.5';
+const APP_VERSION='v3.6';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -1095,6 +1095,10 @@ async function renderInventoryPage(mc) {
         <div class="fg" style="flex:1 1 80px"><label>數量</label><input class="inp" id="biQty" type="number" min="1" step="1" style="margin:0;"></div>
         <div class="fg" style="flex:1 1 120px"><label>日期</label><input class="inp" id="biDate" type="date" style="margin:0;"></div>
       </div>
+      <div class="form-row">
+        <div class="fg" style="flex:1 1 80px"><label>NG瓶數量（選填）</label><input class="inp" id="biNg" type="number" min="0" step="1" placeholder="0" style="margin:0;"></div>
+        <div class="fg" style="flex:2 1 160px"><label>NG原因備註</label><input class="inp" id="biNgNote" placeholder="如：破損/瓶口瑕疵" style="margin:0;"></div>
+      </div>
       <div class="fe mt8"><button class="btn btn-primary btn-sm" id="biBtn">入庫</button></div>
     </div>
     <div style="border-top:0.5px solid var(--border);margin-top:12px;padding-top:12px;">
@@ -1188,7 +1192,7 @@ async function loadBottleLedger() {
     + rows.map(r => {
         const tag = r.type === '入庫'
           ? '<span style="color:var(--gold-dk);">入庫</span>'
-          : '<span style="color:var(--red);">出庫</span>';
+          : (r.type === 'NG' ? '<span style="color:var(--red);font-weight:700;">NG</span>' : '<span style="color:var(--red);">出庫</span>'); // v3.6 NG 標籤
         return `<tr><td style="font-size:12px;">${r.date}</td><td>${tag}</td><td class="tr">${r.qty}</td><td style="font-size:12px;">${r.operator}</td></tr>`;
       }).join('')
     + '</tbody></table></div>';
@@ -1198,10 +1202,14 @@ async function doBottleIn() {
   const qty = parseInt(document.getElementById('biQty').value, 10);
   if (!item) { toast('請選瓶品名'); return; }
   if (!(qty > 0)) { toast('數量需為正整數'); return; }
-  const res = await api({ action: 'bottleIn', item, qty, date: document.getElementById('biDate').value || '', operator: (curUser && curUser.username) || '' });
+  const ngQty = parseInt((document.getElementById('biNg') || {}).value, 10) || 0;
+  const ngNote = (document.getElementById('biNgNote') || {}).value || '';
+  const res = await api({ action: 'bottleIn', item, qty, date: document.getElementById('biDate').value || '', operator: (curUser && curUser.username) || '', ngQty, ngNote });
   if (res.ok) {
-    toast(`已入庫，${item} 現有 ${res.stock} 個`);
+    toast(`已入庫，${item} 現有 ${res.stock} 個` + (ngQty > 0 ? `｜NG ${ngQty} 個已記錄` : ''));
     document.getElementById('biQty').value = '';
+    const ngEl = document.getElementById('biNg'); if (ngEl) ngEl.value = '';
+    const ngNoteEl = document.getElementById('biNgNote'); if (ngNoteEl) ngNoteEl.value = '';
     loadBottleOverview(); loadBottleLedger();
   } else toast('入庫失敗：' + (res.error || ''));
 }
@@ -2501,13 +2509,15 @@ function renderMonthOrders(orders) {
       : (a.deliveryDate || '').localeCompare(b.deliveryDate || ''));
   if (!list.length) { area.innerHTML = `<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">${_orderScopeAll ? '尚無訂單' : `${ym.replace('-', ' 年 ')} 月尚無出貨訂單`}</div>`; return; }
   area.innerHTML = list.map(o => {
-    const itemsTxt = (o.items || []).map(it => `${it.product}×${it.qty}` + (it.sample && it.sample.qty ? `〔🧪試飲${it.sample.bottleType || ''}×${it.sample.qty}〕` : '')).join('、');
-    // v2.9.1 每酒款一顆「查看 run card」鈕；v2.9.3 只顯示已建過卡的酒款；v3.1 有卡完成→反灰標示已完工
+    const itemsTxt = (o.items || []).map(it => `${it.product}×${it.qty}` + (it.bottleType ? `(${it.bottleType})` : '') + (it.sample && it.sample.qty ? `〔🧪試飲${it.sample.bottleType || ''}×${it.sample.qty}〕` : '')).join('、');
+    // v3.6 Run Card 鈕三態（主公指示）：無卡=虛線半透明「尚待PM建立」／進行中=黃底／已完成(狀態=完成或第11站done)=綠底
     const rcBtns = window._rcIdx ? (o.items || []).map((it, i) => {
+      const nm = it.product || ('酒款' + (i + 1));
       const rcSt = window._rcIdx.get(o.orderNo + '||' + (it.product || ''));
-      if (!rcSt) return '';
-      const doneStyle = rcSt.done ? 'opacity:.55;background:var(--bg);color:var(--ink2);' : '';
-      return `<button class="btn btn-ghost btn-sm" style="padding:3px 8px;font-size:11px;${doneStyle}" onclick="event.stopPropagation();rcShowHistoryByNo('${o.orderNo}',${i})">${rcSt.done ? '✔' : '📋'} ${it.product || ('酒款' + (i + 1))}${rcSt.done ? '（已完工）' : ''}</button>`;
+      const common = 'padding:3px 8px;font-size:11px;border-radius:6px;cursor:pointer;';
+      if (!rcSt) return `<button class="btn btn-sm" style="${common}border:1px dashed var(--ink3);background:transparent;color:var(--ink3);opacity:.65;" onclick="event.stopPropagation();rcShowHistoryByNo('${o.orderNo}',${i})">⚠ ${nm} 尚待PM建立Run Card</button>`;
+      if (rcSt.done) return `<button class="btn btn-sm" style="${common}border:1px solid var(--green);background:#e8f2ea;color:var(--green);font-weight:600;" onclick="event.stopPropagation();rcShowHistoryByNo('${o.orderNo}',${i})">✔ ${nm}（已完成）</button>`;
+      return `<button class="btn btn-sm" style="${common}border:1px solid var(--yellow);background:#faf0dc;color:var(--yellow);font-weight:600;" onclick="event.stopPropagation();rcShowHistoryByNo('${o.orderNo}',${i})">📋 ${nm}（進行中）</button>`;
     }).join('') : '';
     return `<div onclick="showOrderDetail('${o.orderNo}')" style="cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;background:var(--card);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
@@ -2893,7 +2903,7 @@ function safetyRow(x, category, client) {
     ? `<input type="number" min="0" step="1" value="${x.safety || 0}" data-item="${x.item}" style="width:56px;padding:4px;font-size:13px;text-align:right;border:1px solid var(--border);border-radius:4px;" onchange="saveSafety('${category}','${client}',this.dataset.item,this.value,this)">`
     : (x.safety || 0);
   return `<tr${low ? ' style="background:#fbeaea;"' : ''}>`
-    + `<td>${x.item}${low ? ' <span style="color:var(--red);font-size:11px;">⚠低於水位</span>' : ''}<div style="font-size:11px;color:var(--ink3);">累計入 ${x.inQty} / 出 ${x.outQty}</div>${x.reserved != null ? `<div style="font-size:11px;${(x.stock - x.reserved) < 0 ? 'color:var(--red);font-weight:700;' : 'color:var(--gold-dk);'}" title="${x.reservedDetail || ''}">訂單預佔 ${x.reserved}｜可用 ${x.stock - x.reserved}</div>` : ''}</td>`
+    + `<td>${x.item}${low ? ' <span style="color:var(--red);font-size:11px;">⚠低於水位</span>' : ''}<div style="font-size:11px;color:var(--ink3);">累計入 ${x.inQty} / 出 ${x.outQty}${x.ng ? ` / <span style="color:var(--red);">NG ${x.ng}</span>` : ''}</div>${x.reserved != null ? `<div style="font-size:11px;${(x.stock - x.reserved) < 0 ? 'color:var(--red);font-weight:700;' : 'color:var(--gold-dk);'}" title="${x.reservedDetail || ''}">訂單預佔 ${x.reserved}｜可用 ${x.stock - x.reserved}</div>` : ''}</td>`
     + `<td class="tr" style="font-weight:600;font-size:16px;${x.stock <= 0 ? 'color:var(--ink3);' : (low ? 'color:var(--red);' : '')}">${x.stock}</td>`
     + `<td class="tr">${safeCell}</td></tr>`;
 }
@@ -3229,7 +3239,7 @@ async function ensureRcIndex(force) {
       (r.index || []).forEach(x => {
         const k = x.orderNo + '||' + x.product;
         const cur = m.get(k) || { done: false };
-        if (x.status === '完成') cur.done = true;
+        if (x.status === '完成' || x.finalDone) cur.done = true; // v3.6 第11站完成也算已完成
         m.set(k, cur);
       });
       window._rcIdx = m; window._rcIdxAt = Date.now();
