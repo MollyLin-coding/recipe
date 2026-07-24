@@ -390,7 +390,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.4';
+const APP_VERSION='v3.5';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -952,7 +952,8 @@ function toRd() {
   rdState = { ings:[], tv:rdata.totalVol||4000, bt:'4L桶', title:rdata.recipeName||rdata._dn||'', client:curClient };
   rdata.ingredients.forEach((ing, idx) => {
     const pct = parseFloat(document.getElementById('rp_'+idx)?.value) || ing.pct;
-    rdState.ings.push({ type:'single', name:ing.name, brand:'', abv:ing.abv||0, price:0, unitVol:0, ratio:pct, volume:rdata.totalVol*pct/100, hasLoss:false, isManual:false, _cost:ing.cost, _vol:ing.vol });
+    // v3.5 P0-6：帶入 unitCost=每ml成本(酒譜成本÷體積)，rdCpm 直接吃到，成本不再歸零（原 _cost/_vol 只寫不讀）
+    rdState.ings.push({ type:'single', name:ing.name, brand:'', abv:ing.abv||0, price:0, unitVol:0, unitCost:(ing.vol>0?ing.cost/ing.vol:0), ratio:pct, volume:rdata.totalVol*pct/100, hasLoss:false, isManual:false });
   });
   switchTab('rd');
   toast('已帶入研發試算');
@@ -2517,7 +2518,7 @@ function renderMonthOrders(orders) {
       </div>
       <div style="text-align:right;flex:0 0 auto;">
         <div style="font-size:12px;font-weight:600;">${o.deliveryDate || '—'}</div>
-        <span class="badge ${o.status === '已完成' ? 'bg-green' : 'bg-yellow'}" style="font-size:9px;">${o.status || '製作中'}</span>
+        <span class="badge ${(o.status === '已完成' || o.status === '已出貨') ? 'bg-green' : 'bg-yellow'}" style="font-size:9px;">${o.status || '製作中'}</span>
       </div>
       </div>
       ${rcBtns ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--border);" onclick="event.stopPropagation()">${rcBtns}</div>` : ''}
@@ -2559,7 +2560,7 @@ function showOrderDetail(orderNo) {
     ${row('發票/驗收單', (o.invoiceSent ? '✅ 已隨貨寄出' : '—') + (o.invoiceLast5 ? '｜發票後五碼 ' + o.invoiceLast5 : ''))}`;
   makeModal(`
     <div class="modal-title">📦 ${o.orderNo}</div>
-    <div style="font-size:12px;color:var(--ink3);margin-bottom:6px;">${clientLabel(o.client)}${o.orderType ? (' · ' + o.orderType) : ''} <span class="badge ${o.status === '已完成' ? 'bg-green' : 'bg-yellow'}" style="font-size:9px;">${o.status || '製作中'}</span></div>
+    <div style="font-size:12px;color:var(--ink3);margin-bottom:6px;">${clientLabel(o.client)}${o.orderType ? (' · ' + o.orderType) : ''} <span class="badge ${(o.status === '已完成' || o.status === '已出貨') ? 'bg-green' : 'bg-yellow'}" style="font-size:9px;">${o.status || '製作中'}</span></div>
     ${row('表訂出貨日', o.deliveryDate || '—')}
     ${row('實際出貨日', o.shipDateConfirmed ? (o.actualDeliveryDate || '—') : (o.actualDeliveryDate || '—') + '（待確認）')}
     ${row('PM', o.pm || '—')}
@@ -3554,8 +3555,8 @@ function rcAbvUpd(){
 // 執行人員清單：取登入頁帳號按鈕格（與「使用者資料」同步維護），失敗用固定清單
 function rcOperators(){
   let names=[];
-  try{ names=[].slice.call(document.querySelectorAll('#loginUserGrid .login-user-btn')).map(function(b){return b.textContent.trim();}).filter(Boolean); }catch(e){}
-  if(!names.length) names=['Lulu','Kevin','阿軒','Molly','小李','Vic','小捲','上海Jason'];
+  try{ names=[].slice.call(document.querySelectorAll('#loginUserGrid .login-user-btn')).filter(function(b){return b.style.display!=='none';}).map(function(b){return b.textContent.trim();}).filter(Boolean); }catch(e){} // v3.5 P2-12：排除隱藏帳號(小捲/上海Jason)
+  if(!names.length) names=['Lulu','Kevin','阿軒','Molly','小李','Vic'];
   return names;
 }
 function rcNowMin(){ const d=new Date(); const p=n=>('0'+n).slice(-2); return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
