@@ -2186,16 +2186,17 @@ function getBottleOverview() {
   Object.keys(names).forEach(function (n) { if (ordered.indexOf(n) < 0) ordered.push(n); });
   const reserved = _bottleReserved_(names); // v2.9 未完成訂單預佔
   const list = ordered.map(function (item) {
-    let inQty = 0, outQty = 0;
+    let inQty = 0, outQty = 0, ngQty = 0;
     rows.forEach(function (r) {
       if (String(r[BK.item]) !== item) return;
       const q = Number(r[BK.qty]) || 0;
       if (String(r[BK.type]) === '入庫') inQty += q;
       else if (String(r[BK.type]) === '出庫') outQty += q;
+      else if (String(r[BK.type]) === 'NG') ngQty += q; // v3.6 NG 統計（不入庫存）
     });
     const rsv = reserved[item] || { qty: 0, detail: [] };
     return { item: item, inQty: inQty, outQty: outQty, stock: inQty - outQty,
-      safety: smap['玻璃瓶||' + item] || 0,
+      safety: smap['玻璃瓶||' + item] || 0, ng: ngQty,
       reserved: rsv.qty, reservedDetail: rsv.detail.join('、') };
   });
   return { ok: true, list: list };
@@ -2213,7 +2214,13 @@ function bottleIn(p) {
     const ws = _bottleSheet_();
     ws.appendRow([_stockGenId_(), p.date || _stockToday_(), item, '入庫', qty,
       p.operator || '', _stockNow_(), p.note || '']);
-    return { ok: true, item: item, stock: _bottleStockOf_(_bottleRows_(), item) };
+    // v3.6 NG 瓶：另記一筆「NG」型別列（不入庫存 Σ，供小李統計；備註=NG 原因）
+    const ngQty = Math.floor(Number(p.ngQty)) || 0;
+    if (ngQty > 0) {
+      ws.appendRow([_stockGenId_(), p.date || _stockToday_(), item, 'NG', ngQty,
+        p.operator || '', _stockNow_(), String(p.ngNote || 'NG瓶')]);
+    }
+    return { ok: true, item: item, stock: _bottleStockOf_(_bottleRows_(), item), ngQty: ngQty };
   } finally { lock.releaseLock(); }
 }
 
@@ -2543,7 +2550,14 @@ function getRunCardIndex() {
   for (let i = 1; i < data.length; i++) {
     const r = data[i];
     if (!r[0]) continue;
-    index.push({ orderNo: String(r[1] || ''), product: String(r[3] || ''), status: String(r[11] || '') }); // v3.1 status 供列表完工反灰
+    // v3.6：finalDone=第11站(final)已勾完成且有產出瓶數 → 與狀態欄「完成」同視為已完成
+    let finalDone = false;
+    try {
+      const d = r[10] ? JSON.parse(r[10]) : {};
+      const fin = (d.stations || []).find(function (s) { return s && s.type === 'final'; });
+      finalDone = !!(fin && fin.done && (Number(fin.count) || 0) > 0);
+    } catch (e) { }
+    index.push({ orderNo: String(r[1] || ''), product: String(r[3] || ''), status: String(r[11] || ''), finalDone: finalDone });
   }
   return { ok: true, index: index };
 }
