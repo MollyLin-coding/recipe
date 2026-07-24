@@ -31,6 +31,9 @@ echo "②b 版本號自動蓋上 ${TAG}（登入頁 #appVer 顯示用）"
 sed -i "s|const APP_VERSION='[^']*';|const APP_VERSION='${TAG}';|" index.html
 grep -q "const APP_VERSION='${TAG}';" index.html || { echo "❌ 版本號置換失敗，已中止（未 commit）"; exit 1; }
 
+echo "②c 版本號同步蓋進 preview（v3.5 P0-4：防 preview 版號過期造成審查誤判）"
+sed -i "s|const APP_VERSION='[^']*';|const APP_VERSION='${TAG}';|" preview/index.html
+
 echo "③ 驗證：正式前台確實指向正式後端"
 grep -q "const API='${PROD_API}';" index.html || { echo "❌ index.html API 置換失敗，已中止（未 commit）"; exit 1; }
 grep -q "const API='${PROD_API}';" order.html || { echo "❌ order.html API 置換失敗，已中止（未 commit）"; exit 1; }

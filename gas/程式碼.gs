@@ -888,7 +888,7 @@ function getOrders(p) {
       shipFeePayer: String(r[32] == null ? '' : r[32]) // v3.4 運費支付方
     };
     if (view === 'bartender') {
-      if (base.status === '已完成') continue; // 不回完成單
+      if (base.status === '已完成' || base.status === '已出貨') continue; // 不回完成/已出貨單
       base.items = items.map(function (it) {
         const o = {
           product: it.product, sheet: it.sheet, volume: it.volume,
@@ -974,6 +974,21 @@ function updateOrder(p) {
     const data = ws.getDataRange().getValues();
     for (let i = 1; i < data.length; i++) {
       if (String(data[i][0]) !== String(orderNo)) continue;
+      // v3.5 P0-5：儲存前重讀表內現況，已完成款的 status/batchId 以現況為準（防編輯快照蓋掉完成狀態→重複扣瓶/重複製作記錄）
+      let curItems = [];
+      try { curItems = data[i][4] ? JSON.parse(data[i][4]) : []; } catch (e) { curItems = []; }
+      const claimedIdx = [];
+      items.forEach(function (nit) {
+        for (let k = 0; k < curItems.length; k++) {
+          if (claimedIdx.indexOf(k) >= 0) continue;
+          if (String(curItems[k].product || '') === String(nit.product || '') && curItems[k].status === '完成') {
+            nit.status = '完成';
+            if (curItems[k].batchId) nit.batchId = curItems[k].batchId;
+            claimedIdx.push(k);
+            break;
+          }
+        }
+      });
       const allDone = items.every(function (it) { return it.status === '完成'; });
       const anyDone = items.some(function (it) { return it.status === '完成'; });
       const status = allDone ? '已完成' : (anyDone ? '製作中' : '待製作');
@@ -1198,7 +1213,7 @@ function saveProcessNote(p) {
   const data = ws.getDataRange().getValues();
   for (let i = 0; i < data.length; i++) {
     if (String(data[i][0]).trim() === '製程備註') {
-      ws.getRange(i + 1, 2).setValue(note);
+      ws.getRange(i + 2, 1).setValue(note); // v3.5 P0-2：寫「下一列 A 欄」與 getRecipe 讀取位置一致（原誤寫同列 B 欄，存了讀不回）
       return { ok: true };
     }
   }
@@ -2020,9 +2035,9 @@ function shipOrder(p) {
   const ows = ss.getSheetByName('訂單主表');
   if (!ows) return { ok: false, error: '找不到訂單主表分頁' };
   const data = ows.getDataRange().getValues();
-  let row = null;
+  let row = null, rowIdx = -1;
   for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(orderNo)) { row = data[i]; break; }
+    if (String(data[i][0]) === String(orderNo)) { row = data[i]; rowIdx = i; break; }
   }
   if (!row) return { ok: false, error: '找不到訂單：' + orderNo };
   const client = String(row[1]);
@@ -2065,6 +2080,7 @@ function shipOrder(p) {
         '', orderNo, p.operator || '', now, '訂單出貨']);
       shipped++;
     });
+    if (rowIdx > 0) ows.getRange(rowIdx + 1, 9).setValue('已出貨'); // v3.5 P1-2：I 製作狀態=已出貨（列表一眼可辨、退出玻璃瓶預佔）
     _logOrderChange_(orderNo, p.operator || '', '確認出貨', '扣成品庫存 ' + shipped + ' 款');
     return { ok: true, orderNo: orderNo, client: client, shippedItems: shipped };
   } finally { lock.releaseLock(); }
@@ -2109,6 +2125,8 @@ function _bottleReserved_(namesMap) {
     for (let i = 1; i < data.length; i++) {
       const orderNo = String(data[i][0] || '');
       if (!orderNo) continue;
+      if (String(data[i][2] || '') === '自有酒款庫存出貨訂單') continue; // v3.5 P1-1：出貨單出成品不裝瓶，不佔玻璃瓶
+      if (String(data[i][8] || '').trim() === '已出貨') continue;        // v3.5 P1-2：已出貨單不再預佔
       let items;
       try { items = JSON.parse(data[i][4] || '[]'); } catch (e) { continue; }
       items.forEach(function (it) {
