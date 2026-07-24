@@ -637,6 +637,10 @@ function _ensureOrderFinanceHeaders_(ws) {
   if (String(ws.getRange(1, 32).getValue() || '') === '') {
     ws.getRange(1, 32).setValue('建單人員');
   }
+  // v3.4 運費支付方（AG=33 欄）
+  if (String(ws.getRange(1, 33).getValue() || '') === '') {
+    ws.getRange(1, 33).setValue('運費支付方');
+  }
 }
 // 金額欄：空=未填(保留空字串)，有值才轉數字
 function _numOrBlank_(v) { return (v == null || v === '') ? '' : (Number(v) || 0); }
@@ -806,6 +810,7 @@ function createOrder(p) {
       status: it.status || '待製作'
     };
     if (it.srcClient) o.srcClient = it.srcClient; // 公版酒帶自有品牌配方來源
+    if (it.sample && (Number(it.sample.qty) || 0) > 0) o.sample = { bottleType: String(it.sample.bottleType || ''), qty: Number(it.sample.qty) || 0, note: String(it.sample.note || '') }; // v3.4 試飲/SGS
     return o;
   });
   const lock = LockService.getScriptLock();
@@ -833,6 +838,10 @@ function createOrder(p) {
     // AF 建單人員（v3.2）
     if (p.orderCreator != null && String(p.orderCreator).trim() !== '') {
       ws.getRange(ws.getLastRow(), 32).setValue(String(p.orderCreator).trim());
+    }
+    // AG 運費支付方（v3.4）
+    if (p.shipFeePayer != null && String(p.shipFeePayer).trim() !== '') {
+      ws.getRange(ws.getLastRow(), 33).setValue(String(p.shipFeePayer).trim());
     }
     _logOrderChange_(orderNo, p.pm || p.user || '', '建立訂單',
       p.client + '／' + items.length + ' 款／總 NT$' + (Number(p.total) || 0) + (p.orderType ? '／' + p.orderType : '')
@@ -875,7 +884,8 @@ function getOrders(p) {
       invoiceSent: (String(r[28]).toUpperCase() === 'TRUE' || r[28] === true),
       invoiceLast5: String(r[29] == null ? '' : r[29]),
       lot: String(r[30] == null ? '' : r[30]),
-      orderCreator: String(r[31] == null ? '' : r[31]) // v3.2 建單人員（兩種 view 皆回，非金額）
+      orderCreator: String(r[31] == null ? '' : r[31]), // v3.2 建單人員（兩種 view 皆回，非金額）
+      shipFeePayer: String(r[32] == null ? '' : r[32]) // v3.4 運費支付方
     };
     if (view === 'bartender') {
       if (base.status === '已完成') continue; // 不回完成單
@@ -885,6 +895,7 @@ function getOrders(p) {
           bottleType: it.bottleType, qty: it.qty, status: it.status || '待製作'
         };
         if (it.srcClient) o.srcClient = it.srcClient; // 公版酒配方來源（Run Card 預填要用，非金額欄）
+        if (it.sample) o.sample = it.sample; // v3.4 試飲/SGS（製作端要看）
         return o;
       });
       orders.push(base); // 刻意不含 total/balance/depositStatus(決議：調酒師不看金額)
@@ -948,6 +959,7 @@ function updateOrder(p) {
       bottleType: it.bottleType || '', qty: Number(it.qty) || 0, status: it.status || '待製作' };
     if (it.batchId) o.batchId = it.batchId;
     if (it.srcClient) o.srcClient = it.srcClient; // 公版酒帶自有品牌配方來源
+    if (it.sample && (Number(it.sample.qty) || 0) > 0) o.sample = { bottleType: String(it.sample.bottleType || ''), qty: Number(it.sample.qty) || 0, note: String(it.sample.note || '') }; // v3.4 試飲/SGS
     return o;
   });
   const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
@@ -983,6 +995,8 @@ function updateOrder(p) {
       ws.getRange(i + 1, 31).setNumberFormat('@').setValue(p.lot == null ? '' : String(p.lot).trim());
       // AF 建單人員（v3.2；有帶參數才覆寫，舊呼叫不清空）
       if (p.orderCreator != null) ws.getRange(i + 1, 32).setValue(String(p.orderCreator).trim());
+      // AG 運費支付方（v3.4；同上）
+      if (p.shipFeePayer != null) ws.getRange(i + 1, 33).setValue(String(p.shipFeePayer).trim());
       _logOrderChange_(orderNo, p.user || p.pm || '', '編輯訂單',
         p.client + '／' + items.length + ' 款／總 NT$' + (Number(p.total) || 0) + '／表訂 ' + (p.deliveryDate || '—')
         + (String(p.lot || '').trim() ? '／Lot ' + String(p.lot).trim() : ''));
@@ -1060,6 +1074,7 @@ function updateOrderDelivery(p) {
         p.shipMethod || '', _numOrBlank_(p.shipFee), p.recvName || '', p.recvPhone || '',
         p.recvAddr || '', p.taxId || '', sent ? 'TRUE' : '', p.invoiceLast5 || ''
       ]]);
+      if (p.shipFeePayer != null) ws.getRange(i + 1, 33).setValue(String(p.shipFeePayer).trim()); // v3.4
       _logOrderChange_(orderNo, p.user || '', '更新配送',
         (p.shipMethod || '—') + '／' + (p.recvName || '—') + ' ' + (p.recvPhone || '') + '／' + (p.recvAddr || '—')
         + (sent ? '／發票驗收單已隨貨' : ''));
