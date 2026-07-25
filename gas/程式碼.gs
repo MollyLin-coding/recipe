@@ -94,6 +94,24 @@ function stripRecipePrefix(name) {
 // ── 入口 ────────────────────────────────────────────────────
 // v2.1 授權表：FB觀看 只允許這三個 action（後端為準，前端只是 UI）
 var FBVIEW_ALLOWED_ACTIONS = ['getRecipeList', 'getRecipe', 'changePassword'];
+// v3.7 P0-1 角色權限矩陣（後端統一把關；補「持有效 token 即可呼叫任意寫入 action」的洞）。
+// 規則：列於此表的 action 僅限指定角色；未列者＝任何已登入者皆可（讀取與日常操作）。
+// admin 一律放行（各清單皆含 admin）。FB觀看 另有更嚴格白名單（見 FBVIEW_ALLOWED_ACTIONS）。
+// 各業務函式原有的 p._role 內檢查保留為縱深防禦，本表為第一道統一閘門。
+var ROLE_MATRIX = {
+  // 訂單建立/編輯/金流/配送/刪除、審核核准、資料遷移回填、破壞性刪除、帳號診斷 → 僅 admin
+  createOrder: ['admin'], updateOrder: ['admin'], updateOrderFinance: ['admin'],
+  updateOrderDelivery: ['admin'], deleteOrder: ['admin'],
+  reviewApply: ['admin'], reviewRdApply: ['admin'],
+  migrateOrderNos: ['admin'], migrateOrderTypes: ['admin'], backfillOrderCreators: ['admin'],
+  deleteBatchRecord: ['admin'], deleteRunCard: ['admin'], deleteRdRecord: ['admin'],
+  checkUser: ['admin'],
+  // 完成回報/確認出貨日/出貨扣庫、成品與玻璃瓶庫存異動、新增瓶品項、安全水位 → admin + 倉管
+  completeOrderItem: ['admin', '倉管'], confirmShipDate: ['admin', '倉管'], shipOrder: ['admin', '倉管'],
+  stockIn: ['admin', '倉管'], stockOut: ['admin', '倉管'],
+  bottleIn: ['admin', '倉管'], bottleOut: ['admin', '倉管'], addBottleItem: ['admin', '倉管'],
+  setSafetyLevel: ['admin', '倉管']
+};
 function doGet(e) {
   const p = e.parameter || {};
   const action = p.action || '';
@@ -108,6 +126,12 @@ function doGet(e) {
       }
       p._user = sess.username; p._role = sess.role;
       if (sess.role === 'FB觀看' && FBVIEW_ALLOWED_ACTIONS.indexOf(action) < 0) {
+        return ContentService.createTextOutput(JSON.stringify({ ok: false, error: '權限不足' }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      // v3.7 P0-1：角色權限矩陣統一把關（未列於表者放行）
+      var _mRoles = ROLE_MATRIX[action];
+      if (_mRoles && _mRoles.indexOf(sess.role) < 0) {
         return ContentService.createTextOutput(JSON.stringify({ ok: false, error: '權限不足' }))
           .setMimeType(ContentService.MimeType.JSON);
       }
@@ -246,7 +270,8 @@ function __seedTestUsers() {
   const have = {};
   for (let i = 1; i < rows.length; i++) have[String(rows[i][0]).trim()] = true;
   const added = [];
-  [['上海Jason', '111111', 'FB觀看'], ['testadmin', '999999', 'admin']].forEach(function (u) {
+  [['上海Jason', '111111', 'FB觀看'], ['testadmin', '999999', 'admin'],
+   ['wtest', '444444', '倉管'], ['utest', '555555', 'user'], ['ftest', '666666', '財務']].forEach(function (u) {
     if (!have[u[0]]) { ws.appendRow(u); added.push(u[0]); }
   });
   return { ok: true, added: added };
@@ -1443,18 +1468,48 @@ function reviewApply(p) {
   return { ok: false, error: '找不到申請 id' };
 }
 
+// v3.7 P0-3：核准寫回占比(B)後，連動重算「體積(C)／成本(I)」。
+// 欄位語意沿用 getRecipe：A=名稱(0) B=占比小數(1) C=體積(2) I=成本(8)，「總體積」列 C 欄=本批總體積。
+// 連動公式：新體積 = 占比 × 總體積；新成本 = 舊成本 × 新體積/舊體積（成本∝體積，免解析單價/複合料）。
+// 防呆：C/I 若為 Sheet 公式則不覆寫（讓其自動重算）；舊體積=0 時略過成本重算；全程 try/catch 不阻斷核准。
+// ⚠️ 執行帳號 joyhouse.rental 須對該酒譜表有「編輯者」權限，否則寫入被 Google 擋（懸案①）。
 function writeApproveToRecipe(row) {
   const client = String(row[3]), sheet = String(row[4]);
   const items = JSON.parse(String(row[6]));
   const ss = getClientSS(client);
   const ws = ss.getSheetByName(sheet);
   if (!ws) return;
-  const data = ws.getDataRange().getValues();
+  const range = ws.getDataRange();
+  const data = range.getValues();
+  const formulas = range.getFormulas(); // 判斷 C/I 是否為公式，公式列不覆寫
+
+  // 定位「總體積」列，讀本批總體積(C 欄=index 2)
+  let totalVol = 0;
+  for (let i = 3; i < data.length; i++) {
+    if (String(data[i][0] || '').trim() === '總體積') { totalVol = parseFloat(data[i][2]) || 0; break; }
+  }
+
   for (const item of items) {
     for (let i = 3; i < data.length; i++) {
       if (String(data[i][0]).trim() === String(item.name).trim()) {
         // newVal 是百分比整數如 10，需 ÷100 還原為 0.1
-        ws.getRange(i+1, 2).setValue(parseFloat(item.newVal) / 100);
+        const ratio = parseFloat(item.newVal) / 100;
+        ws.getRange(i + 1, 2).setValue(ratio); // B 占比
+
+        // C 體積：非公式且有總體積才連動重算
+        const cIsFormula = !!(formulas[i] && formulas[i][2]);
+        const oldVol = parseFloat(data[i][2]) || 0;
+        if (!cIsFormula && totalVol > 0) {
+          const newVol = ratio * totalVol;
+          ws.getRange(i + 1, 3).setValue(newVol); // C 體積
+
+          // I 成本：非公式且舊體積>0 才按體積比例連動
+          const iIsFormula = !!(formulas[i] && formulas[i][8]);
+          const oldCost = parseFloat(data[i][8]) || 0;
+          if (!iIsFormula && oldVol > 0 && oldCost > 0) {
+            ws.getRange(i + 1, 9).setValue(oldCost * newVol / oldVol); // I 成本
+          }
+        }
         break;
       }
     }
