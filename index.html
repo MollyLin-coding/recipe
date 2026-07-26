@@ -295,6 +295,12 @@ tbody tr:hover td{background:#faf3e8;}
 #rcBody .rm .vl{font-size:15px;}
 #rcBody .ing-r2{gap:4px;}
 #rcBody .rc-pct{width:52px;padding:5px 4px;}
+/* v3.8 入出站鈕：加大觸控目標(手機好按)+已記錄態(綠底) */
+.rc-stamp{padding:8px 14px!important;font-size:13px!important;}
+.rc-stamp.rc-stamped{background:#e8f5ee!important;border-color:#4F8068!important;color:#2F5A44!important;font-weight:700;}
+/* v3.8 浮水印（帳號+時間平鋪；pointer-events:none 不擋操作） */
+#npWm{position:fixed;inset:0;pointer-events:none;z-index:600;display:none;background-repeat:repeat;}
+.np-wm-abs{position:absolute;inset:0;pointer-events:none;z-index:50;background-repeat:repeat;}
 /* v2.7.5 字級統一（比照建單欄位 14px，手機好讀） */
 #rcBody input,#rcBody select,#rcBody textarea{font-size:14px!important;}
 #rcBody label,#rcBody span,#rcBody .rc-chk,#rcBody .btn,#rcBody .cpd-sub-name,#rcBody .cpd-sub-hd{font-size:13px!important;}
@@ -390,7 +396,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.6';
+const APP_VERSION='v3.8';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -398,6 +404,9 @@ window.addEventListener('DOMContentLoaded', function () {
 // v2.6.2 後端暖機：頁面一開就靜默 ping getEnvInfo（免 token），趁使用者選帳號打密碼的空檔
 // 把 GAS 冷啟動（常 2~5 秒）先吃掉，按「登入」時後端已是熱的
 window.addEventListener('DOMContentLoaded', function () { api({ action: 'getEnvInfo' }, true); });
+// v3.8 卡點2 保溫 ping：APP 開著時每 4.5 分鐘靜默 ping 一次，消滅掛機後的 GAS 冷啟動
+// （開頁暖機只熱一次，小李掛機半小時後端又冷了；背景分頁瀏覽器自動降頻，流量負擔可忽略）
+setInterval(function () { api({ action: 'getEnvInfo' }, true); }, 270000);
 
 let _sessExpiredShown = false;
 async function api(params, silent) {
@@ -603,6 +612,7 @@ function doLogout() {
   const _ab = document.getElementById('stockAlertBar'); if (_ab) _ab.remove();
   const _sb = document.getElementById('shipDateAlertBar'); if (_sb) _sb.remove();
   curUser = null; curToken = null; rdata = null; curSheet = '';
+  wmUpdate(); // v3.8 登出即關浮水印
   document.body.classList.remove('fbviewer');
   Object.assign(C, { inv:null, profit:{}, recipes:{}, batch:null });
   recipeList = []; rdState = { ings:[], tv:4000, bt:'4L桶', title:'', client:'', matSel:{} };
@@ -656,11 +666,35 @@ function doRefresh() {
 }
 
 // ── 導覽 ─────────────────────────────────────────────────────
+// ── v3.8 卡點4：浮水印（帳號+時間平鋪半透明；截圖外洩可溯源）──
+// 說明：網頁技術上「無法偵測」系統截圖（瀏覽器拿不到 OS 截圖事件），浮水印為業界標準替代：
+// 酒譜頁與 Run Card 編輯頁疊上登入者帳號+時間，流出的截圖一看即知出自誰的畫面（嚇阻+溯源）。
+function wmBgUrl(){
+  const u=(curUser&&curUser.username)||''; if(!u) return '';
+  const d=new Date();
+  const txt=u+' '+d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)+' '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+  const esc=txt.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  const svg='<svg xmlns="http://www.w3.org/2000/svg" width="280" height="150"><text x="8" y="84" font-size="15" font-family="sans-serif" fill="rgba(110,90,70,0.12)" transform="rotate(-20 140 75)">'+esc+'</text></svg>';
+  return 'url("data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg)+'")';
+}
+function wmUpdate(){
+  let el=document.getElementById('npWm');
+  if(!el){ el=document.createElement('div'); el.id='npWm'; document.body.appendChild(el); }
+  const on=!!curUser&&curTab==='recipe';
+  el.style.display=on?'block':'none';
+  if(on) el.style.backgroundImage=wmBgUrl();
+}
+function wmAttach(box){
+  if(!box||box.querySelector('.np-wm-abs')) return;
+  const d=document.createElement('div'); d.className='np-wm-abs'; d.style.backgroundImage=wmBgUrl();
+  box.style.position='relative'; box.appendChild(d);
+}
 function switchTab(tab) {
   curTab = tab;
   document.querySelectorAll('.nav-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
   const mc = document.getElementById('mainContent'); mc.scrollTop = 0;
   ({ recipe:renderRecipePage, profit:renderProfitPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderRuncardPage, order:renderOrderPage, stock:renderStockPage, apply:renderApplyPage })[tab]?.(mc);
+  wmUpdate(); // v3.8 酒譜頁浮水印開/關
 }
 
 // ════════════════════════════════════════════════
@@ -2650,6 +2684,76 @@ function addOrderClient() {
   orderModalClientChange();
 }
 // v2.0：edit 傳入既有訂單物件＝編輯模式（全欄位可改，儲存走 updateOrder、保留各酒款完成狀態）
+// ── v3.8 卡點3：建單草稿（新建單每4秒自動暫存 localStorage；閃退/斷線/誤關重開可還原）──
+let _odTimer=null,_odLast='';
+function orderDraftClear(){ try{ localStorage.removeItem('np_orderDraft'); }catch(e){} }
+function _odSnap(){
+  const il=document.getElementById('orderItemLines'); if(!il) return null;
+  const modal=il.closest('.modal-bg'); if(!modal) return null;
+  const header={};
+  modal.querySelectorAll('input[id],select[id],textarea[id]').forEach(el=>{
+    if(el.closest('#orderItemLines')) return;
+    header[el.id]=(el.type==='checkbox')?{c:el.checked}:{v:el.value};
+  });
+  const lines=[...il.querySelectorAll('.order-line')].map(line=>{
+    const li=line.id.replace('oline_','');
+    const g=id=>{const e=document.getElementById('oi_'+li+'_'+id);return e?(e.type==='checkbox'?e.checked:e.value):'';};
+    return { rec:g('rec'), qty:g('qty'), vol:g('vol'), bt:g('bt'), smp:g('smp'), smpbt:g('smpbt'), smpqty:g('smpqty'), smpnote:g('smpnote') };
+  });
+  return { header, lines };
+}
+function orderDraftArm(){
+  if(_odTimer) clearInterval(_odTimer);
+  _odLast='';
+  _odTimer=setInterval(function(){
+    const s=_odSnap();
+    if(!s){ clearInterval(_odTimer); _odTimer=null; return; } // modal 已關 → 自動停(草稿去留由關閉路徑決定)
+    const j=JSON.stringify(s);
+    if(j===_odLast) return;
+    _odLast=j;
+    // 有實質內容才留草稿(酒款有填或總金額>0)，剛開就關不留垃圾
+    const meat=s.lines.some(l=>String(l.rec||'').trim())||Number((s.header.om_total||{}).v)>0;
+    if(meat) lsSet('np_orderDraft',{ts:Date.now(),snap:s});
+  },4000);
+}
+function orderDraftTryRestore(){
+  const d=lsGet('np_orderDraft'); if(!d||!d.snap) return;
+  if(Date.now()-(d.ts||0)>86400000){ orderDraftClear(); return; } // 超過24小時視為過期
+  const w=new Date(d.ts), t=('0'+w.getHours()).slice(-2)+':'+('0'+w.getMinutes()).slice(-2);
+  if(!confirm('💾 發現上次未儲存的建單草稿（'+t+' 留存）。\n按「確定」還原草稿；按「取消」開全新建單（草稿將刪除）。')){ orderDraftClear(); return; }
+  const s=d.snap;
+  // 1) 訂單類型：dispatch change 讓客戶欄位連動重建
+  const typeEl=document.getElementById('om_type');
+  if(typeEl&&s.header.om_type){ typeEl.value=s.header.om_type.v; typeEl.dispatchEvent(new Event('change')); }
+  // 2) 客戶：只設值不觸發 change(orderModalClientChange 會清空酒款列/覆蓋配送)
+  const cEl=document.getElementById('om_client');
+  if(cEl&&s.header.om_client) cEl.value=s.header.om_client.v;
+  // 3) 酒款列重建：清空→照草稿數量加列→依序回填(dispatch 事件觸發試飲展開/缺瓶檢查等副作用)
+  const il=document.getElementById('orderItemLines');
+  if(il){
+    il.innerHTML=''; (s.lines||[]).forEach(()=>orderModalAddLine());
+    [...il.querySelectorAll('.order-line')].forEach((line,ix)=>{
+      const li=line.id.replace('oline_',''), L=s.lines[ix]||{};
+      const set=(id,val,isChk)=>{ const e=document.getElementById('oi_'+li+'_'+id); if(!e) return;
+        if(isChk){ e.checked=!!val; }
+        else { if(e.tagName==='SELECT'&&val&&![...e.options].some(o=>o.value===val)){const op=document.createElement('option');op.textContent=val;e.appendChild(op);} e.value=val==null?'':val; }
+        e.dispatchEvent(new Event(isChk?'change':'input')); };
+      set('smp',L.smp,true); set('rec',L.rec); set('qty',L.qty); set('vol',L.vol); set('bt',L.bt);
+      set('smpbt',L.smpbt); set('smpqty',L.smpqty); set('smpnote',L.smpnote);
+    });
+  }
+  // 4) 其餘欄位(含金流/配送)；om_type/om_client 已處理
+  Object.keys(s.header).forEach(id=>{
+    if(id==='om_type'||id==='om_client') return;
+    const el=document.getElementById(id); if(!el) return;
+    const h=s.header[id];
+    if('c' in h) el.checked=h.c; else el.value=h.v==null?'':h.v;
+    if(id==='om_lot') el.dataset.userEdited='1'; // 防被 Lot 自動遞增覆蓋
+  });
+  if(typeof _syncFinanceVis==='function') _syncFinanceVis();
+  renumberOrderLines(); checkBottleWarn();
+  toast('已還原建單草稿');
+}
 function showOrderModal(edit) {
   const isEdit = !!(edit && edit.orderNo);
   const allClients = clientList.length ? clientList.map(c => c.name) : ['Feeling Bar', '南坡萬公版', '南坡萬v.2', 'Feeling Bar Cafe'];
@@ -2666,7 +2770,7 @@ function showOrderModal(edit) {
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
       <div class="modal-title" style="margin:0;">${isEdit ? ('✏️ 編輯訂單 ' + edit.orderNo) : '＋ 新增出貨訂單'}</div>
       <div style="display:flex;gap:6px;flex:0 0 auto;">
-        <button class="btn btn-ghost btn-sm" style="white-space:nowrap;" onclick="if(confirm('放棄未儲存的變更？')) this.closest('.modal-bg').remove()">✕ 取消編輯</button>
+        <button class="btn btn-ghost btn-sm" style="white-space:nowrap;" onclick="if(confirm('放棄未儲存的變更？')){${isEdit?'':'orderDraftClear();'}this.closest('.modal-bg').remove()}">✕ 取消編輯</button>
         <button class="btn btn-primary btn-sm" id="om_sub_top" style="white-space:nowrap;">💾 儲存並關閉</button>
       </div>
     </div>
@@ -2694,7 +2798,7 @@ function showOrderModal(edit) {
     <div class="fg" style="margin-bottom:12px;"><label>訂金狀態</label><input class="inp" id="om_deposit" list="omDepList" value="${isEdit ? (edit.depositStatus || '') : ''}" placeholder="未收 / 已收訂 / 已結清（可自填如 已收訂金 NT$3,000）" style="margin:0;"><datalist id="omDepList"><option>未收</option><option>已收訂</option><option>已結清</option></datalist></div>
     <div id="omFinWrap">${financeFieldsHtml(isEdit ? edit : null)}</div>
     <div id="omDeliveryWrap">${deliveryFieldsHtml(isEdit ? edit : null)}</div>
-    <div class="fe" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="if(confirm('放棄未儲存的變更？')) this.closest('.modal-bg').remove()">✕ 取消編輯</button><button class="btn btn-primary btn-sm" id="om_sub">💾 儲存並關閉</button></div>`, { locked: true });
+    <div class="fe" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="if(confirm('放棄未儲存的變更？')){${isEdit?'':'orderDraftClear();'}this.closest('.modal-bg').remove()}">✕ 取消編輯</button><button class="btn btn-primary btn-sm" id="om_sub">💾 儲存並關閉</button></div>`, { locked: true });
   if (isEdit) {
     document.getElementById('om_client').value = edit.client;
     if (t0 === '自行keyin') { const c = document.getElementById('om_type_custom'); if (c) { c.style.display = ''; c.value = edit.orderType || ''; } }
@@ -2735,6 +2839,8 @@ function showOrderModal(edit) {
     document.getElementById('om_actual').value = _localDate();
     _orderLineSeq = 0; orderModalAddLine();
     refillDeliveryDefaults();
+    orderDraftTryRestore(); // v3.8 有草稿先問還原(在預設帶入之後跑，草稿值優先)
+    orderDraftArm();        // v3.8 啟動每4秒自動暫存
   }
   // v2.9 玻璃瓶警告：載入快取後檢查；編輯模式先扣掉本單自身的預佔避免重複計
   ensureBottleCache().then(() => {
@@ -2791,7 +2897,7 @@ function showOrderModal(edit) {
       orderCreator: (document.getElementById('om_creator') || {}).value || '',
       ...collectFinanceFields(), ...collectDeliveryFields()
     });
-    if (res.ok) { toast(isEdit ? ('訂單已更新 ' + edit.orderNo) : ('已建立訂單 ' + res.orderNo)); modal.remove(); loadOrderMgmt(); if (isFinanceUser()) loadFinanceSummary(); }
+    if (res.ok) { if (!isEdit) orderDraftClear(); toast(isEdit ? ('訂單已更新 ' + edit.orderNo) : ('已建立訂單 ' + res.orderNo)); modal.remove(); loadOrderMgmt(); if (isFinanceUser()) loadFinanceSummary(); }
     else toast((isEdit ? '更新失敗：' : '建單失敗：') + (res.error || ''));
   };
   const b = modal.querySelector('#om_sub');
@@ -3333,6 +3439,7 @@ let _rcDraftTimer=null,_rcLastSnap='';
 function rcAutoSaveArm(){
   rcAutoSaveStop();
   _rcLastSnap=JSON.stringify(rcState);
+  _rcSrvSnap=_rcLastSnap; _rcSrvAt=Date.now(); // v3.8 開卡即設回存基準(開卡未改不觸發回存)
   _rcDraftTimer=setInterval(function(){
     if(!rcState){ rcAutoSaveStop(); return; }
     const snap=JSON.stringify(rcState);
@@ -3342,6 +3449,8 @@ function rcAutoSaveArm(){
       const el=document.getElementById('rcDraftInfo');
       if(el){ const d=new Date(); el.textContent='💾 已自動暫存 '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)+':'+('0'+d.getSeconds()).slice(-2); }
     }
+    // v3.8 卡點3：已存過的卡(有 id)內容有變且距上次回存>2分鐘 → 靜默回存後端(斷線/當機最多丟2分鐘)
+    if(rcState.id&&snap!==_rcSrvSnap&&Date.now()-_rcSrvAt>120000) rcSrvAutoSave(snap);
   },4000);
 }
 function rcAutoSaveStop(){ if(_rcDraftTimer){ clearInterval(_rcDraftTimer); _rcDraftTimer=null; } }
@@ -3378,6 +3487,7 @@ function rcOpenEditor(st){
   rcRenderBody();
   rcLoadOrderOptions();
   rcAutoSaveArm();
+  wmAttach(modal.querySelector('.modal-box')); // v3.8 Run Card 編輯頁浮水印
 }
 function rcCloseEditor(btn){
   if(!confirm('關閉 Run Card？未儲存的變更會遺失。')) return;
@@ -3481,10 +3591,9 @@ function rcRenderBody(){
         <span style="font-size:11px;color:#c0392b;font-weight:700;">⚠ 提醒 PM：請留一瓶 100ml 自主留樣樣品</span>
       </div>`:''}
       <textarea class="rc-snote" rows="1" style="width:100%;margin-top:4px;padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--ink1);resize:none;overflow:hidden;line-height:1.5;" oninput="rcState.stations[${i}].note=this.value;this.style.height='auto';this.style.height=this.scrollHeight+'px';" placeholder="備註（可多行，自動展開）">${rcEsc(s.note||'')}</textarea>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;width:100%;margin-top:4px;font-size:11px;color:var(--ink3);">
-        <button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="rcStamp(${i},'inAt')">⏱ 記錄入站時間</button><span id="rcIn_${i}">${s.inAt||'—'}</span>
-        <span style="color:var(--border);">｜</span>
-        <button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="rcStamp(${i},'outAt')">⏱ 記錄出站時間</button><span id="rcOut_${i}">${s.outAt||'—'}</span>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;width:100%;margin-top:6px;font-size:12px;color:var(--ink3);">
+        <button class="btn btn-ghost btn-sm rc-stamp${s.inAt?' rc-stamped':''}" id="rcInBtn_${i}" onclick="rcStamp(${i},'inAt')">${s.inAt?('✓ 入站 '+s.inAt):'⏱ 記錄入站時間'}</button>
+        <button class="btn btn-ghost btn-sm rc-stamp${s.outAt?' rc-stamped':''}" id="rcOutBtn_${i}" onclick="rcStamp(${i},'outAt')">${s.outAt?('✓ 出站 '+s.outAt):'⏱ 記錄出站時間'}</button>
         <span id="rcDur_${i}" style="font-weight:600;color:var(--gold-dk);">${rcDurTxt(s)}</span>
       </div>
     </div>`; }).join('');
@@ -3577,11 +3686,15 @@ function rcDurTxt(s){
   return '停留 '+(Math.round((b-a)/360000)/10)+' 小時';
 }
 function rcStamp(i,k){
+  // v3.8 卡點1：按鈕本身即狀態(綠底+時間)、已有時間再按跳確認防誤蓋(猛按不再默默覆蓋原時間)
   const s=rcState&&rcState.stations[i]; if(!s) return;
+  const isIn=k==='inAt';
+  if(s[k]&&!confirm((isIn?'入站':'出站')+'時間已記錄為 '+s[k]+'\n確定要覆蓋成現在時間嗎？')) return;
   s[k]=rcNowMin();
-  const el=document.getElementById((k==='inAt'?'rcIn_':'rcOut_')+i); if(el) el.textContent=s[k];
+  const btn=document.getElementById((isIn?'rcInBtn_':'rcOutBtn_')+i);
+  if(btn){ btn.textContent=(isIn?'✓ 入站 ':'✓ 出站 ')+s[k]; btn.classList.add('rc-stamped'); }
   const d=document.getElementById('rcDur_'+i); if(d) d.textContent=rcDurTxt(s);
-  toast((k==='inAt'?'已記錄入站時間 ':'已記錄出站時間 ')+s[k]);
+  toast((isIn?'已記錄入站時間 ':'已記錄出站時間 ')+s[k]);
 }
 function rcDeviated(g){ return g.origPct!=null && Math.abs((+g.pct||0)-(+g.origPct||0))>=0.05; }
 function rcDevUpd(i){
@@ -3608,8 +3721,20 @@ function rcResetPct(){
   rcRenderBody();
   toast(n?('已回復 '+n+' 項原料至原酒譜占比'):'占比已與原酒譜相同，未變動');
 }
+// v3.8 saveRunCard 參數統一組裝（手動儲存與自動回存共用）
+function _rcPayload(st){
+  const data={ totalVol:st.totalVol, bottles:st.bottles, labelFrontOk:!!st.labelFrontOk, labelBackOk:!!st.labelBackOk,
+    processNote:st.processNote, liquids:st.liquids, solids:st.solids, stations:st.stations };
+  return { action:'saveRunCard', id:st.id||'', orderNo:st.orderNo||'',
+    client:String(st.client).trim(), product:String(st.product).trim(), sheet:st.sheet||'',
+    bottleType:st.bottleType||'', prodDate:st.prodDate||'', pm:st.pm||'', lot:st.lot||'',
+    version:st.version||'', status:st.status||'進行中',
+    user:(curUser&&curUser.username)||'', data:JSON.stringify(data) };
+}
+let _rcSaving=false, _rcSrvAt=0, _rcSrvSnap='';
 async function rcSave(){
   const st=rcState; if(!st) return;
+  if(_rcSaving) return; // v3.8 跨鈕全域鎖：頂/底兩顆儲存鈕不能各發一次(防重複建卡)
   if(!String(st.client||'').trim()||!String(st.product||'').trim()){ toast('客戶名稱與酒款名稱必填'); return; }
   const bad=st.liquids.map((g,i)=>({g,i})).filter(x=>rcDeviated(x.g)&&!String(x.g.note||'').trim());
   if(bad.length){
@@ -3619,21 +3744,34 @@ async function rcSave(){
     if(row) row.scrollIntoView({behavior:'smooth',block:'center'});
     return;
   }
-  const data={ totalVol:st.totalVol, bottles:st.bottles, labelFrontOk:!!st.labelFrontOk, labelBackOk:!!st.labelBackOk,
-    processNote:st.processNote, liquids:st.liquids, solids:st.solids, stations:st.stations };
-  const res=await api({ action:'saveRunCard', id:st.id||'', orderNo:st.orderNo||'',
-    client:String(st.client).trim(), product:String(st.product).trim(), sheet:st.sheet||'',
-    bottleType:st.bottleType||'', prodDate:st.prodDate||'', pm:st.pm||'', lot:st.lot||'',
-    version:st.version||'', status:st.status||'進行中',
-    user:(curUser&&curUser.username)||'', data:JSON.stringify(data) });
-  if(res.ok){
-    if(!st.id) st.id=res.id;
-    const t=document.getElementById('rcTitle'); if(t) t.textContent='📋 編輯 Run Card '+st.id;
-    rcDraftClear(); _rcLastSnap=JSON.stringify(rcState);
-    const di=document.getElementById('rcDraftInfo'); if(di) di.textContent='';
-    toast('已儲存 '+st.id+(res.autoStockIn?('｜📦 成品自動入庫 '+res.autoStockIn.item+'×'+res.autoStockIn.qty):''));
-    ensureRcIndex(true).then(() => { if (window._mgmtOrders) renderMonthOrders(window._mgmtOrders); }); // v2.9.3 新卡即時亮鈕
-  } else toast('儲存失敗：'+(res.error||''));
+  _rcSaving=true;
+  try{
+    const res=await api(_rcPayload(st));
+    if(res.ok){
+      if(!st.id) st.id=res.id;
+      const t=document.getElementById('rcTitle'); if(t) t.textContent='📋 編輯 Run Card '+st.id;
+      rcDraftClear(); _rcLastSnap=JSON.stringify(rcState);
+      _rcSrvSnap=_rcLastSnap; _rcSrvAt=Date.now(); // v3.8 自動回存基準點
+      const di=document.getElementById('rcDraftInfo'); if(di) di.textContent='';
+      toast('已儲存 '+st.id+(res.autoStockIn?('｜📦 成品自動入庫 '+res.autoStockIn.item+'×'+res.autoStockIn.qty):''));
+      ensureRcIndex(true).then(() => { if (window._mgmtOrders) renderMonthOrders(window._mgmtOrders); }); // v2.9.3 新卡即時亮鈕
+    } else toast('儲存失敗：'+(res.error||''));
+  } finally { _rcSaving=false; }
+}
+// v3.8 卡點3：已存過的卡(有 id)每 2 分鐘靜默回存後端；新卡不自動建卡(維持草稿制防半成品卡)
+async function rcSrvAutoSave(snap){
+  const st=rcState; if(!st||!st.id||_rcSaving) return;
+  if(!String(st.client||'').trim()||!String(st.product||'').trim()) return;
+  if(st.liquids.some(g=>rcDeviated(g)&&!String(g.note||'').trim())) return; // 驗證不過→留給手動儲存提示
+  _rcSaving=true;
+  try{
+    const res=await api(_rcPayload(st), true);
+    if(res&&res.ok){
+      _rcSrvSnap=snap; _rcSrvAt=Date.now(); rcDraftClear(); _rcLastSnap=snap;
+      const el=document.getElementById('rcDraftInfo');
+      if(el){ const d=new Date(); el.textContent='☁ 已自動儲存 '+('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2); }
+    }
+  }catch(e){} finally { _rcSaving=false; }
 }
 </script>
 </body>

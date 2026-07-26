@@ -143,6 +143,7 @@ function doGet(e) {
       case 'checkUser':      result = checkUser(p); break;               // 帳號診斷(遮罩、不回密碼)
       case '__seedTestUsers': result = __seedTestUsers(); break;         // 沙盒限定：種驗收用測試帳號(PROD 直接拒絕)
       case '__readLoginLog':  result = __readLoginLog(); break;          // 沙盒限定：讀登入紀錄供自動驗收(PROD 直接拒絕)
+      case '__readAuditLog':  result = __readAuditLog(); break;          // 沙盒限定：讀操作紀錄供自動驗收(PROD 直接拒絕, v3.8)
       case 'getRecipeList':  result = getRecipeList(p); break;
       case 'getRecipe':      result = getRecipe(p); break;
       case 'getClientRecipeList':    result = getClientRecipeList(p); break;     // Phase C 訂單系統
@@ -198,12 +199,47 @@ function doGet(e) {
       case 'getRdHistory':   result = getRdHistory(); break;
       default: result = { ok: false, error: '未知 action: ' + action };
     }
+    _logAction_(action, p, result); // v3.8 操作紀錄（內部 try/catch，失敗不阻斷）
   } catch(err) {
     result = { ok: false, error: err.message };
   }
   return ContentService
     .createTextOutput(JSON.stringify(result))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ── v3.8 操作紀錄（稽核用）─────────────────────────────────────
+// 記「寫入動作」＋「敏感讀取(開酒譜)」到主表「操作紀錄」分頁：時間/帳號/角色/動作/摘要/結果。
+// 摘要只收白名單參數(絕不記 password/token/data 大 JSON)；appendRow 失敗不阻斷業務。
+var AUDIT_ACTIONS = {
+  createOrder:1, updateOrder:1, updateOrderFinance:1, updateOrderDelivery:1, deleteOrder:1,
+  completeOrderItem:1, confirmShipDate:1, shipOrder:1,
+  stockIn:1, stockOut:1, bottleIn:1, bottleOut:1, addBottleItem:1, setSafetyLevel:1,
+  saveRunCard:1, deleteRunCard:1, saveProcessNote:1,
+  addBatchRecord:1, updateBatchRecord:1, deleteBatchRecord:1,
+  submitApply:1, reviewApply:1, saveRdRecord:1, deleteRdRecord:1, submitRdApply:1, reviewRdApply:1,
+  changePassword:1, migrateOrderNos:1, migrateOrderTypes:1, backfillOrderCreators:1,
+  getRecipe:1, getRecipeForProduction:1 // 敏感讀取：誰、何時、開了哪張配方(外洩溯源)
+};
+var AUDIT_PARAM_KEYS = ['orderNo','client','sheet','product','item','qty','id','itemIndex','category','name','level','username','approve'];
+function _logAction_(action, p, result) {
+  if (!AUDIT_ACTIONS[action]) return;
+  try {
+    var ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+    var ws = ss.getSheetByName('操作紀錄');
+    if (!ws) {
+      ws = ss.insertSheet('操作紀錄');
+      ws.getRange(1, 1, 1, 6).setValues([['時間', '帳號', '角色', '動作', '摘要', '結果']]);
+    }
+    var parts = [];
+    for (var i = 0; i < AUDIT_PARAM_KEYS.length; i++) {
+      var k = AUDIT_PARAM_KEYS[i];
+      if (p[k] != null && p[k] !== '') parts.push(k + '=' + String(p[k]).slice(0, 60));
+    }
+    ws.appendRow([Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss'),
+      String(p._user || ''), String(p._role || ''), action, parts.join(' '),
+      (result && result.ok) ? '成功' : ('失敗:' + String((result && result.error) || '').slice(0, 80))]);
+  } catch (e) { /* 紀錄失敗不阻斷 */ }
 }
 
 // ── 登入 ─────────────────────────────────────────────────────
@@ -288,6 +324,21 @@ function __readLoginLog() {
   for (let i = Math.max(1, data.length - 20); i < data.length; i++) {
     rows.push({ time: _fmtDateTime_(data[i][0]), user: String(data[i][1] || ''),
       role: String(data[i][2] || ''), result: String(data[i][3] || '') });
+  }
+  return { ok: true, rows: rows };
+}
+
+// 沙盒限定：讀操作紀錄末 20 筆（v3.8 自動驗收用；PROD 一律拒絕）
+function __readAuditLog() {
+  if (getEnvInfo().env === 'PROD') return { ok: false, error: '僅限測試環境' };
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('操作紀錄');
+  if (!ws) return { ok: true, rows: [] };
+  const data = ws.getDataRange().getValues();
+  const rows = [];
+  for (let i = Math.max(1, data.length - 20); i < data.length; i++) {
+    rows.push({ time: String(data[i][0] || ''), user: String(data[i][1] || ''), role: String(data[i][2] || ''),
+      action: String(data[i][3] || ''), summary: String(data[i][4] || ''), result: String(data[i][5] || '') });
   }
   return { ok: true, rows: rows };
 }
