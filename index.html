@@ -396,7 +396,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.8';
+const APP_VERSION='v3.8.1';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2091,6 +2091,7 @@ async function renderRuncardPage(mc) {
     <div class="card" style="margin-bottom:10px;">
       <div class="sec-hd"><div class="card-title" style="margin:0">📦 訂單列表</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:flex-end;">
+          <input type="search" id="ordSearch" placeholder="🔍 搜客戶／酒款" value="${rcEsc(_orderSearch || '')}" oninput="setOrderSearch(this.value)" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);width:132px;">
           <button class="btn btn-ghost btn-sm" id="ordMonPrev" onclick="shiftOrderMonth(-1)" title="上個月">◀</button>
           <input type="month" id="ordMonthPick" value="${_orderMonth}" onchange="setOrderMonth(this.value)" style="font-size:12px;padding:4px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--ink);">
           <button class="btn btn-ghost btn-sm" id="ordMonNext" onclick="shiftOrderMonth(1)" title="下個月">▶</button>
@@ -2511,6 +2512,10 @@ function showDeliveryModal(orderNo) {
 // 📦 訂單列表（依表訂出貨日排序；點卡片看完整詳情＋操作）。v2.0：本月/全部切換；v2.9.4：◀▶ 按月份查詢
 let _orderScopeAll = false;
 let _orderMonth = _localDate().slice(0, 7); // 目前檢視月份 YYYY-MM（預設當月）
+// v3.8.1 訂單搜尋（主公指示）：搜「客戶名稱(真鍵+顯示名)」與「酒款名稱」；輸入即跨全部月份比對
+let _orderSearch = '';
+function setOrderSearch(v) { _orderSearch = String(v || ''); if (window._mgmtOrders) renderMonthOrders(window._mgmtOrders); }
+function clearOrderSearch() { _orderSearch = ''; const e = document.getElementById('ordSearch'); if (e) e.value = ''; if (window._mgmtOrders) renderMonthOrders(window._mgmtOrders); }
 function _syncOrderScopeUI() {
   const b = document.getElementById('ordScopeBtn');
   if (b) b.textContent = _orderScopeAll ? '看單月' : '顯示全部';
@@ -2537,12 +2542,21 @@ function shiftOrderMonth(d) {
 function renderMonthOrders(orders) {
   const area = document.getElementById('monthOrderArea'); if (!area) return;
   const ym = _orderMonth; // v2.9.4 依選定月份（依表訂出貨日歸月）
-  const list = (orders || []).filter(o => _orderScopeAll || (o.deliveryDate || '').slice(0, 7) === ym)
-    .sort((a, b) => _orderScopeAll
-      ? (b.deliveryDate || '').localeCompare(a.deliveryDate || '')
-      : (a.deliveryDate || '').localeCompare(b.deliveryDate || ''));
-  if (!list.length) { area.innerHTML = `<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">${_orderScopeAll ? '尚無訂單' : `${ym.replace('-', ' 年 ')} 月尚無出貨訂單`}</div>`; return; }
-  area.innerHTML = list.map(o => {
+  // v3.8.1 搜尋模式：有關鍵字→跨全部月份比對 客戶(真鍵+顯示名)/酒款名稱，出貨日新→舊
+  const q = String(_orderSearch || '').trim().toLowerCase();
+  const list = q
+    ? (orders || []).filter(o =>
+        String(o.client || '').toLowerCase().includes(q) ||
+        clientLabel(o.client || '').toLowerCase().includes(q) ||
+        (o.items || []).some(it => String(it.product || '').toLowerCase().includes(q)))
+      .sort((a, b) => (b.deliveryDate || '').localeCompare(a.deliveryDate || ''))
+    : (orders || []).filter(o => _orderScopeAll || (o.deliveryDate || '').slice(0, 7) === ym)
+      .sort((a, b) => _orderScopeAll
+        ? (b.deliveryDate || '').localeCompare(a.deliveryDate || '')
+        : (a.deliveryDate || '').localeCompare(b.deliveryDate || ''));
+  const hd = q ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--gold-dk);font-weight:600;margin:4px 0 2px;"><span>🔍 「${rcEsc(_orderSearch.trim())}」搜尋結果 ${list.length} 張（跨全部月份）</span><button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="clearOrderSearch()">✕ 清除搜尋</button></div>` : '';
+  if (!list.length) { area.innerHTML = hd + `<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">${q ? `找不到符合「${rcEsc(_orderSearch.trim())}」的訂單` : (_orderScopeAll ? '尚無訂單' : `${ym.replace('-', ' 年 ')} 月尚無出貨訂單`)}</div>`; return; }
+  area.innerHTML = hd + list.map(o => {
     const itemsTxt = (o.items || []).map(it => `${it.product}×${it.qty}` + (it.bottleType ? `(${it.bottleType})` : '') + (it.sample && it.sample.qty ? `〔🧪試飲${it.sample.bottleType || ''}×${it.sample.qty}〕` : '')).join('、');
     // v3.6 Run Card 鈕三態（主公指示）：無卡=虛線半透明「尚待PM建立」／進行中=黃底／已完成(狀態=完成或第11站done)=綠底
     const rcBtns = window._rcIdx ? (o.items || []).map((it, i) => {
