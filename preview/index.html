@@ -396,7 +396,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.8.1';
+const APP_VERSION='v3.8.2';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -3345,7 +3345,7 @@ function rcOpenFromRecipe(){
     name:ing.name, pct:Math.round((+ing.pct||0)*10)/10, abv:+ing.abv||0,
     vol:Math.round(+ing.vol||0), fed:false, ordered:false, note:'',
     subs:rcSubs(ing), hasLoss:!!ing.hasLoss,
-    locked:true, origPct:Math.round((+ing.pct||0)*10)/10 }));
+    locked:true, origPct:Math.round((+ing.pct||0)*10)/10, origName:String(ing.name||'').trim() }));
   rcOpenEditor(st);
 }
 // 入口②：訂單詳情 → 該酒款 Run Card 歷史清單
@@ -3438,7 +3438,7 @@ async function rcFillFromOrderItem(st, o, it){
       const p=st.totalVol>0?Math.round((+g.orderVol||0)/st.totalVol*1000)/10:0;
       return { name:g.name, pct:p, abv:+g.abv||0, vol:Math.round(+g.orderVol||0),
         fed:false, ordered:false, note:'', subs:rcSubs(g), hasLoss:!!g.hasLoss,
-        locked:true, origPct:p }; });
+        locked:true, origPct:p, origName:String(g.name||'').trim() }; });
   } else toast('酒譜帶入失敗：'+(res.error||'')+'，請手動填原料');
   return st;
 }
@@ -3553,7 +3553,7 @@ function rcRenderBody(){
     return `
     <div class="ing-row${g.fed?' fed':''}" id="rcL_${i}">
       <div class="ing-r1" style="gap:6px;">
-        <input type="text" class="rc-name${g.locked?' rc-locked':''}" style="flex:1;min-width:100px;" value="${rcEsc(g.name)}" ${g.locked?'readonly title="既有原料品名鎖定；要改品名請至原料庫/酒譜"':'oninput="rcState.liquids['+i+'].name=this.value" placeholder="液體原料名稱"'}>
+        <input type="text" class="rc-name" style="flex:1;min-width:100px;" value="${rcEsc(g.name)}" oninput="rcState.liquids[${i}].name=this.value;rcDevUpd(${i})" placeholder="液體原料名稱"${g.origName?` title="原品名：${rcEsc(g.origName)}（改動需在備註填原因）"`:''}>
         ${subs.length?'<span class="cpd-badge">複合</span>':''}
         <label class="rc-chk"><input type="checkbox" ${g.fed?'checked':''} onchange="rcState.liquids[${i}].fed=this.checked;document.getElementById('rcL_${i}').classList.toggle('fed',this.checked)">已投入</label>
         <button class="del-btn" style="font-size:13px;" onclick="rcState.liquids.splice(${i},1);rcRenderBody()">🗑</button>
@@ -3562,7 +3562,7 @@ function rcRenderBody(){
         <label class="ing-lbl">占比</label>
         <input type="number" class="ing-inp rc-pct" value="${g.pct}" min="0" step="0.1" oninput="rcLPct(${i},this.value)">
         <span class="ing-unit">%</span>
-        <span class="rc-devtag" style="display:none;font-size:10px;color:#e67e22;white-space:nowrap;">原 ${g.origPct!=null?g.origPct:''}%</span>
+        <span class="rc-devtag" style="display:none;font-size:10px;color:#e67e22;white-space:nowrap;"></span>
         <span class="ing-sep">↔</span>
         <label class="ing-lbl">體積</label>
         <input type="number" class="ing-inp rc-vol" style="width:76px;" value="${g.vol}" min="0" step="1" oninput="rcLVol(${i},this.value)">
@@ -3636,9 +3636,9 @@ function rcRenderBody(){
         </div></div>
       <div class="rm"><div class="lb">占比合計</div><div class="vl" id="rcPctSum">—</div></div>
     </div>
-    ${st.liquids.some(g=>g.origPct!=null)?'<div style="margin:2px 0 4px;"><button class="btn btn-ghost btn-sm" onclick="rcResetPct()">↩ 一鍵回到原酒譜比例</button></div>':''}
+    ${st.liquids.some(g=>g.origPct!=null||g.origName!=null)?'<div style="margin:2px 0 4px;"><button class="btn btn-ghost btn-sm" onclick="rcResetPct()">↩ 一鍵回到原配方（占比＋品名）</button></div>':''}
     ${liq||'<div style="color:var(--ink3);font-size:12px;padding:6px 0;">尚無液體原料——可由上方選訂單帶入，或點下方新增。</div>'}
-    <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.liquids.push({name:'',pct:0,abv:0,vol:0,fed:false,ordered:false,note:'',subs:[],locked:false,origPct:null});rcRenderBody()">＋ 加液體原料</button>
+    <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.liquids.push({name:'',pct:0,abv:0,vol:0,fed:false,ordered:false,note:'',subs:[],locked:false,origPct:null,origName:null});rcRenderBody()">＋ 加液體原料</button>
     <div class="rc-sec">🧂 固體原料</div>
     ${sol||'<div style="color:var(--ink3);font-size:12px;padding:6px 0;">尚無固體原料。</div>'}
     <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.solids.push({name:'',ratio:'',fed:false,note:''});rcRenderBody()">＋ 加固體原料</button>
@@ -3711,29 +3711,37 @@ function rcStamp(i,k){
   toast((isIn?'已記錄入站時間 ':'已記錄出站時間 ')+s[k]);
 }
 function rcDeviated(g){ return g.origPct!=null && Math.abs((+g.pct||0)-(+g.origPct||0))>=0.05; }
+// v3.8.2 品名偏差（主公裁示：品名全面開放編輯，但改了一律留痕）
+function rcNameDeviated(g){ return g.origName!=null && String(g.name||'').trim()!==String(g.origName||'').trim(); }
+function rcAnyDev(g){ return rcDeviated(g)||rcNameDeviated(g); }
 function rcDevUpd(i){
   const g=rcState&&rcState.liquids[i]; if(!g) return;
   const row=document.getElementById('rcL_'+i); if(!row) return;
-  const dev=rcDeviated(g);
-  const pctEl=row.querySelector('.rc-pct'); if(pctEl) pctEl.classList.toggle('rc-dev',dev);
-  const tag=row.querySelector('.rc-devtag'); if(tag) tag.style.display=dev?'':'none';
+  const devP=rcDeviated(g), devN=rcNameDeviated(g), dev=devP||devN;
+  const pctEl=row.querySelector('.rc-pct'); if(pctEl) pctEl.classList.toggle('rc-dev',devP);
+  const nameEl=row.querySelector('.rc-name'); if(nameEl) nameEl.classList.toggle('rc-dev',devN);
+  const tag=row.querySelector('.rc-devtag');
+  if(tag){
+    tag.style.display=dev?'':'none';
+    tag.textContent=[devN?('原名 '+g.origName):'',devP?('原 '+g.origPct+'%'):''].filter(Boolean).join('｜');
+  }
   const note=row.querySelector('.rc-note');
   if(note){
     note.classList.toggle('rc-note-need',dev&&!String(g.note||'').trim());
-    note.placeholder=dev?('⚠ 占比已改（原 '+g.origPct+'%），請填修改原因'):'備註（製法）';
+    note.placeholder=dev?('⚠ '+[devN?'品名':'',devP?'占比':''].filter(Boolean).join('與')+'已改（'+[devN?('原名 '+g.origName):'',devP?('原 '+g.origPct+'%'):''].filter(Boolean).join('、')+'），請填修改原因'):'備註（製法）';
   }
 }
 function rcResetPct(){
   if(!rcState) return;
   let n=0;
   rcState.liquids.forEach(g=>{
-    if(g.origPct==null) return;
-    if(rcDeviated(g)) n++;
-    g.pct=+g.origPct;
-    g.vol=Math.round((rcState.totalVol||0)*g.pct/100);
+    if(g.origPct==null&&g.origName==null) return;
+    if(rcAnyDev(g)) n++;
+    if(g.origPct!=null){ g.pct=+g.origPct; g.vol=Math.round((rcState.totalVol||0)*g.pct/100); }
+    if(g.origName!=null) g.name=g.origName;
   });
   rcRenderBody();
-  toast(n?('已回復 '+n+' 項原料至原酒譜占比'):'占比已與原酒譜相同，未變動');
+  toast(n?('已回復 '+n+' 項原料至原配方（占比／品名）'):'占比與品名已與原配方相同，未變動');
 }
 // v3.8 saveRunCard 參數統一組裝（手動儲存與自動回存共用）
 function _rcPayload(st){
@@ -3750,14 +3758,20 @@ async function rcSave(){
   const st=rcState; if(!st) return;
   if(_rcSaving) return; // v3.8 跨鈕全域鎖：頂/底兩顆儲存鈕不能各發一次(防重複建卡)
   if(!String(st.client||'').trim()||!String(st.product||'').trim()){ toast('客戶名稱與酒款名稱必填'); return; }
-  const bad=st.liquids.map((g,i)=>({g,i})).filter(x=>rcDeviated(x.g)&&!String(x.g.note||'').trim());
+  const bad=st.liquids.map((g,i)=>({g,i})).filter(x=>rcAnyDev(x.g)&&!String(x.g.note||'').trim());
   if(bad.length){
-    toast('⚠ '+bad.length+' 項原料占比與原酒譜不同，請在該原料「備註」寫下修改原因');
+    toast('⚠ '+bad.length+' 項原料的占比／品名與原配方不同，請在該原料「備註」寫下修改原因');
     st.liquids.forEach(function(_,i){ rcDevUpd(i); });
     const row=document.getElementById('rcL_'+bad[0].i);
     if(row) row.scrollIntoView({behavior:'smooth',block:'center'});
     return;
   }
+  // v3.8.2 基準補齊：儲存時把缺基準的原料(酒譜帶入失敗的手動卡/舊卡)以當前值蓋上 origPct/origName
+  // ——首次存檔狀態=基準；之後再改占比或品名一律觸發紅字+必填原因(全卡統一防呆，不再有無防呆卡)
+  st.liquids.forEach(g=>{
+    if(g.origPct==null&&((+g.pct||0)>0||(+g.vol||0)>0)) g.origPct=Math.round((+g.pct||0)*10)/10;
+    if(g.origName==null&&String(g.name||'').trim()) g.origName=String(g.name).trim();
+  });
   _rcSaving=true;
   try{
     const res=await api(_rcPayload(st));
@@ -3776,7 +3790,7 @@ async function rcSave(){
 async function rcSrvAutoSave(snap){
   const st=rcState; if(!st||!st.id||_rcSaving) return;
   if(!String(st.client||'').trim()||!String(st.product||'').trim()) return;
-  if(st.liquids.some(g=>rcDeviated(g)&&!String(g.note||'').trim())) return; // 驗證不過→留給手動儲存提示
+  if(st.liquids.some(g=>rcAnyDev(g)&&!String(g.note||'').trim())) return; // 驗證不過→留給手動儲存提示(自動回存不蓋基準)
   _rcSaving=true;
   try{
     const res=await api(_rcPayload(st), true);
