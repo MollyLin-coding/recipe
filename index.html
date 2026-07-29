@@ -397,7 +397,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.8.3';
+const APP_VERSION='v3.8.4';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2104,6 +2104,7 @@ async function renderRuncardPage(mc) {
       <div style="font-size:11px;color:var(--ink3);margin-bottom:2px;">依出貨日排序・點卡片看詳情與操作（完成回報／確認出貨／編輯）</div>
       <div id="monthOrderArea"><div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">載入中…</div></div>
     </div>
+    <div id="unboundRcArea"></div>
     <div id="runcardArea" style="display:none"></div>`; // v3.1.5 製作記錄區隱藏(主公指示，程式保留可復原)
   if (isFinanceUser()) loadFinanceSummary();
   loadOrderMgmt();
@@ -2540,7 +2541,24 @@ function shiftOrderMonth(d) {
   const dt = new Date(Number(parts[0]), Number(parts[1]) - 1 + d, 1);
   setOrderMonth(dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0'));
 }
+// v3.8.4 無訂單之獨立 Run Card 區（主公指示：孤兒卡存檔後要找得到）
+function renderUnboundRc(){
+  const area=document.getElementById('unboundRcArea'); if(!area) return;
+  const rows=(window._rcIdxRows||[]).filter(x=>x.id&&!String(x.orderNo||'').trim());
+  if(!rows.length){ area.innerHTML=''; return; }
+  area.innerHTML=`<div class="card" style="margin-bottom:10px;border:1px dashed var(--gold-dk);">
+    <div class="card-title" style="margin-bottom:2px;">🧪 無訂單之獨立 Run Card（測試／未綁單）</div>
+    <div style="font-size:11px;color:var(--ink3);margin-bottom:4px;">未綁定訂單的卡片集中在此，點卡開啟編輯；綁定訂單後會改列在該訂單卡上。</div>
+    ${rows.map(x=>{
+      const done=x.status==='完成'||x.finalDone;
+      return `<div onclick="rcOpenCard('${rcEsc(x.id)}')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;background:var(--card);">
+        <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span style="font-weight:600;font-size:13px;">📋 ${rcEsc(x.product||'（未填酒款）')}</span><span style="font-size:11px;color:var(--ink3);margin-left:6px;">${rcEsc(x.client||'')}</span><span style="font-size:11px;color:var(--ink3);margin-left:6px;">${rcEsc(x.id)}</span></div>
+        <span class="badge ${done?'bg-green':'bg-yellow'}" style="font-size:9px;flex:0 0 auto;">${done?'已完成':(x.status||'進行中')}</span>
+      </div>`; }).join('')}
+  </div>`;
+}
 function renderMonthOrders(orders) {
+  renderUnboundRc(); // v3.8.4 訂單列表重繪時一併更新獨立卡區
   const area = document.getElementById('monthOrderArea'); if (!area) return;
   const ym = _orderMonth; // v2.9.4 依選定月份（依表訂出貨日歸月）
   // v3.8.1 搜尋模式：有關鍵字→跨全部月份比對 客戶(真鍵+顯示名)/酒款名稱，出貨日新→舊
@@ -3364,6 +3382,7 @@ async function ensureRcIndex(force) {
         m.set(k, cur);
       });
       window._rcIdx = m; window._rcIdxAt = Date.now();
+      window._rcIdxRows = r.index || []; // v3.8.4 原始列(含 id/client)：無訂單獨立卡區用
     }
   } catch (e) { }
 }

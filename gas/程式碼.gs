@@ -2663,7 +2663,8 @@ function getRunCardIndex() {
       const fin = (d.stations || []).find(function (s) { return s && s.type === 'final'; });
       finalDone = !!(fin && fin.done && (Number(fin.count) || 0) > 0);
     } catch (e) { }
-    index.push({ orderNo: String(r[1] || ''), product: String(r[3] || ''), status: String(r[11] || ''), finalDone: finalDone });
+    // v3.8.4 補 id/client：讓前端能列出「無訂單之獨立卡」並直接開啟(孤兒卡救援)
+    index.push({ id: String(r[0] || ''), orderNo: String(r[1] || ''), client: String(r[2] || ''), product: String(r[3] || ''), status: String(r[11] || ''), finalDone: finalDone });
   }
   return { ok: true, index: index };
 }
