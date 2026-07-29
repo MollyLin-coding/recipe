@@ -288,6 +288,7 @@ tbody tr:hover td{background:#faf3e8;}
 .rc-locked{background:var(--bg2);color:var(--ink2);}
 .rc-dev{border-color:#e67e22!important;background:#fdf0e3!important;}
 .rc-note-need{border-color:#c0392b!important;}
+.rc-note-need::placeholder{color:#c0392b!important;opacity:1;font-weight:600;} /* v3.8.3 「請填修改原因」紅字明顯化 */
 /* v2.7.3 Run Card 手機優化：全黑字＋緊湊（占比欄縮短防%換行） */
 #rcBody,#rcBody label,#rcBody .rm .lb,#rcBody .rm .vl,#rcBody .ing-lbl,#rcBody .ing-unit,#rcBody .ing-sep,#rcBody .rc-chk,#rcBody .rc-sec,#rcBody input,#rcBody select,#rcBody textarea,#rcBody .cpd-sub-hd,#rcBody .cpd-sub-name{color:#1a1a1a;}
 #rcBody .recipe-meta{gap:6px;}
@@ -396,7 +397,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.8.2';
+const APP_VERSION='v3.8.3';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -3678,7 +3679,7 @@ function rcPctSum(){
   const s=rcState.liquids.reduce((a,g)=>a+(+g.pct||0),0);
   const r=Math.round(s*10)/10;
   el.textContent=r+'%';
-  el.style.color=(rcState.liquids.length&&Math.abs(r-100)>=0.5)?'#c0392b':'';
+  el.style.color=(rcState.liquids.length&&Math.abs(r-100)>=0.05)?'#c0392b':''; // v3.8.3 收緊：非 100.0% 即紅(原 0.5 容差漏掉 99.9%)
 }
 function rcAbvUpd(){
   const el=document.getElementById('rcAbv'); if(!el||!rcState) return;
@@ -3765,6 +3766,11 @@ async function rcSave(){
     const row=document.getElementById('rcL_'+bad[0].i);
     if(row) row.scrollIntoView({behavior:'smooth',block:'center'});
     return;
+  }
+  // v3.8.3 占比合計≠100% 確認（主公指示：製酒誤觸防呆）——手動儲存為守門點，自動回存不打擾
+  if(st.liquids.length){
+    const sumPct=Math.round(st.liquids.reduce((a,g)=>a+(+g.pct||0),0)*10)/10;
+    if(Math.abs(sumPct-100)>=0.05 && !confirm('⚠ 目前液體原料占比合計為 '+sumPct+'%，並非 100%。\n若是誤觸請按「取消」回去修正；確認是否繼續儲存？')) return;
   }
   // v3.8.2 基準補齊：儲存時把缺基準的原料(酒譜帶入失敗的手動卡/舊卡)以當前值蓋上 origPct/origName
   // ——首次存檔狀態=基準；之後再改占比或品名一律觸發紅字+必填原因(全卡統一防呆，不再有無防呆卡)
