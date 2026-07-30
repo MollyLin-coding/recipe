@@ -99,8 +99,8 @@ var FBVIEW_ALLOWED_ACTIONS = ['getRecipeList', 'getRecipe', 'changePassword'];
 // admin 一律放行（各清單皆含 admin）。FB觀看 另有更嚴格白名單（見 FBVIEW_ALLOWED_ACTIONS）。
 // 各業務函式原有的 p._role 內檢查保留為縱深防禦，本表為第一道統一閘門。
 var ROLE_MATRIX = {
-  // 訂單建立/編輯/金流/配送/刪除、審核核准、資料遷移回填、破壞性刪除、帳號診斷 → 僅 admin
-  createOrder: ['admin'], updateOrder: ['admin'], updateOrderFinance: ['admin'],
+  // 訂單建立/編輯 → admin + PM(v3.9 主公拍板：Vic/阿軒可自建單；金流/配送編輯/刪除仍僅 admin)
+  createOrder: ['admin', 'PM'], updateOrder: ['admin', 'PM'], updateOrderFinance: ['admin'],
   updateOrderDelivery: ['admin'], deleteOrder: ['admin'],
   reviewApply: ['admin'], reviewRdApply: ['admin'],
   migrateOrderNos: ['admin'], migrateOrderTypes: ['admin'], backfillOrderCreators: ['admin'],
@@ -307,7 +307,8 @@ function __seedTestUsers() {
   for (let i = 1; i < rows.length; i++) have[String(rows[i][0]).trim()] = true;
   const added = [];
   [['上海Jason', '111111', 'FB觀看'], ['testadmin', '999999', 'admin'],
-   ['wtest', '444444', '倉管'], ['utest', '555555', 'user'], ['ftest', '666666', '財務']].forEach(function (u) {
+   ['wtest', '444444', '倉管'], ['utest', '555555', 'user'], ['ftest', '666666', '財務'],
+   ['pmtest', '777777', 'PM']].forEach(function (u) {
     if (!have[u[0]]) { ws.appendRow(u); added.push(u[0]); }
   });
   return { ok: true, added: added };
@@ -989,6 +990,12 @@ function getOrders(p) {
       base.finalAdjusted = (String(r[19]).toUpperCase() === 'TRUE' || r[19] === true);
       base.finalAdjustedAmount = _numOrBlank_(r[20]);
       base.finalAdjustNote = String(r[21] == null ? '' : r[21]);
+      // v3.9 PM 視角：full view(含已完成單+total 等建單基本盤)但剝除金流明細 N~V(僅 admin/財務名單可見)
+      if (p && p._role === 'PM') {
+        base.depositAmount = ''; base.depositDueDate = ''; base.depositPaidDate = '';
+        base.finalAmount = ''; base.finalDueDate = ''; base.finalPaidDate = '';
+        base.finalAdjusted = false; base.finalAdjustedAmount = ''; base.finalAdjustNote = '';
+      }
       orders.push(base);
     }
   }
@@ -1073,7 +1080,8 @@ function updateOrder(p) {
         Number(p.total) || 0, Number(p.balance) || 0, p.depositStatus || '', status, p.pm || ''
       ]]);
       ws.getRange(i + 1, 12).setValue(p.actualDeliveryDate || p.deliveryDate || '');
-      ws.getRange(i + 1, 14, 1, 9).setValues([[
+      // v3.9 PM 編輯不動金流明細 N~V(其 modal 無金流欄、getOrders 也不回給它——照寫會把 admin 填的蓋空)
+      if (p._role !== 'PM') ws.getRange(i + 1, 14, 1, 9).setValues([[
         _numOrBlank_(p.depositAmount), p.depositDueDate || '', p.depositPaidDate || '',
         _numOrBlank_(p.finalAmount), p.finalDueDate || '', p.finalPaidDate || '',
         finAdj ? 'TRUE' : '', finAdj ? _numOrBlank_(p.finalAdjustedAmount) : '', p.finalAdjustNote || ''

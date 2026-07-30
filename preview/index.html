@@ -397,7 +397,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.8.4';
+const APP_VERSION='v3.9';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -452,6 +452,7 @@ function setOffline(on){
 let curUser = null, curToken = null, curClient = '', curSheet = '', rdata = null, curTab = 'recipe';
 // v2.1 FB觀看（外部唯讀角色，如上海Jason）：純觀看 Feeling Bar 酒譜、無成本
 function isFbViewer() { return !!(curUser && curUser.role === 'FB觀看'); }
+function isPM() { return !!(curUser && curUser.role === 'PM'); } // v3.9 PM 角色：可建單/編輯訂單，不見金流明細、不可審核/刪除
 let recipeList = [], clientList = [];
 const C = { inv: null, profit: {}, recipes: {}, batch: null };
 let rdState = { ings: [], tv: 4000, bt: '4L桶', title: '', client: '', matSel: {} };
@@ -2098,7 +2099,7 @@ async function renderRuncardPage(mc) {
           <button class="btn btn-ghost btn-sm" id="ordMonNext" onclick="shiftOrderMonth(1)" title="下個月">▶</button>
           <button class="btn btn-ghost btn-sm" id="ordScopeBtn" onclick="toggleOrderScope()">${_orderScopeAll ? '看單月' : '顯示全部'}</button>
           <button class="btn btn-ghost btn-sm" onclick="loadOrderMgmt()">↻</button>
-          ${isAdmin ? '<button class="btn btn-primary btn-sm" onclick="showOrderModal()">＋ 建單</button>' : ''}
+          ${(isAdmin || isPM()) ? '<button class="btn btn-primary btn-sm" onclick="showOrderModal()">＋ 建單</button>' : ''}
         </div>
       </div>
       <div style="font-size:11px;color:var(--ink3);margin-bottom:2px;">依出貨日排序・點卡片看詳情與操作（完成回報／確認出貨／編輯）</div>
@@ -2141,7 +2142,8 @@ async function loadFinanceSummary() {
 async function loadOrderMgmt() {
   const isAdmin = curUser && curUser.role === 'admin';
   const canSeeMoney = isAdmin || isFinanceUser();
-  const res = await api(canSeeMoney ? { action: 'getOrders' } : { action: 'getOrders', view: 'bartender' });
+  // v3.9 PM 走 full view(含已完成單+total 基本盤，編輯不蓋 0)；後端對 PM 剝除金流明細 N~V
+  const res = await api((canSeeMoney || isPM()) ? { action: 'getOrders' } : { action: 'getOrders', view: 'bartender' });
   const area = document.getElementById('monthOrderArea');
   if (!res.ok) { if (area) area.innerHTML = `<div class="warn" style="padding:10px;">${res.error || '讀取失敗'}</div>`; return; }
   window._mgmtOrders = res.orders || [];
@@ -2649,7 +2651,7 @@ function showOrderDetail(orderNo) {
     <div style="margin:8px 0 2px;font-size:13px;font-weight:600;color:var(--gold-dk);">📜 修改歷史</div>
     <div id="orderHistArea" style="font-size:11px;color:var(--ink3);">載入中…</div>
     <div class="fe" style="margin-top:10px;gap:6px;flex-wrap:wrap;">
-      ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();editOrder(${idx})">✏️ 編輯訂單</button>` : ''}
+      ${(isAdmin || isPM()) ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();editOrder(${idx})">✏️ 編輯訂單</button>` : ''}
       ${isAdmin ? `<button class="btn btn-ghost btn-sm" style="color:#c0392b;border:1px solid #e74c3c;" onclick="deleteOrderFromDetail('${o.orderNo}')">🗑 刪除訂單</button>` : ''}
       ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();showDeliveryModal('${o.orderNo}')">🚚 編輯配送</button>` : ''}
       ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();showFinanceModal(${idx})">💰 金流</button>` : ''}
@@ -2829,7 +2831,7 @@ function showOrderModal(edit) {
       <div class="fg"><label>尾款</label><input class="inp" id="om_balance" type="number" min="0" value="${isEdit ? (edit.balance || 0) : 0}" style="margin:0;"></div>
     </div>
     <div class="fg" style="margin-bottom:12px;"><label>訂金狀態</label><input class="inp" id="om_deposit" list="omDepList" value="${isEdit ? (edit.depositStatus || '') : ''}" placeholder="未收 / 已收訂 / 已結清（可自填如 已收訂金 NT$3,000）" style="margin:0;"><datalist id="omDepList"><option>未收</option><option>已收訂</option><option>已結清</option></datalist></div>
-    <div id="omFinWrap">${financeFieldsHtml(isEdit ? edit : null)}</div>
+    <div id="omFinWrap">${isPM() ? '' : financeFieldsHtml(isEdit ? edit : null)}</div><!-- v3.9 PM 不見金流明細；後端 PM 編輯亦不寫 N~V -->
     <div id="omDeliveryWrap">${deliveryFieldsHtml(isEdit ? edit : null)}</div>
     <div class="fe" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="if(confirm('放棄未儲存的變更？')){${isEdit?'':'orderDraftClear();'}this.closest('.modal-bg').remove()}">✕ 取消編輯</button><button class="btn btn-primary btn-sm" id="om_sub">💾 儲存並關閉</button></div>`, { locked: true });
   if (isEdit) {
