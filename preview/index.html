@@ -397,7 +397,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.9';
+const APP_VERSION='v3.9.1';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -1364,15 +1364,87 @@ async function renderRdPage(mc) {
     <div id="rd_sum"></div>
   </div>
 
-  <div class="fe" style="gap:6px;margin-bottom:80px;flex-wrap:wrap;">
+  <div class="fe" style="gap:6px;flex-wrap:wrap;">
     <button class="btn btn-ghost btn-sm" onclick="rdStash()" title="存到這台裝置，隨時回來繼續編輯（不會進儲存記錄）">📝 暫存</button>
     <button class="btn btn-ghost btn-sm" onclick="lockRun(this, rdSave)">💾 儲存</button>
     <button class="btn btn-ghost btn-sm" onclick="rdLoadList()">📋 載入</button>
     <button class="btn btn-ghost btn-sm" onclick="rdExportCSV()">⬇ CSV</button>
     <button class="btn btn-primary btn-sm" onclick="lockRun(this, rdSubmitApply)">📤 送出申請</button>
-  </div>`;
+  </div>
+  <div id="rdSavedList" style="margin-bottom:80px;"></div>`;
 
   rdDraftBar(); rdRender(); rdUpdateMat(); rdCalc();
+  rdRenderSavedList(); // v3.9.1 常駐已儲存清單（主公指示）
+}
+// ── v3.9.1 已儲存試算記錄：常駐清單＋點開詳情（主公指示）──
+let _rdRecords = [];
+async function rdRenderSavedList(force) {
+  const box = document.getElementById('rdSavedList'); if (!box) return;
+  if (force || !_rdRecords.length) {
+    const res = await api({ action: 'getRdRecords' }, true);
+    if (res && res.ok) _rdRecords = res.records || [];
+  }
+  if (!_rdRecords.length) { box.innerHTML = ''; return; }
+  const rows = _rdRecords.slice().reverse(); // 新→舊
+  box.innerHTML = `<div class="card" style="margin-top:10px;">
+    <div class="card-title" style="margin-bottom:4px;">💾 已儲存試算記錄（${rows.length}）</div>
+    <div style="font-size:11px;color:var(--ink3);margin-bottom:4px;">點一筆查看詳細試算內容；可從詳情載入編輯或送出申請。</div>
+    ${rows.map(r => `<div onclick="rdShowDetail('${rcEsc(r.id)}')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;background:var(--card);">
+      <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span style="font-weight:600;font-size:13px;">${rcEsc(r.name || '未命名')}</span><span style="font-size:11px;color:var(--ink3);margin-left:6px;">${rcEsc(r.client || '—')}</span></div>
+      <div style="font-size:11px;color:var(--ink3);flex:0 0 auto;">${rcEsc(r.creator || '')} · ${rcEsc(String(r.createdAt).substring(0, 10))}</div>
+    </div>`).join('')}
+  </div>`;
+}
+function rdShowDetail(id) {
+  const r = _rdRecords.find(x => String(x.id) === String(id)); if (!r) return;
+  let ings = r.ingredients || [];
+  if (typeof ings === 'string') { try { ings = JSON.parse(ings); } catch (e) { ings = []; } }
+  if (!Array.isArray(ings)) ings = [];
+  let rs = r.results || {};
+  if (typeof rs === 'string') { try { rs = JSON.parse(rs); } catch (e) { rs = {}; } }
+  const ingRows = ings.map(g => {
+    if (g.type === 'compound') {
+      const subs = (g.subs || []).map(s => `<div style="padding-left:14px;font-size:11px;color:var(--ink3);">└ ${rcEsc(s.name)}（${rcEsc(s.brand || '')}）${nt(s.volume)}ml</div>`).join('');
+      return `<div style="padding:5px 0;border-bottom:1px dashed var(--border);"><b>${rcEsc(g.name)}</b> <span style="font-size:11px;color:var(--gold-dk);">複合${g.hasLoss ? '·÷0.8耗損' : ''}</span>${subs}</div>`;
+    }
+    if (g.type === 'free') {
+      const u = g.unit === '自訂' ? (g.customUnit || '自訂') : (g.unit || '');
+      return `<div style="padding:5px 0;border-bottom:1px dashed var(--border);"><b>${rcEsc(g.name)}</b> <span style="font-size:11px;color:var(--gold-dk);">自由材料</span> <span style="font-size:12px;">用量 ${rcEsc(g.qty || 0)}${rcEsc(u)}｜進貨 NT$${nt(g.packPrice)}/${rcEsc(g.packSize || 0)}${rcEsc(u)}${(+g.ratio > 0) ? '｜占比 ' + nt(g.ratio, 1) + '%' : ''}${(+g.abv > 0) ? '｜ABV ' + g.abv + '%' : ''}</span></div>`;
+    }
+    return `<div style="padding:5px 0;border-bottom:1px dashed var(--border);"><b>${rcEsc(g.name)}</b> <span style="font-size:12px;">占比 ${nt(g.ratio, 1)}%｜用量 ${nt(g.volume)}ml${(+g.abv > 0) ? '｜ABV ' + g.abv + '%' : ''}${g.hasLoss ? '｜÷0.8耗損' : ''}</span></div>`;
+  }).join('') || '<div style="color:var(--ink3);font-size:12px;">（無原料明細）</div>';
+  const resRow = (lb, v, unit) => (v == null || v === '' ? '' : `<div class="rm"><div class="lb">${lb}</div><div class="vl">${v}${unit || ''}</div></div>`);
+  const isAdmin = curUser && curUser.role === 'admin';
+  const modal = makeModal(`<div class="modal-title">🧪 ${rcEsc(r.name || '未命名')}</div>
+    <div style="font-size:12px;color:var(--ink3);margin-bottom:8px;">${rcEsc(r.client || '—')} · ${rcEsc(r.creator || '')} · ${rcEsc(String(r.createdAt).substring(0, 16))}｜總量 ${rcEsc(r.volume || 0)}ml · ${rcEsc(r.bottle || '')}</div>
+    <div class="card-title" style="font-size:13px;">原料明細</div>
+    <div style="max-height:230px;overflow-y:auto;margin-bottom:10px;">${ingRows}</div>
+    <div class="card-title" style="font-size:13px;">試算結果</div>
+    <div class="recipe-meta" style="margin-bottom:10px;">
+      ${resRow('酒精濃度', nt(rs.abv, 1), '%')}${resRow('酒稅', 'NT$' + nt(rs.tax, 2))}${resRow('食材成本', 'NT$' + nt(rs.totalCost, 2))}${resRow('食材報價', 'NT$' + nt(rs.quote, 2))}${resRow('資材成本', 'NT$' + nt(rs.matCost, 2))}${resRow('總成本', 'NT$' + nt(rs.totalAll, 2))}
+    </div>
+    <div class="fe" style="gap:6px;flex-wrap:wrap;">
+      ${isAdmin ? `<button class="btn btn-ghost btn-sm" style="color:#c0392b;" onclick="rdDelFromDetail('${rcEsc(r.id)}',this)">🗑 刪除</button>` : ''}
+      <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">關閉</button>
+      <button class="btn btn-ghost btn-sm" onclick="rdApplyFromRecord(_rdRecords.find(x=>String(x.id)==='${rcEsc(r.id)}'))">📤 送出申請</button>
+      <button class="btn btn-primary btn-sm" onclick="rdLoadFromDetail('${rcEsc(r.id)}',this)">✏️ 載入編輯</button>
+    </div>`);
+}
+function rdLoadFromDetail(id, btn) {
+  const r = _rdRecords.find(x => String(x.id) === String(id)); if (!r) return;
+  let ings = r.ingredients || [];
+  if (typeof ings === 'string') { try { ings = JSON.parse(ings); } catch (e) { ings = []; } }
+  if (!Array.isArray(ings)) ings = [];
+  rdState = { ings, tv: r.volume || 4000, bt: r.bottle || '4L桶', title: r.name || '', client: r.client || '', matSel: {} };
+  btn.closest('.modal-bg').remove();
+  switchTab('rd');
+  toast('已載入：' + (r.name || '未命名'));
+}
+async function rdDelFromDetail(id, btn) {
+  if (!confirm('確定刪除這筆試算記錄？（不可復原）')) return;
+  const res = await api({ action: 'deleteRdRecord', id: id });
+  if (res.ok) { toast('已刪除'); btn.closest('.modal-bg').remove(); rdRenderSavedList(true); }
+  else toast('刪除失敗：' + (res.error || ''));
 }
 // ── v2.2.1 暫存草稿（本機 localStorage 單一槽位；編到一半先存、回來繼續）──
 function rdStash() {
@@ -1723,7 +1795,7 @@ async function rdSave() {
   const sp = window._rdPctSum;
   if (sp !== undefined && Math.abs(sp - 100) >= 0.1 && !confirm(`目前占比總和 ${sp.toFixed(1)}%（與 100% 不符），確定仍要儲存？`)) return;
   const res = await api({ action:'saveRdRecord', creator:curUser.username, client:rdState.client||'', name:rdState.title||'未命名', volume:rdState.tv, bottle:rdState.bt, ingredients:JSON.stringify(rdState.ings), results:JSON.stringify(window._rdRes||{}) });
-  if (res.ok) toast('試算已儲存！'); else toast('儲存失敗:'+res.error);
+  if (res.ok) { toast('試算已儲存！'); rdRenderSavedList(true); } else toast('儲存失敗:'+res.error); // v3.9.1 存後刷新常駐清單
 }
 async function rdLoadList() {
   const res = await api({ action:'getRdRecords' });
