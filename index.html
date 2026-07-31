@@ -397,7 +397,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.9.1';
+const APP_VERSION='v3.9.2';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -449,7 +449,7 @@ function setOffline(on){
 }
 
 // ── 狀態 ─────────────────────────────────────────────────────
-let curUser = null, curToken = null, curClient = '', curSheet = '', rdata = null, curTab = 'recipe';
+let curUser = null, curToken = null, curClient = '', curSheet = '', rdata = null, curTab = 'batch'; // v3.9.2 預設分頁=訂單(主公指示)；角色無 batch 權限者(FB觀看)自動 fallback
 // v2.1 FB觀看（外部唯讀角色，如上海Jason）：純觀看 Feeling Bar 酒譜、無成本
 function isFbViewer() { return !!(curUser && curUser.role === 'FB觀看'); }
 function isPM() { return !!(curUser && curUser.role === 'PM'); } // v3.9 PM 角色：可建單/編輯訂單，不見金流明細、不可審核/刪除
@@ -605,7 +605,7 @@ async function doLogin() {
     document.querySelectorAll('#navbar .nav-tab').forEach(el => {
       if (!el.classList.contains('admin-only')) el.style.display = '';
     });
-    switchTab('recipe');
+    switchTab('batch'); // v3.9.2 登入預設=訂單分頁(主公指示)
   }
   showStockAlerts();
   showShipDateAlerts();
