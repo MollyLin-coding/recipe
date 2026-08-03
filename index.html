@@ -397,7 +397,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.9.2';
+const APP_VERSION='v3.9.3';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2290,9 +2290,8 @@ function checkBottleWarn() {
   const need = {};
   const rows = lines.map(el => {
     const idx = el.id.replace('oline_', '');
-    const btEl = document.getElementById('oi_' + idx + '_bt');
     const qEl = document.getElementById('oi_' + idx + '_qty');
-    const inv = btEl ? bottleInvName(btEl.value) : null;
+    const inv = bottleInvName(_lineBt(idx)); // v3.9.3 手動輸入瓶型對不到庫存品名→不觸發缺瓶警告(正確：非標準容器)
     const q = qEl ? (parseInt(qEl.value, 10) || 0) : 0;
     if (inv && q > 0) need[inv] = (need[inv] || 0) + q;
     return { idx, inv, q };
@@ -2436,7 +2435,7 @@ function orderLineHtml(idx, client) {
     </div>
     <div class="form-row" style="gap:6px;">
       <div class="fg" style="flex:1 1 90px"><label>規格</label><input class="inp" id="oi_${idx}_vol" value="100ml" style="margin:0;font-size:13px;"></div>
-      <div class="fg" style="flex:1 1 100px"><label>瓶型</label><select class="inp" id="oi_${idx}_bt" style="margin:0;font-size:13px;" onchange="checkBottleWarn()">${btOpts}</select></div>
+      <div class="fg" style="flex:1 1 100px"><label>瓶型</label><select class="inp" id="oi_${idx}_bt" style="margin:0;font-size:13px;" onchange="orderBtChange(${idx})">${btOpts}<option value="__custom__">✎ 手動輸入瓶型</option></select><input class="inp" type="text" id="oi_${idx}_btc" placeholder="輸入瓶型名稱" style="margin:4px 0 0;font-size:13px;display:none;"></div>
       <div class="fg" style="flex:0 0 auto;display:flex;align-items:flex-end;"><button class="btn btn-ghost btn-sm" onclick="document.getElementById('oline_${idx}').remove();renumberOrderLines()">✕</button></div>
     </div>
     <label style="display:flex;gap:6px;align-items:center;font-size:12px;margin-top:6px;color:var(--gold-dk);font-weight:600;">
@@ -2451,6 +2450,18 @@ function orderLineHtml(idx, client) {
     </div>
     <div id="oi_${idx}_btwarn" style="display:none;font-size:12px;color:var(--red);margin-top:4px;line-height:1.5;"></div>
   </div>`;
+}
+// v3.9.3 瓶型「✎ 手動輸入」（主公指示）：選手動→顯示自由輸入框；取值統一走 _lineBt
+function _lineBt(idx) {
+  const s = document.getElementById('oi_' + idx + '_bt'); if (!s) return '';
+  if (s.value === '__custom__') { const c = document.getElementById('oi_' + idx + '_btc'); return c ? c.value.trim() : ''; }
+  return s.value;
+}
+function orderBtChange(idx) {
+  const s = document.getElementById('oi_' + idx + '_bt');
+  const c = document.getElementById('oi_' + idx + '_btc');
+  if (s && c) { const on = s.value === '__custom__'; c.style.display = on ? '' : 'none'; if (on) c.focus(); }
+  checkBottleWarn();
 }
 // 酒款編號：加/刪一款後重編 1..n，並更新「已 key N 款」計數
 function renumberOrderLines() {
@@ -2805,7 +2816,7 @@ function _odSnap(){
   const lines=[...il.querySelectorAll('.order-line')].map(line=>{
     const li=line.id.replace('oline_','');
     const g=id=>{const e=document.getElementById('oi_'+li+'_'+id);return e?(e.type==='checkbox'?e.checked:e.value):'';};
-    return { rec:g('rec'), qty:g('qty'), vol:g('vol'), bt:g('bt'), smp:g('smp'), smpbt:g('smpbt'), smpqty:g('smpqty'), smpnote:g('smpnote') };
+    return { rec:g('rec'), qty:g('qty'), vol:g('vol'), bt:g('bt'), btc:g('btc'), smp:g('smp'), smpbt:g('smpbt'), smpqty:g('smpqty'), smpnote:g('smpnote') };
   });
   return { header, lines };
 }
@@ -2846,6 +2857,7 @@ function orderDraftTryRestore(){
         else { if(e.tagName==='SELECT'&&val&&![...e.options].some(o=>o.value===val)){const op=document.createElement('option');op.textContent=val;e.appendChild(op);} e.value=val==null?'':val; }
         e.dispatchEvent(new Event(isChk?'change':'input')); };
       set('smp',L.smp,true); set('rec',L.rec); set('qty',L.qty); set('vol',L.vol); set('bt',L.bt);
+      set('btc',L.btc); // v3.9.3 手動瓶型文字(在 bt dispatch change 顯示輸入框後回填)
       set('smpbt',L.smpbt); set('smpqty',L.smpqty); set('smpnote',L.smpnote);
     });
   }
@@ -2974,7 +2986,7 @@ function showOrderModal(edit) {
         const npw = recipeList.find(i => i.client === '南坡萬v.2' && i.recipeName === product);
         if (npw) { rec = npw; srcClient = '南坡萬v.2'; }
       }
-      const item = { product, sheet: rec ? rec.sheet : '', volume: document.getElementById('oi_' + idx + '_vol').value || '', bottleType: document.getElementById('oi_' + idx + '_bt').value || '', qty, status: (isEdit && line.dataset.status) ? line.dataset.status : '待製作' };
+      const item = { product, sheet: rec ? rec.sheet : '', volume: document.getElementById('oi_' + idx + '_vol').value || '', bottleType: _lineBt(idx) || '', qty, status: (isEdit && line.dataset.status) ? line.dataset.status : '待製作' };
       if (srcClient) item.srcClient = srcClient;
       // v3.4 試飲(SGS)酒品
       const smpChk = document.getElementById('oi_' + idx + '_smp');
