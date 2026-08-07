@@ -397,7 +397,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.9.4';
+const APP_VERSION='v3.10';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2318,8 +2318,8 @@ const HIDDEN_CLIENTS = ['Feeling Bar Cafe', '南坡萬公版'];
 const EXTRA_CLIENT_RECIPES = {
   'OEM-好野吧': ['好野吧-玫開二度', '好野吧-老鷹教父', '好野吧-灌籃高手', '好野吧-蝴蝶魔球'],
   'OEM-Lane72': ['茉莉香片琴酒(利口酒)', '焙火烏龍威士忌(利口酒)', '玫瑰烏龍威士忌', '桂花烏龍威士忌'],
-  '全客製-酒肉朋友': ['梨香蜜桃紅烏龍'], // v3.9.4：酒譜表尚未登記後端，先供建單選用（待轉正式客戶時移除）
 };
+// v3.10：全客製-酒肉朋友 已轉正式客戶（後端 CLIENTS 供真酒譜「梨香蜜桃紅烏龍調酒」），自 EXTRA 清單移除
 const EXTRA_CLIENTS = Object.keys(EXTRA_CLIENT_RECIPES);
 function clientLabel(key) { return CLIENT_LABELS[key] || key; }
 // v1.6 金流可見名單（僅此三人看得到金流總覽與訂單金流欄；後端 getFinanceSummary 同名單雙重把關）
