@@ -38,6 +38,14 @@ const CLIENTS = {
     prefix: /^BF_/i, strip: /^BF_/i,
     profitSheet: 'BF_報價毛利分析', profitFmt: 'bf-2row',
   },
+  // v3.10 全客製-酒肉朋友 轉正式客戶（主公提供「酒肉朋友酒譜資料庫」20260807）
+  // ⚠️ 此書分頁「無前綴」（如「梨香蜜桃紅烏龍調酒」），以「調酒」結尾為識別（毛利/報價分頁本就被 isRecipeSheet 排除）；
+  //    suffix 式 strip 不適用「審核核准建新分頁」的前綴推導（createRecipeSheet），此客戶暫不支援該功能。
+  '全客製-酒肉朋友': {
+    id: '1GguVGe67xnq1GlMVqUSb1GUQrT-tzXTLXAl2yVpvh1Q',
+    prefix: /調酒$/, strip: /調酒$/,
+    profitSheet: '報價毛利', profitFmt: 'jrp-1row',
+  },
 };
 // 主表 ID：優先讀 Script Property 'SHEET_ID'（測試部署指向沙盒副本用），
 // 找不到時 fallback 正式硬編碼 ID（向後相容：正式部署不設此屬性，行為與改版前完全一致）。
@@ -56,6 +64,8 @@ const PROFIT_COLS = {
   'two-bottle': { price: 3, cost: 4, twoRow: true },
   // OEM-Babyface：A酒款 B售價 C容量 D總成本，一酒款兩列(100ml/500ml)、無 ABV 欄
   'bf-2row':    { price: 1, cost: 3, twoRow: true, noAbv: true },
+  // 全客製-酒肉朋友：A品名 B容量 C含稅單價 D成本 …… G使用瓶型，單列式
+  'jrp-1row':   { price: 2, cost: 3, capCol: 1, bottleCol: 6 },
 };
 
 // 取得客戶設定（唯一入口，未知客戶直接擋下）
@@ -1388,20 +1398,21 @@ function getProfitData(p) {
       list.push({ recipeName: nm, bottle: capStr, price, abv, totalCostTax, profit, profitRate, warn });
     }
   } else {
-    // FB / FBC
+    // FB / FBC（capCol/bottleCol 未設走原欄位）；jrp-1row 帶 capCol=B、bottleCol=G
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
       const nm = String(row[0] || '').trim();
       if (!nm) continue;
       const price = parseFloat(row[pc.price]) || 0;
-      const cap = parseFloat(row[2]) || 0;
+      const cap = parseFloat(row[pc.capCol != null ? pc.capCol : 2]) || 0;
       const totalCostTax = parseFloat(row[pc.cost]) || 0;
       if (!price && !totalCostTax && !cap) continue; // 整列無數據 = 非酒款列，跳過
       // 欄位健檢：有酒款名稱卻讀不到售價/成本 → 不再靜默丟棄，照常回傳並標記 warn
       const warn = !(price > 0) || !(totalCostTax > 0);
       const profit = Math.round((price - totalCostTax) * 100) / 100;
       const profitRate = price > 0 ? Math.round(profit / price * 1000) / 10 : 0; // 百分比整數（55.1），與NO1分支統一
-      list.push({ recipeName: nm, bottle: '4L桶', price, cap, totalCostTax, profit, profitRate, warn });
+      const bottle = pc.bottleCol != null ? (String(row[pc.bottleCol] || '').trim() || (cap ? cap + 'ml' : '')) : '4L桶';
+      list.push({ recipeName: nm, bottle, price, cap, totalCostTax, profit, profitRate, warn });
     }
   }
 
