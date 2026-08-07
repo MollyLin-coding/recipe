@@ -36,7 +36,12 @@ sed -i "s|const APP_VERSION='[^']*';|const APP_VERSION='${TAG}';|" preview/index
 
 echo "③ 驗證：正式前台確實指向正式後端"
 grep -q "const API='${PROD_API}';" index.html || { echo "❌ index.html API 置換失敗，已中止（未 commit）"; exit 1; }
-grep -q "const API='${PROD_API}';" order.html || { echo "❌ order.html API 置換失敗，已中止（未 commit）"; exit 1; }
+# v3.7 起 order.html 為停用告示頁（無 API 行）；僅在檔內確實有 API 行時才驗證
+if grep -q "const API=" order.html; then
+  grep -q "const API='${PROD_API}';" order.html || { echo "❌ order.html API 置換失敗，已中止（未 commit）"; exit 1; }
+else
+  echo "   （order.html 為停用告示頁、無 API 行，略過檢查）"
+fi
 echo "   ✅ index.html / order.html 皆指向正式 /exec"
 
 echo "④ git commit + 打版本標籤 ${TAG}"

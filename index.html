@@ -397,7 +397,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.9.3';
+const APP_VERSION='v3.9.4';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2318,6 +2318,7 @@ const HIDDEN_CLIENTS = ['Feeling Bar Cafe', '南坡萬公版'];
 const EXTRA_CLIENT_RECIPES = {
   'OEM-好野吧': ['好野吧-玫開二度', '好野吧-老鷹教父', '好野吧-灌籃高手', '好野吧-蝴蝶魔球'],
   'OEM-Lane72': ['茉莉香片琴酒(利口酒)', '焙火烏龍威士忌(利口酒)', '玫瑰烏龍威士忌', '桂花烏龍威士忌'],
+  '全客製-酒肉朋友': ['梨香蜜桃紅烏龍'], // v3.9.4：酒譜表尚未登記後端，先供建單選用（待轉正式客戶時移除）
 };
 const EXTRA_CLIENTS = Object.keys(EXTRA_CLIENT_RECIPES);
 function clientLabel(key) { return CLIENT_LABELS[key] || key; }
@@ -2401,6 +2402,7 @@ function _isGongbanType() {
 }
 // v3.1 換前標客戶／v3.1.3 庫存出貨／v3.1.4 投產單：瓶型預設 100ml山形香水瓶（南坡萬自有品牌酒瓶型）
 function _defaultBottleFor(client) {
+  if (client === '全客製-酒肉朋友') return '500ml大香水瓶'; // v3.9.4 主公指定預設瓶型
   if (String(client || '').startsWith('換前標-')) return '100ml山形香水瓶';
   const t = document.getElementById('om_type');
   if (t && (t.value === '自有酒款庫存出貨訂單' || t.value === TYPE_NO_FINANCE)) return '100ml山形香水瓶';
