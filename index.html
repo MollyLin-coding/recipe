@@ -397,7 +397,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.10';
+const APP_VERSION='v3.11';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -3527,7 +3527,8 @@ async function rcOpenCard(id){
     labelFrontOk:(d.labelFrontOk!=null)?!!d.labelFrontOk:!!String(d.labelFront||'').trim(),
     labelBackOk:(d.labelBackOk!=null)?!!d.labelBackOk:!!String(d.labelBack||'').trim(),
     processNote:d.processNote||'',
-    liquids:Array.isArray(d.liquids)?d.liquids:[], solids:Array.isArray(d.solids)?d.solids:[] });
+    liquids:Array.isArray(d.liquids)?d.liquids:[], solids:Array.isArray(d.solids)?d.solids:[],
+    printLog:Array.isArray(d.printLog)?d.printLog:[] }); // v3.11 紙本列印歷史（舊卡無欄位=空陣列相容）
   if(Array.isArray(d.stations)&&d.stations.length) st.stations=d.stations;
   if(!st.stations.some(function(x){ return x&&x.type==='final'; }))
     st.stations.push({no:st.stations.length+1,name:'統計此酒款之最終產出瓶數',type:'final',count:'',note:'',operator:'',done:false});
@@ -3591,6 +3592,7 @@ function rcOpenEditor(st){
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:6px;">
       <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;min-width:0;"><div class="modal-title" id="rcTitle" style="margin:0;">📋 ${st.id?('編輯 Run Card '+st.id):'編輯 Run Card（新卡）'}</div><span id="rcDraftInfo" style="font-size:10px;color:#888;"></span></div>
       <div style="display:flex;gap:6px;flex:0 0 auto;">
+        <button class="btn btn-ghost btn-sm" onclick="rcPrint()">🖨 列印紙本</button>
         <button class="btn btn-primary btn-sm" id="rc_save_top">💾 儲存</button>
         <button class="btn btn-ghost btn-sm" onclick="rcCloseEditor(this)">✖ 關閉</button>
       </div>
@@ -3752,7 +3754,12 @@ function rcRenderBody(){
     <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.solids.push({name:'',ratio:'',fed:false,note:''});rcRenderBody()">＋ 加固體原料</button>
     <div class="rc-sec">🏭 製程站點與備註</div>
     ${sta||'<div style="color:var(--ink3);font-size:12px;padding:6px 0;">尚無站點。</div>'}
-    <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.stations.push({no:rcState.stations.length+1,name:'',note:'',operator:'',done:false});rcRenderBody()">＋ 加站點</button>`;
+    <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.stations.push({no:rcState.stations.length+1,name:'',note:'',operator:'',done:false});rcRenderBody()">＋ 加站點</button>
+    ${(st.printLog&&st.printLog.length)?`<div class="rc-sec">🖨 紙本列印歷史</div>
+    <div id="rcPrintLog" style="font-size:12px;color:var(--ink2);padding:4px 2px 0;">
+      ${st.printLog.map((p,i)=>`<div style="padding:2px 0;">第 ${i+1} 次　${rcEsc(p.at||'')}　由 <b>${rcEsc(p.by||'')}</b> 列印</div>`).join('')}
+      <div style="font-size:11px;color:var(--ink3);margin-top:2px;">（紙本手寫內容請記得回系統補登）</div>
+    </div>`:''}`;
   rcPctSum(); rcAbvUpd();
   st.liquids.forEach(function(_,i){ rcDevUpd(i); });
   b.querySelectorAll('.rc-snote').forEach(function(t){ t.style.height='auto'; t.style.height=t.scrollHeight+'px'; });
@@ -3851,10 +3858,104 @@ function rcResetPct(){
   rcRenderBody();
   toast(n?('已回復 '+n+' 項原料至原配方（占比／品名）'):'占比與品名已與原配方相同，未變動');
 }
+// ── v3.11 列印紙本 Run Card（A4；潔淨室手寫用，回廠再謄寫進系統）──
+function rcPrintHtml(st){
+  const e=rcEsc, chk=v=>v?'☑':'☐', line='＿＿＿＿＿＿';
+  const abv=Math.round(st.liquids.reduce((s,g)=>s+(+g.abv||0)*(+g.pct||0)/100,0)*10)/10;
+  const pctSum=Math.round(st.liquids.reduce((a,g)=>a+(+g.pct||0),0)*10)/10;
+  const liq=st.liquids.map((g,i)=>{
+    const subs=(g.subs||[]).map(s=>`<div class="sub">└ ${e(s.name)} × ${e(s.ratio)}</div>`).join('');
+    return `<tr>
+      <td class="c">${i+1}</td>
+      <td>${e(g.name)}${g.subs&&g.subs.length?(g.hasLoss?' <span class="tag">÷0.8耗損</span>':'')+subs:''}</td>
+      <td class="c">${g.pct||0}%</td><td class="r">${g.vol||0} ml</td><td class="c">${g.abv||0}%</td>
+      <td class="c big">${chk(g.fed)}</td><td class="wr">${e(g.note||'')}</td>
+    </tr>`; }).join('');
+  const sol=st.solids.length?st.solids.map((g,i)=>`<tr>
+      <td class="c">${i+1}</td><td>${e(g.name)}</td><td class="c">${e(g.ratio||'')}</td>
+      <td class="c big">${chk(g.fed)}</td><td class="wr">${e(g.note||'')}</td>
+    </tr>`).join('')
+    :'<tr><td class="c">—</td><td colspan="4" style="color:#888;">（無固體原料）</td></tr>';
+  const sta=st.stations.map((s,i)=>`<tr>
+      <td class="c">${i+1}</td>
+      <td>${e(s.name)}${s.type==='final'?`<div class="finalbox">最終產出瓶數：${s.count!==''&&s.count!=null?e(s.count)+' 瓶':line+' 瓶'}　⚠ 請留一瓶 100ml 自主留樣</div>`:''}</td>
+      <td class="c">${e(s.operator||'')||line}</td>
+      <td class="c">${e(s.inAt?String(s.inAt).slice(5):'')||line}</td>
+      <td class="c">${e(s.outAt?String(s.outAt).slice(5):'')||line}</td>
+      <td class="c big">${chk(s.done)}</td>
+      <td class="wr">${e(s.note||'')}</td>
+    </tr>`).join('');
+  const now=rcNowMin(), by=(curUser&&curUser.username)||'';
+  return `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><title>Run Card ${e(st.id||'（未儲存）')}</title>
+<style>
+  @page{size:A4;margin:11mm;}
+  *{box-sizing:border-box;}
+  body{font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;color:#111;font-size:11.5px;margin:0;line-height:1.45;}
+  h1{font-size:17px;margin:0 0 2px;} .sub-t{font-size:11px;color:#555;margin-bottom:8px;}
+  table{width:100%;border-collapse:collapse;margin:4px 0 10px;page-break-inside:auto;}
+  th,td{border:1px solid #333;padding:4px 5px;vertical-align:top;}
+  th{background:#eee;font-size:11px;white-space:nowrap;}
+  td.c{text-align:center;white-space:nowrap;} td.r{text-align:right;white-space:nowrap;}
+  td.big{font-size:15px;} td.wr{min-width:120px;}
+  .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid #333;margin-bottom:8px;}
+  .meta>div{border:1px solid #333;margin:-0.5px;padding:4px 6px;}
+  .meta .lb{font-size:9.5px;color:#555;} .meta .vl{font-size:12.5px;font-weight:700;min-height:16px;}
+  .sec{font-size:13px;font-weight:700;margin:8px 0 2px;border-left:4px solid #333;padding-left:6px;}
+  .sub{font-size:10px;color:#444;padding-left:10px;}
+  .tag{font-size:9px;border:1px solid #999;border-radius:3px;padding:0 3px;color:#555;}
+  .notebox{border:1px solid #333;min-height:44px;padding:4px 6px;margin:2px 0 8px;white-space:pre-wrap;}
+  .finalbox{margin-top:3px;font-size:11px;font-weight:700;}
+  .foot{margin-top:10px;font-size:10px;color:#555;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+  .remind{font-weight:700;color:#111;}
+</style></head><body>
+  <h1>凱文南坡萬 生產 Run Card　${e(st.id||'（未儲存草稿）')}</h1>
+  <div class="sub-t">狀態：${e(st.status||'進行中')}${st.orderNo?'　｜　綁定訂單：'+e(st.orderNo):''}　｜　列印：${e(now)}　${e(by)}</div>
+  <div class="meta">
+    <div><div class="lb">客戶名稱</div><div class="vl">${e(st.client||'')}</div></div>
+    <div><div class="lb">酒款名稱</div><div class="vl">${e(st.product||'')}</div></div>
+    <div><div class="lb">瓶型</div><div class="vl">${e(st.bottleType||'')}</div></div>
+    <div><div class="lb">生產日期</div><div class="vl">${e(st.prodDate||'')}</div></div>
+    <div><div class="lb">產品PM</div><div class="vl">${e(st.pm||'')}</div></div>
+    <div><div class="lb">Lot批號</div><div class="vl">${e(st.lot||'')}</div></div>
+    <div><div class="lb">本批總液體體積</div><div class="vl">${st.totalVol||0} ml</div></div>
+    <div><div class="lb">預估酒精濃度／占比合計</div><div class="vl">${abv}%／${pctSum}%</div></div>
+    <div><div class="lb">前標數量是否充足?</div><div class="vl">${chk(st.labelFrontOk)}</div></div>
+    <div><div class="lb">後標數量是否充足?</div><div class="vl">${chk(st.labelBackOk)}</div></div>
+    <div style="grid-column:span 2;"><div class="lb">Run Card 編號</div><div class="vl">${e(st.id||'（儲存後生成，謄寫時請補填）')}</div></div>
+  </div>
+  <div class="sec">📝 製程特別備註</div>
+  <div class="notebox">${e(st.processNote||'')}</div>
+  <div class="sec">🧪 液體原料</div>
+  <table><tr><th>#</th><th>原料名稱</th><th>占比</th><th>體積</th><th>ABV</th><th>已投入</th><th>備註／手寫</th></tr>${liq||'<tr><td colspan="7" style="color:#888;">（無液體原料）</td></tr>'}</table>
+  <div class="sec">🧂 固體原料</div>
+  <table><tr><th>#</th><th>原料名稱</th><th>比例</th><th>已投入</th><th>備註／手寫</th></tr>${sol}</table>
+  <div class="sec">🏭 製程站點</div>
+  <table><tr><th>#</th><th>站點</th><th>執行人員</th><th>入站時間</th><th>出站時間</th><th>完成</th><th>備註／手寫</th></tr>${sta}</table>
+  <div class="foot">
+    <span class="remind">⚠ 紙本手寫內容請於離開潔淨室後，回系統補登本張 Run Card。</span>
+    <span>列印人：${e(by)}｜列印時間：${e(now)}</span>
+  </div>
+<script>window.onload=function(){window.print();};<\/script>
+</body></html>`;
+}
+function rcPrint(){
+  const st=rcState; if(!st) return;
+  const w=window.open('','_blank');
+  if(!w){ toast('瀏覽器擋下彈出視窗，請允許本站彈出視窗後再試'); return; }
+  w.document.write(rcPrintHtml(st));
+  w.document.close();
+  // 記列印歷史（隨卡片 JSON 儲存；未存卡→隨下次儲存入庫）
+  st.printLog=st.printLog||[];
+  st.printLog.push({ at:rcNowMin(), by:(curUser&&curUser.username)||'' });
+  rcRenderBody();
+  if(st.id) rcSrvAutoSave(JSON.stringify(rcState)); // 已存卡→靜默回存(含驗證守門，不過就留給手動儲存)
+  toast('已開啟列印視窗'+(st.id?'':'（此卡尚未儲存，列印紀錄將於儲存後保留）'));
+}
 // v3.8 saveRunCard 參數統一組裝（手動儲存與自動回存共用）
 function _rcPayload(st){
   const data={ totalVol:st.totalVol, bottles:st.bottles, labelFrontOk:!!st.labelFrontOk, labelBackOk:!!st.labelBackOk,
-    processNote:st.processNote, liquids:st.liquids, solids:st.solids, stations:st.stations };
+    processNote:st.processNote, liquids:st.liquids, solids:st.solids, stations:st.stations,
+    printLog:st.printLog||[] }; // v3.11 紙本列印歷史隨卡片 JSON 入庫
   return { action:'saveRunCard', id:st.id||'', orderNo:st.orderNo||'',
     client:String(st.client).trim(), product:String(st.product).trim(), sheet:st.sheet||'',
     bottleType:st.bottleType||'', prodDate:st.prodDate||'', pm:st.pm||'', lot:st.lot||'',
