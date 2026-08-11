@@ -397,7 +397,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.11';
+const APP_VERSION='v3.11.1';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -3612,6 +3612,7 @@ function rcOpenEditor(st){
   rcLoadOrderOptions();
   rcAutoSaveArm();
   wmAttach(modal.querySelector('.modal-box')); // v3.8 Run Card 編輯頁浮水印
+  rcClientRemind(); // v3.11.1 客戶專屬提醒（如酒肉朋友：收集金蘭姆酒瓶蓋）
 }
 function rcCloseEditor(btn){
   if(!confirm('關閉 Run Card？未儲存的變更會遺失。')) return;
@@ -3648,6 +3649,7 @@ async function rcPrefillFromOrderSel(){
   st.id=keepId;
   rcState=st; rcRenderBody();
   toast('已帶入 '+o.orderNo+'／'+(it.product||'')+' 基本資料');
+  rcClientRemind(); // v3.11.1 編輯器內換綁訂單後客戶若有專屬提醒也要彈
 }
 function rcRenderBody(){
   const b=document.getElementById('rcBody'); if(!b||!rcState) return;
@@ -3858,6 +3860,26 @@ function rcResetPct(){
   rcRenderBody();
   toast(n?('已回復 '+n+' 項原料至原配方（占比／品名）'):'占比與品名已與原配方相同，未變動');
 }
+// ── v3.11.1 客戶專屬 Run Card 提醒（開卡即彈一次；日後其他客戶提醒往這個表加一行即可）──
+const RC_CLIENT_REMINDERS = {
+  '全客製-酒肉朋友': '業主要求保留其提供的原物料「SAMAI金蘭姆酒」瓶蓋。\n本批製作過程中，請記得收集金蘭姆酒的瓶蓋並交回保存！'
+};
+function rcClientRemind(){
+  if(!rcState) return;
+  const msg=RC_CLIENT_REMINDERS[String(rcState.client||'').trim()];
+  if(!msg||rcState._remindShown) return;
+  rcState._remindShown=true; // 同一次開卡只彈一次（不入庫：_rcPayload 白名單不含此欄）
+  const bg=document.createElement('div');
+  bg.setAttribute('data-rcremind','1');
+  bg.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:5000;padding:20px;';
+  bg.innerHTML=`<div style="background:#fff;border:3px solid #c0392b;border-radius:14px;max-width:420px;width:100%;padding:18px 16px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.3);">
+    <div style="font-size:34px;">🍾</div>
+    <div style="font-size:16px;font-weight:800;color:#c0392b;margin:6px 0 8px;">${rcEsc(clientLabel(rcState.client))} 專屬提醒</div>
+    <div style="font-size:14px;color:#1a1a1a;line-height:1.7;white-space:pre-line;text-align:left;">${rcEsc(msg)}</div>
+    <button class="btn btn-primary" style="margin-top:14px;width:100%;" onclick="this.closest('div[data-rcremind]').remove()">✅ 我知道了</button>
+  </div>`;
+  document.body.appendChild(bg);
+}
 // ── v3.11 列印紙本 Run Card（A4；潔淨室手寫用，回廠再謄寫進系統）──
 function rcPrintHtml(st){
   const e=rcEsc, chk=v=>v?'☑':'☐', line='＿＿＿＿＿＿';
@@ -3923,6 +3945,7 @@ function rcPrintHtml(st){
     <div><div class="lb">後標數量是否充足?</div><div class="vl">${chk(st.labelBackOk)}</div></div>
     <div style="grid-column:span 2;"><div class="lb">Run Card 編號</div><div class="vl">${e(st.id||'（儲存後生成，謄寫時請補填）')}</div></div>
   </div>
+  ${RC_CLIENT_REMINDERS[String(st.client||'').trim()]?`<div style="border:2.5px solid #c00;border-radius:6px;padding:6px 9px;margin:0 0 8px;font-weight:700;font-size:12.5px;white-space:pre-line;">🍾 專屬提醒：${e(RC_CLIENT_REMINDERS[String(st.client||'').trim()])}</div>`:''}
   <div class="sec">📝 製程特別備註</div>
   <div class="notebox">${e(st.processNote||'')}</div>
   <div class="sec">🧪 液體原料</div>
