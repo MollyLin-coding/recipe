@@ -2622,6 +2622,16 @@ function saveRunCard(p) {
       const data = ws.getDataRange().getValues();
       for (let i = 1; i < data.length; i++) {
         if (String(data[i][0]) === String(p.id)) {
+          // v3.11.2 冪等補強（BUG-20260817 泰奶烏龍蘭姆酒重複入庫×4）：舊前端 payload 不帶 autoStockedIn，
+          // 每次覆寫都把旗標洗掉→完工投產單卡每存一次（含自動回存）就重複入庫一次。
+          // 修＝更新前先從「庫內舊卡」把 autoStockedIn 併回進來的 data（後端自保，不依賴前端）。
+          try {
+            const stored = JSON.parse(String(data[i][10] || '{}'));
+            if (stored && stored.autoStockedIn) {
+              const incoming = JSON.parse(dataStr);
+              if (!incoming.autoStockedIn) { incoming.autoStockedIn = stored.autoStockedIn; dataStr = JSON.stringify(incoming); }
+            }
+          } catch (e) {}
           const asi = _rcAutoStockIn_(p, String(p.id), dataStr); dataStr = asi.dataStr; // v3.0 投產單完工自動入庫
           ws.getRange(i + 1, 2, 1, 11).setValues([[
             String(p.orderNo || ''), String(p.client), String(p.product),
