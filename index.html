@@ -397,7 +397,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.11.1';
+const APP_VERSION='v3.11.2';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2188,7 +2188,7 @@ async function renderRuncardPage(mc) {
 async function loadFinanceSummary() {
   const el = document.getElementById('financeSummaryCard'); if (!el) return;
   el.innerHTML = '<div class="card" style="margin-bottom:10px;padding:12px;"><div style="font-size:12px;color:var(--ink3);">💰 金流總覽載入中…</div></div>';
-  const res = await api({ action: 'getFinanceSummary', user: (curUser && curUser.username) || '' }, true);
+  const res = await api({ action: 'getFinanceSummary', user: (curUser && curUser.username) || '', month: _orderMonth }, true); // v3.11.2 跟隨訂單列表月份選單（原固定當月）
   if (!res.ok) { el.innerHTML = ''; return; }
   el.innerHTML = `<div class="card" style="margin-bottom:10px;padding:12px;">
     <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -2622,6 +2622,7 @@ function setOrderMonth(v) {
   _orderMonth = v; _orderScopeAll = false;
   _syncOrderScopeUI();
   renderMonthOrders(window._mgmtOrders || []);
+  if (isFinanceUser()) loadFinanceSummary(); // v3.11.2 金流總覽卡跟著切月（主公回報：卡片卡在當月）
 }
 function shiftOrderMonth(d) {
   const parts = _orderMonth.split('-');
@@ -3528,7 +3529,8 @@ async function rcOpenCard(id){
     labelBackOk:(d.labelBackOk!=null)?!!d.labelBackOk:!!String(d.labelBack||'').trim(),
     processNote:d.processNote||'',
     liquids:Array.isArray(d.liquids)?d.liquids:[], solids:Array.isArray(d.solids)?d.solids:[],
-    printLog:Array.isArray(d.printLog)?d.printLog:[] }); // v3.11 紙本列印歷史（舊卡無欄位=空陣列相容）
+    printLog:Array.isArray(d.printLog)?d.printLog:[], // v3.11 紙本列印歷史（舊卡無欄位=空陣列相容）
+    autoStockedIn:d.autoStockedIn||null }); // v3.11.2 已自動入庫旗標必須跟卡走（BUG-20260817：旗標被覆寫洗掉→投產單每存一次重複入庫一次）
   if(Array.isArray(d.stations)&&d.stations.length) st.stations=d.stations;
   if(!st.stations.some(function(x){ return x&&x.type==='final'; }))
     st.stations.push({no:st.stations.length+1,name:'統計此酒款之最終產出瓶數',type:'final',count:'',note:'',operator:'',done:false});
@@ -3979,6 +3981,7 @@ function _rcPayload(st){
   const data={ totalVol:st.totalVol, bottles:st.bottles, labelFrontOk:!!st.labelFrontOk, labelBackOk:!!st.labelBackOk,
     processNote:st.processNote, liquids:st.liquids, solids:st.solids, stations:st.stations,
     printLog:st.printLog||[] }; // v3.11 紙本列印歷史隨卡片 JSON 入庫
+  if(st.autoStockedIn) data.autoStockedIn=st.autoStockedIn; // v3.11.2 冪等旗標跟卡走（防重複自動入庫）
   return { action:'saveRunCard', id:st.id||'', orderNo:st.orderNo||'',
     client:String(st.client).trim(), product:String(st.product).trim(), sheet:st.sheet||'',
     bottleType:st.bottleType||'', prodDate:st.prodDate||'', pm:st.pm||'', lot:st.lot||'',
