@@ -397,7 +397,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.11.2';
+const APP_VERSION='v3.12';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -564,14 +564,19 @@ async function doLogin() {
     return;
   }
   loginBtn.innerHTML = '<span class="btn-spin"></span>載入資料中…';
-  curUser = { username, role: res.role };
   curToken = res.token || null;
-  document.body.classList.toggle('fbviewer', res.role === 'FB觀看');
+  _sessSave(username, res.role); // v3.12 F5 不掉線：session 存 sessionStorage
+  await _bootApp(username, res.role);
+  loginBtn.disabled = false; loginBtn.textContent = '登入';
+}
+// v3.12 登入後開機流程（doLogin 與 F5 還原共用；自 doLogin 原地抽出、內容不變）
+async function _bootApp(username, role) {
+  curUser = { username, role };
+  document.body.classList.toggle('fbviewer', role === 'FB觀看');
   const [invRes, lr] = await Promise.all([
     api({ action: 'getInventory' }, true),
     api({ action: 'getRecipeList' }, true),
   ]);
-  loginBtn.disabled = false; loginBtn.textContent = '登入';
   if (invRes.ok) C.inv = invRes.items || [];
   if (lr.ok) {
     recipeList = lr.list || [];
@@ -592,10 +597,10 @@ async function doLogin() {
   const app = document.getElementById('app');
   app.style.display = 'flex';
   // admin 才顯示審核
-  document.querySelectorAll('.admin-only').forEach(el => el.style.display = res.role === 'admin' ? '' : 'none');
+  document.querySelectorAll('.admin-only').forEach(el => el.style.display = role === 'admin' ? '' : 'none');
   // 角色分頁分流：倉管=run card+庫存；財務(Lulu)=只看訂單/run card(含金流總覽)；FB觀看(上海Jason)=只看酒譜；其餘角色維持原本可見範圍
   const ROLE_TABS = { '倉管': ['batch', 'recipe', 'stock', 'inventory'], '財務': ['batch'], 'FB觀看': ['recipe'] }; // v3.3 主公指示：小李(倉管)加開 酒譜/run card
-  const allowed = ROLE_TABS[res.role];
+  const allowed = ROLE_TABS[role];
   if (allowed) {
     document.querySelectorAll('#navbar .nav-tab').forEach(el =>
       el.style.display = allowed.includes(el.dataset.tab) ? '' : 'none');
@@ -610,7 +615,31 @@ async function doLogin() {
   showStockAlerts();
   showShipDateAlerts();
 }
+// ── v3.12 F5 重新整理不掉線（主公拍板）──────────────────────
+// session 存 sessionStorage：同分頁重新整理存活、關閉分頁即清；token 仍受後端 6h TTL 管
+function _sessSave(username, role) { try { sessionStorage.setItem('np_sess', JSON.stringify({ t: curToken, u: username, r: role, at: Date.now() })); } catch (e) {} }
+function _sessClear() { try { sessionStorage.removeItem('np_sess'); } catch (e) {} }
+async function _sessRestore() {
+  let s = null; try { s = JSON.parse(sessionStorage.getItem('np_sess') || 'null'); } catch (e) {}
+  if (!s || !s.t || !s.u) return false;
+  const err = document.getElementById('loginErr');
+  if (err) err.textContent = '🔄 恢復登入中…';
+  curToken = s.t;
+  // 輕量驗 token：getRecipeList 全角色可打(含FB觀看白名單)且後端有 300s 快取；SESSION_EXPIRED/失敗=token失效
+  const probe = await api({ action: 'getRecipeList' }, true);
+  if (!probe || !probe.ok) {
+    curToken = null; _sessClear();
+    if (err) err.textContent = '';
+    return false;
+  }
+  await _bootApp(s.u, s.r);
+  if (err) err.textContent = '';
+  return true;
+}
+// 開頁即嘗試還原（script 位於 body 末端，DOM 已就緒）
+_sessRestore();
 function doLogout() {
+  _sessClear(); // v3.12 登出/逾時即清 session
   const _ab = document.getElementById('stockAlertBar'); if (_ab) _ab.remove();
   const _sb = document.getElementById('shipDateAlertBar'); if (_sb) _sb.remove();
   curUser = null; curToken = null; rdata = null; curSheet = '';
