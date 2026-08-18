@@ -397,7 +397,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.12';
+const APP_VERSION='v3.12.1';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -757,15 +757,18 @@ function onClientChange() {
   if (list.length) loadRecipe();
   else document.getElementById('recipeArea').innerHTML = '<div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">無酒款</div>';
 }
+let _recipeReq = 0; // v3.12.1 換酒款請求序號：晚回來的舊請求不得覆蓋新選擇（競態防護）
 async function loadRecipe() {
   const sel = document.getElementById('selRecipe'); if (!sel?.value) return;
   curSheet = sel.value;
   const rn = sel.options[sel.selectedIndex]?.dataset.name || curSheet;
   const key = curClient + '::' + curSheet;
+  const myReq = ++_recipeReq;
   const area = document.getElementById('recipeArea'); if (!area) return;
   area.innerHTML = '<div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">載入中…</div>';
   if (!C.recipes[key]) {
     const res = await api({ action:'getRecipe', client:curClient, sheet:curSheet });
+    if (myReq !== _recipeReq) return; // v3.12.1 使用者已換選別款，本回應作廢（不覆蓋 rdata/畫面）
     if (!res.ok) {
       if (res._offline) {
         const cached = lsGet('np_recipe_' + key);
@@ -776,7 +779,7 @@ async function loadRecipe() {
       C.recipes[key] = res; lsSet('np_recipe_' + key, res); setOffline(false);
     }
   }
-  rdata = C.recipes[key]; rdata._dn = rn;
+  rdata = C.recipes[key]; rdata._dn = rn; rdata._key = key; // v3.12.1 記載入鍵，供「生成run card」比對防拿到上一款
   renderRecipeDetail(area);
 }
 function renderRecipeDetail(area) {
@@ -3474,6 +3477,9 @@ function rcSubs(ing){
 // 入口①：酒譜頁 → 以當前酒譜配方生成新卡
 function rcOpenFromRecipe(){
   if(!rdata){ toast('請先選擇酒款'); return; }
+  // v3.12.1 BUG修（主公 8/17-8/18 各中一次）：換酒款後酒譜還在載入時按「生成run card」，
+  // rdata 仍是上一款 → 卡片帶錯配方。載入鍵不符當前選擇＝擋下提示稍候（載入完成再按即正確）。
+  if(rdata._key !== (curClient + '::' + curSheet)){ toast('⏳ 酒譜載入中，請稍候一秒再按「生成run card」'); return; }
   const st=rcNewState();
   st.client=curClient; st.product=rdata._dn||rdata.recipeName||''; st.sheet=curSheet;
   st.totalVol=Math.round(Number(rdata.totalVol)||0);
