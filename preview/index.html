@@ -397,7 +397,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.14.1';
+const APP_VERSION='v3.14.2';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -408,6 +408,13 @@ window.addEventListener('DOMContentLoaded', function () { api({ action: 'getEnvI
 // v3.8 卡點2 保溫 ping：APP 開著時每 4.5 分鐘靜默 ping 一次，消滅掛機後的 GAS 冷啟動
 // （開頁暖機只熱一次，小李掛機半小時後端又冷了；背景分頁瀏覽器自動降頻，流量負擔可忽略）
 setInterval(function () { api({ action: 'getEnvInfo' }, true); }, 270000);
+
+// v3.14.2（主公指示）：取消數字輸入框「滑鼠滾輪改數值」——滾輪碰到聚焦中的 number 欄位即自動失焦，
+// 數值不被誤改、頁面照常捲動。全站一次生效（建單數量/RunCard占比體積/金流金額/庫存數量…）。
+document.addEventListener('wheel', function (e) {
+  const el = document.activeElement;
+  if (el && el.tagName === 'INPUT' && el.type === 'number' && (el === e.target || el.contains(e.target))) el.blur();
+}, { passive: true });
 
 let _sessExpiredShown = false;
 async function api(params, silent) {
