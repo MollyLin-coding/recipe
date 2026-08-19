@@ -397,7 +397,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.13';
+const APP_VERSION='v3.13.1';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2243,13 +2243,20 @@ async function loadFinanceSummary() {
 }
 
 // v2.0：出貨訂單大卡片區已移除（與訂單列表+詳情重複）；此函式只負責抓資料+渲染列表
-async function loadOrderMgmt() {
+async function loadOrderMgmt(_retried) {
   const isAdmin = curUser && curUser.role === 'admin';
   const canSeeMoney = isAdmin || isFinanceUser();
   // v3.9 PM 走 full view(含已完成單+total 基本盤，編輯不蓋 0)；後端對 PM 剝除金流明細 N~V
   const res = await api((canSeeMoney || isPM()) ? { action: 'getOrders' } : { action: 'getOrders', view: 'bartender' });
   const area = document.getElementById('monthOrderArea');
-  if (!res.ok) { if (area) area.innerHTML = `<div class="warn" style="padding:10px;">${res.error || '讀取失敗'}</div>`; return; }
+  if (!res.ok) {
+    // v3.13.1（主公 8/19「樣品單不見了」案）：GAS 偶發回 HTML 錯誤頁→列表變空像訂單消失。
+    // 修＝暫時性失敗自動重試一次；仍失敗顯示中文警示＋重試鈕（絕不再靜默空列表）
+    if (!_retried) { await new Promise(r => setTimeout(r, 1500)); return loadOrderMgmt(true); }
+    if (area) area.innerHTML = `<div class="warn" style="padding:10px;">⚠ 訂單列表載入失敗（多為暫時性網路／後端問題，<b>訂單資料都還在</b>）
+      <button class="btn btn-ghost btn-sm" style="margin-left:8px;" onclick="loadOrderMgmt()">↻ 重新載入</button></div>`;
+    return;
+  }
   window._mgmtOrders = res.orders || [];
   renderMonthOrders(window._mgmtOrders);
   ensureBottleCache(); // 建單玻璃瓶警告用（背景預載）
