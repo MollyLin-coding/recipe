@@ -397,7 +397,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.13.1';
+const APP_VERSION='v3.14';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2712,7 +2712,7 @@ function renderMonthOrders(orders) {
         : (a.deliveryDate || '').localeCompare(b.deliveryDate || ''));
   const hd = q ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--gold-dk);font-weight:600;margin:4px 0 2px;"><span>🔍 「${rcEsc(_orderSearch.trim())}」搜尋結果 ${list.length} 張（跨全部月份）</span><button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="clearOrderSearch()">✕ 清除搜尋</button></div>` : '';
   if (!list.length) { area.innerHTML = hd + `<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">${q ? `找不到符合「${rcEsc(_orderSearch.trim())}」的訂單` : (_orderScopeAll ? '尚無訂單' : `${ym.replace('-', ' 年 ')} 月尚無出貨訂單`)}</div>`; return; }
-  area.innerHTML = hd + list.map(o => {
+  const cardOf = (o) => {
     const itemsTxt = (o.items || []).map(it => `${it.product}×${it.qty}` + (it.bottleType ? `(${it.bottleType})` : '') + (it.sample && it.sample.qty ? `〔🧪試飲${it.sample.bottleType || ''}×${it.sample.qty}〕` : '')).join('、');
     // v3.6 Run Card 鈕三態（主公指示）：無卡=虛線半透明「尚待PM建立」／進行中=黃底／已完成(狀態=完成或第11站done)=綠底
     const rcBtns = window._rcIdx ? (o.items || []).map((it, i) => {
@@ -2737,7 +2737,48 @@ function renderMonthOrders(orders) {
       </div>
       ${rcBtns ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;padding-top:6px;border-top:1px dashed var(--border);" onclick="event.stopPropagation()">${rcBtns}</div>` : ''}
     </div>`;
-  }).join('');
+  };
+  // v3.14 樣品酒獨立集中區（主公指示）：樣品單抽離主列表、集中在最下緣深綠區塊＝一眼看出當月樣品出量與行銷材料成本
+  // 搜尋模式維持混排（搜尋是查找工具，不分組）
+  if (q) { area.innerHTML = hd + list.map(cardOf).join(''); return; }
+  const samples = list.filter(o => o.orderType === TYPE_SAMPLE);
+  const normal = list.filter(o => o.orderType !== TYPE_SAMPLE);
+  let html = hd + normal.map(cardOf).join('');
+  if (!normal.length) html += `<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">${_orderScopeAll ? '（一般訂單尚無）' : `${ym.replace('-', ' 年 ')} 月一般訂單尚無`}</div>`;
+  if (samples.length) {
+    const bottles = samples.reduce((s, o) => s + (o.items || []).reduce((a, it) => a + (+it.qty || 0), 0), 0);
+    html += `<div id="sampleBlock" style="margin-top:14px;background:#14532d;border:1px solid #0f3d21;border-radius:10px;padding:10px 10px 12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+        <div style="font-weight:700;font-size:13px;color:#eafbe7;">🎁 ${_orderScopeAll ? '全部' : ym.replace('-', ' 年 ') + ' 月'}樣品酒（行銷）｜${samples.length} 張・共 ${bottles} 瓶</div>
+        ${isFinanceUser() ? `<div id="sampleCostLine" style="font-size:12px;color:#bbf7d0;font-weight:700;">行銷材料成本 計算中…</div>` : ''}
+      </div>
+      <div style="--card:#f0faf2;--border:#9dc7a8;">${samples.map(cardOf).join('')}</div>
+    </div>`;
+  }
+  area.innerHTML = html;
+  if (samples.length && isFinanceUser()) _fillSampleCost(samples);
+}
+// v3.14 樣品行銷材料成本＝Σ(酒款×瓶型容量對應的毛利分析「總成本(含稅)」×瓶數)；成本源=南坡萬v.2 報價表(與毛利頁同源)
+async function _fillSampleCost(samples) {
+  const el = document.getElementById('sampleCostLine'); if (!el) return;
+  try {
+    if (!C.profit['南坡萬v.2']) {
+      const res = await api({ action: 'getProfitData', client: '南坡萬v.2' }, true);
+      if (!res || !res.ok) { el.textContent = '行銷材料成本 —（成本資料載入失敗，點 ↻ 重試）'; return; }
+      C.profit['南坡萬v.2'] = res;
+    }
+    const rows = (C.profit['南坡萬v.2'].list || []);
+    let sum = 0; const miss = [];
+    samples.forEach(o => (o.items || []).forEach(it => {
+      const cap = parseInt(String(it.bottleType || '')) || 0; // 100ml山形香水瓶→100、500ml大香水瓶→500
+      const row = rows.find(r => String(r.recipeName || '').trim() === String(it.product || '').trim() && (parseInt(r.bottle) || 0) === cap);
+      if (row && row.totalCostTax > 0) sum += row.totalCostTax * (+it.qty || 0);
+      else miss.push((it.product || '') + (it.bottleType ? '(' + it.bottleType + ')' : ''));
+    }));
+    const missU = [...new Set(miss)];
+    el.textContent = '行銷材料成本 約 NT$' + Math.round(sum).toLocaleString() + (missU.length ? '｜⚠ ' + missU.length + ' 款無成本資料未計入' : '');
+    el.title = missU.length ? '無成本資料（非自有酒款或報價表缺該容量列）：' + missU.join('、') : '成本＝南坡萬v.2 報價表「總成本(含稅)」×瓶數';
+  } catch (e) { el.textContent = '行銷材料成本 —'; }
 }
 // 訂單完整詳情（本月列表卡片點開）
 function showOrderDetail(orderNo) {
