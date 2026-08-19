@@ -397,7 +397,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.12.1';
+const APP_VERSION='v3.13';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2315,7 +2315,7 @@ function checkShipStockWarn() {
 // 建單酒款列：玻璃瓶可用量（庫存−其他訂單預佔）不足 → 即時紅字警告（同瓶型多款合計；僅提醒不擋單，實際以倉管盤點為準）
 function checkBottleWarn() {
   const tEl = document.getElementById('om_type');
-  if (tEl && tEl.value === '自有酒款庫存出貨訂單') { checkShipStockWarn(); return; } // v3.1 出貨單改比對成品庫存
+  if (tEl && _isOwnStockOutType(tEl.value)) { checkShipStockWarn(); return; } // v3.1 出貨單改比對成品庫存；v3.13 樣品亦同
   const ov = window._bottleOv; if (!ov || !ov.length) return;
   const lines = [...document.querySelectorAll('#orderItemLines .order-line')];
   if (!lines.length) return;
@@ -2358,9 +2358,16 @@ function clientLabel(key) { return CLIENT_LABELS[key] || key; }
 const FINANCE_USERS = ['Kevin', 'Molly', 'Lulu'];
 function isFinanceUser() { return !!(curUser && FINANCE_USERS.includes(curUser.username)); }
 // v3.0 訂單類型改「類型先行」（主公 2026-07-22 拍板）：先選類型 → 客戶名稱下拉隨類型連動
-const ORDER_TYPES = ['代工訂單(全客製/換前標)', '南坡萬自有酒款投產單，無金流', '自有酒款庫存出貨訂單', '自行keyin'];
-const TYPE_NO_FINANCE = '南坡萬自有酒款投產單，無金流'; // 此類型建單隱藏金流＋配送區塊
-// 各類型的客戶名稱選單：[資料鍵(存訂單B欄), 顯示文字]；未列類型＝沿用完整客戶清單
+// v3.13（主公 2026-08-18 指示）：「自有酒款庫存出貨訂單」改抬頭「自有酒款出貨訂單(有金流)」＋新增「自有酒款樣品(無金流)」（客戶試飲樣品酒）
+const TYPE_SHIP = '自有酒款出貨訂單(有金流)';   // 原「自有酒款庫存出貨訂單」改名（舊單字串以 _isShipType 相容、編輯即懶遷移）
+const TYPE_SHIP_OLD = '自有酒款庫存出貨訂單';
+const TYPE_SAMPLE = '自有酒款樣品(無金流)';     // 樣品：隱藏金流、保留配送（要寄給客戶）；出貨照扣成品庫存；不觸發完工自動入庫
+const ORDER_TYPES = ['代工訂單(全客製/換前標)', '南坡萬自有酒款投產單，無金流', TYPE_SHIP, TYPE_SAMPLE, '自行keyin'];
+const TYPE_NO_FINANCE = '南坡萬自有酒款投產單，無金流'; // 投產單：建單隱藏金流＋配送區塊
+function _isShipType(t) { return t === TYPE_SHIP || t === TYPE_SHIP_OLD; }
+function _isOwnStockOutType(t) { return _isShipType(t) || t === TYPE_SAMPLE; } // 出貨/樣品：皆出自有成品庫存（比對庫存、帶自有全酒款、不佔玻璃瓶）
+function _isNoFinanceType(t) { return t === TYPE_NO_FINANCE || t === TYPE_SAMPLE; } // 無金流型：投產單＋樣品
+// 各類型的客戶名稱選單：[資料鍵(存訂單B欄), 顯示文字]；未列類型＝沿用完整客戶清單（樣品未列＝全客戶＋可自行輸入新試飲對象）
 const TYPE_CLIENTS = {
   '代工訂單(全客製/換前標)': [
     ['OEM-Babyface', '全客製-Babyface'], ['OEM-Lane72', '全客製-Lane72'], ['OEM-好野吧', '全客製-好野吧'],
@@ -2368,7 +2375,7 @@ const TYPE_CLIENTS = {
     ['Feeling Bar', '全客製-Feeling Bar'], ['換前標-滿枝枒', '換前標-滿枝枒']
   ],
   '南坡萬自有酒款投產單，無金流': [['南坡萬v.2', '補充自廠酒款水位']],
-  '自有酒款庫存出貨訂單': [['經銷商－日光貳參', '經銷商－日光貳參'], ['經銷商－文博會', '經銷商－文博會']]
+  [TYPE_SHIP]: [['經銷商－日光貳參', '經銷商－日光貳參'], ['經銷商－文博會', '經銷商－文博會']]
 };
 function orderTypeSelectHtml(selected) {
   const opts = ['<option value="">—選擇訂單類型—</option>'].concat(ORDER_TYPES.map(t => `<option${t === selected ? ' selected' : ''}>${t}</option>`)).join('');
@@ -2400,13 +2407,16 @@ function omTypeChange() {
   if (cw) cw.innerHTML = omClientFieldHtml(t ? t.value : '', ''); // 切類型即重置客戶清單（避免殘留上一類型的選擇）
   _syncFinanceVis();
   orderModalClientChange();
-  if (t && t.value === '自有酒款庫存出貨訂單') ensureNpwStockCache().then(() => checkBottleWarn()); // v3.1
+  if (t && _isOwnStockOutType(t.value)) ensureNpwStockCache().then(() => checkBottleWarn()); // v3.1；v3.13 樣品亦同
 }
-// 投產單（無金流）→ 隱藏金流＋配送區塊
+// 投產單（無金流）→ 隱藏金流＋配送；樣品（無金流）→ 只隱藏金流、保留配送（v3.13：樣品要寄給客戶）
 function _syncFinanceVis() {
   const t = document.getElementById('om_type');
-  const hide = !!(t && t.value === TYPE_NO_FINANCE);
-  ['omFinWrap', 'omDeliveryWrap'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = hide ? 'none' : ''; });
+  const v = t ? t.value : '';
+  const hideFin = _isNoFinanceType(v);
+  const hideDlv = (v === TYPE_NO_FINANCE);
+  const f = document.getElementById('omFinWrap'); if (f) f.style.display = hideFin ? 'none' : '';
+  const d = document.getElementById('omDeliveryWrap'); if (d) d.style.display = hideDlv ? 'none' : '';
 }
 // 取訂單類型送出值：自行keyin＋有輸入 → 存輸入的類型/生產目的文字
 function getOrderTypeValue() {
@@ -2425,7 +2435,7 @@ function _isGongbanType() {
   const el = document.getElementById('om_type');
   const v = el ? String(el.value || '') : '';
   if (v.includes('公版酒')) return true;
-  if (v === '自有酒款庫存出貨訂單') return true;
+  if (_isOwnStockOutType(v)) return true; // v3.13 出貨(有金流)/樣品皆帶自有全酒款
   if (v === '代工訂單(全客製/換前標)') {
     const c = document.getElementById('om_client');
     return !!(c && String(c.value || '').startsWith('換前標-'));
@@ -2437,7 +2447,7 @@ function _defaultBottleFor(client) {
   if (client === '全客製-酒肉朋友') return '500ml大香水瓶'; // v3.9.4 主公指定預設瓶型
   if (String(client || '').startsWith('換前標-')) return '100ml山形香水瓶';
   const t = document.getElementById('om_type');
-  if (t && (t.value === '自有酒款庫存出貨訂單' || t.value === TYPE_NO_FINANCE)) return '100ml山形香水瓶';
+  if (t && (_isOwnStockOutType(t.value) || t.value === TYPE_NO_FINANCE)) return '100ml山形香水瓶'; // v3.13 樣品亦預設 100ml山形香水瓶
   return '';
 }
 function orderLineRecipeNames(client) {
@@ -2711,7 +2721,7 @@ function renderMonthOrders(orders) {
       <div style="flex:1;min-width:0;">
         <div style="font-weight:600;font-size:13px;">${clientLabel(o.client)} <span style="color:var(--ink3);font-weight:400;font-size:11px;">${o.orderNo}</span> <span style="font-weight:400;font-size:11px;${o.lot ? 'color:var(--gold-dk);' : 'color:var(--red);opacity:.7;'}">${o.lot ? ('Lot ' + o.lot) : '未填寫Lot數'}</span>${o.orderCreator ? ` <span style="font-weight:400;font-size:11px;color:var(--ink3);">建單:${o.orderCreator}</span>` : ''}</div>
         <div style="font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${itemsTxt || '—'}</div>
-        ${(o.orderType !== TYPE_NO_FINANCE && o.depositPaidDate !== undefined) ? `<div style="font-size:11px;margin-top:2px;"><span style="color:${o.depositPaidDate ? 'var(--green)' : 'var(--yellow)'};font-weight:600;">訂金${o.depositPaidDate ? ' ✓已收' : ' 未收'}</span><span style="margin:0 6px;color:var(--border);">|</span><span style="color:${o.finalPaidDate ? 'var(--green)' : 'var(--yellow)'};font-weight:600;">尾款${o.finalPaidDate ? ' ✓已收' : ' 未收'}</span></div>` : ''}
+        ${(!_isNoFinanceType(o.orderType) && o.depositPaidDate !== undefined) ? `<div style="font-size:11px;margin-top:2px;"><span style="color:${o.depositPaidDate ? 'var(--green)' : 'var(--yellow)'};font-weight:600;">訂金${o.depositPaidDate ? ' ✓已收' : ' 未收'}</span><span style="margin:0 6px;color:var(--border);">|</span><span style="color:${o.finalPaidDate ? 'var(--green)' : 'var(--yellow)'};font-weight:600;">尾款${o.finalPaidDate ? ' ✓已收' : ' 未收'}</span></div>` : ''}
       </div>
       <div style="text-align:right;flex:0 0 auto;">
         <div style="font-size:12px;font-weight:600;">${o.deliveryDate || '—'}</div>
@@ -2742,7 +2752,7 @@ function showOrderDetail(orderNo) {
   const finShown = o.finalAdjusted && o.finalAdjustedAmount !== '' && o.finalAdjustedAmount != null
     ? `<s style="opacity:.6;">NT$${o.finalAmount !== '' ? o.finalAmount : (o.balance || 0)}</s> → NT$${o.finalAdjustedAmount}（特殊調整）`
     : (o.finalAmount !== '' ? 'NT$' + o.finalAmount : (o.balance ? 'NT$' + o.balance : '—'));
-  const moneyHtml = (canSeeMoney && o.orderType !== TYPE_NO_FINANCE) ? `
+  const moneyHtml = (canSeeMoney && !_isNoFinanceType(o.orderType)) ? `
     <div style="margin:8px 0 2px;font-size:13px;font-weight:600;color:var(--gold-dk);">金流</div>
     ${row('總金額', 'NT$' + (o.total || 0) + '（訂金狀態 ' + (o.depositStatus || '—') + '）')}
     ${row('訂金', (o.depositAmount !== '' && o.depositAmount != null ? 'NT$' + o.depositAmount : '—') + '（預計 ' + (o.depositDueDate || '—') + '｜實收 ' + (o.depositPaidDate || '未收') + '）')}
@@ -2914,7 +2924,8 @@ function showOrderModal(edit) {
   let clients = allClients.filter(c => !HIDDEN_CLIENTS.includes(c)).concat(EXTRA_CLIENTS.filter(c => !allClients.includes(c)));
   if (isEdit && edit.client && !clients.includes(edit.client)) clients = [edit.client, ...clients];
   const c0 = isEdit ? edit.client : (clients[0] || '');
-  const t0 = isEdit ? (ORDER_TYPES.includes(edit.orderType) ? edit.orderType : (edit.orderType ? '自行keyin' : '')) : '';
+  const _etRaw = isEdit ? (edit.orderType === TYPE_SHIP_OLD ? TYPE_SHIP : edit.orderType) : ''; // v3.13 舊單「自有酒款庫存出貨訂單」編輯時正規化為新抬頭（存檔即懶遷移）
+  const t0 = isEdit ? (ORDER_TYPES.includes(_etRaw) ? _etRaw : (edit.orderType ? '自行keyin' : '')) : '';
   // v3.2 建單人員：預設=登入者（在名單內），編輯帶舊值（不在名單自動補列；舊單無值給空白）
   const CREATORS = ['Kevin', 'Molly', 'Vic', '阿軒'];
   const creator0 = isEdit ? (edit.orderCreator || '') : ((curUser && CREATORS.includes(curUser.username)) ? curUser.username : 'Kevin');
