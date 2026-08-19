@@ -397,7 +397,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.14';
+const APP_VERSION='v3.14.1';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2768,16 +2768,23 @@ async function _fillSampleCost(samples) {
       C.profit['南坡萬v.2'] = res;
     }
     const rows = (C.profit['南坡萬v.2'].list || []);
+    // v3.14.1 全口徑（主公拍板）：食材（報價表總成本含稅）＋瓶材＋標籤＋代工費（BSPEC，走 _bspecOf 別名反查）
     let sum = 0; const miss = [];
     samples.forEach(o => (o.items || []).forEach(it => {
+      const qty = +it.qty || 0; if (!qty) return;
+      const nm = (it.product || '') + (it.bottleType ? '(' + it.bottleType + ')' : '');
       const cap = parseInt(String(it.bottleType || '')) || 0; // 100ml山形香水瓶→100、500ml大香水瓶→500
       const row = rows.find(r => String(r.recipeName || '').trim() === String(it.product || '').trim() && (parseInt(r.bottle) || 0) === cap);
-      if (row && row.totalCostTax > 0) sum += row.totalCostTax * (+it.qty || 0);
-      else miss.push((it.product || '') + (it.bottleType ? '(' + it.bottleType + ')' : ''));
+      if (row && row.totalCostTax > 0) sum += row.totalCostTax * qty;
+      else miss.push(nm + '〔食材成本無資料〕');
+      const spec = _bspecOf(it.bottleType || '');
+      const btl = (+spec.cont || 0) + (+spec.lab || 0) + (+spec.labor || 0);
+      if (btl > 0) sum += btl * qty;
+      else miss.push(nm + '〔瓶材/代工費無規格〕');
     }));
     const missU = [...new Set(miss)];
-    el.textContent = '行銷材料成本 約 NT$' + Math.round(sum).toLocaleString() + (missU.length ? '｜⚠ ' + missU.length + ' 款無成本資料未計入' : '');
-    el.title = missU.length ? '無成本資料（非自有酒款或報價表缺該容量列）：' + missU.join('、') : '成本＝南坡萬v.2 報價表「總成本(含稅)」×瓶數';
+    el.textContent = '行銷材料成本(食材＋瓶＋代工) 約 NT$' + Math.round(sum).toLocaleString() + (missU.length ? '｜⚠ ' + missU.length + ' 項未計入' : '');
+    el.title = (missU.length ? '未計入明細：' + missU.join('、') + '\n' : '') + '口徑＝報價表食材總成本(含稅)＋BSPEC 瓶材+標籤+代工費，×瓶數';
   } catch (e) { el.textContent = '行銷材料成本 —'; }
 }
 // 訂單完整詳情（本月列表卡片點開）
