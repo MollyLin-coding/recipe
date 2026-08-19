@@ -2250,7 +2250,8 @@ function _bottleReserved_(namesMap) {
     for (let i = 1; i < data.length; i++) {
       const orderNo = String(data[i][0] || '');
       if (!orderNo) continue;
-      if (String(data[i][2] || '') === '自有酒款庫存出貨訂單') continue; // v3.5 P1-1：出貨單出成品不裝瓶，不佔玻璃瓶
+      // v3.5 P1-1：出貨單出成品不裝瓶，不佔玻璃瓶；v3.13：改抬頭「自有酒款出貨訂單(有金流)」＋新型「自有酒款樣品(無金流)」同理（皆出自有成品庫存）
+      if (['自有酒款庫存出貨訂單', '自有酒款出貨訂單(有金流)', '自有酒款樣品(無金流)'].indexOf(String(data[i][2] || '')) >= 0) continue;
       if (String(data[i][8] || '').trim() === '已出貨') continue;        // v3.5 P1-2：已出貨單不再預佔
       let items;
       try { items = JSON.parse(data[i][4] || '[]'); } catch (e) { continue; }
