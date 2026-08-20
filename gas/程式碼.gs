@@ -103,7 +103,7 @@ function stripRecipePrefix(name) {
 
 // ── 入口 ────────────────────────────────────────────────────
 // v2.1 授權表：FB觀看 只允許這三個 action（後端為準，前端只是 UI）
-var FBVIEW_ALLOWED_ACTIONS = ['getRecipeList', 'getRecipe', 'changePassword'];
+var FBVIEW_ALLOWED_ACTIONS = ['getRecipeList', 'getRecipe', 'changePassword', 'bootstrap'];
 // v3.7 P0-1 角色權限矩陣（後端統一把關；補「持有效 token 即可呼叫任意寫入 action」的洞）。
 // 規則：列於此表的 action 僅限指定角色；未列者＝任何已登入者皆可（讀取與日常操作）。
 // admin 一律放行（各清單皆含 admin）。FB觀看 另有更嚴格白名單（見 FBVIEW_ALLOWED_ACTIONS）。
@@ -116,6 +116,7 @@ var ROLE_MATRIX = {
   migrateOrderNos: ['admin'], migrateOrderTypes: ['admin'], backfillOrderCreators: ['admin'],
   deleteBatchRecord: ['admin'], deleteRunCard: ['admin'], deleteRdRecord: ['admin'],
   checkUser: ['admin'],
+  __installKeepWarm: ['admin'], __keepWarmStatus: ['admin'],   // v3.14.4 保溫觸發器管理
   // 完成回報/確認出貨日/出貨扣庫、成品與玻璃瓶庫存異動、新增瓶品項、安全水位 → admin + 倉管
   completeOrderItem: ['admin', '倉管'], confirmShipDate: ['admin', '倉管'], shipOrder: ['admin', '倉管'],
   stockIn: ['admin', '倉管'], stockOut: ['admin', '倉管'],
@@ -146,6 +147,11 @@ function doGet(e) {
           .setMimeType(ContentService.MimeType.JSON);
       }
     }
+    // v3.14.4 強制刷新逃生口：使用者按 ↻ 時前端帶 fresh=1 → 先清掉該讀取對應的快取再執行。
+    //   有了它，TTL 才敢拉長（資料一致性靠「寫入即失效」＋「使用者可強制繞過」，而非短 TTL 硬扛）。
+    if (String(p.fresh || '') === '1' && FRESH_BUST_MAP[action]) {
+      try { CacheService.getScriptCache().removeAll(FRESH_BUST_MAP[action]); } catch (e) {}
+    }
     switch(action) {
       case 'getEnvInfo':     result = getEnvInfo(); break;                        // 環境探針(確認打到哪份主表)
       case 'login':          result = login(p); break;
@@ -154,6 +160,9 @@ function doGet(e) {
       case '__seedTestUsers': result = __seedTestUsers(); break;         // 沙盒限定：種驗收用測試帳號(PROD 直接拒絕)
       case '__readLoginLog':  result = __readLoginLog(); break;          // 沙盒限定：讀登入紀錄供自動驗收(PROD 直接拒絕)
       case '__readAuditLog':  result = __readAuditLog(); break;          // 沙盒限定：讀操作紀錄供自動驗收(PROD 直接拒絕, v3.8)
+      case 'bootstrap':      result = bootstrap(p); break;                    // v3.14.4 開機一次打包(取代 6~8 個請求)
+      case '__installKeepWarm': result = __installKeepWarm(p); break;          // v3.14.4 安裝/移除保溫觸發器(admin)
+      case '__keepWarmStatus':  result = __keepWarmStatus(); break;            // v3.14.4 查保溫狀態(admin)
       case 'getRecipeList':  result = getRecipeList(p); break;
       case 'getRecipe':      result = getRecipe(p); break;
       case 'getClientRecipeList':    result = getClientRecipeList(p); break;     // Phase C 訂單系統
@@ -210,6 +219,7 @@ function doGet(e) {
       default: result = { ok: false, error: '未知 action: ' + action };
     }
     _logAction_(action, p, result); // v3.8 操作紀錄（內部 try/catch，失敗不阻斷）
+    _bustOrderCache_(action, result); // v3.14.4 訂單快取失效（寫入成功即清，防「剛建的單看不到」）
   } catch(err) {
     result = { ok: false, error: err.message };
   }
@@ -428,7 +438,7 @@ function getRecipeList(p) {
     }
   }
   const result = { ok: true, list };
-  cache.put('recipeList_v1', JSON.stringify(result), 300);
+  cache.put('recipeList_v1', JSON.stringify(result), 600); // v3.14.4 TTL 600＋保溫每5分鐘刷新＝使用者永遠打不到冷路徑(實測冷啟 20 秒)
   return _filterRecipeListByRole_(result, role);
 }
 function _filterRecipeListByRole_(result, role) {
@@ -951,6 +961,15 @@ function _fmtDate_(v) {
 // 讀訂單；view='bartender' → 過濾金額/訂金、只回未完成、依出貨日排序
 function getOrders(p) {
   const view = p && p.view;
+  // v3.14.4 訂單快取（實測 getOrders 熱狀態 4.7 秒，其中 2.7 秒是試算表 I/O）。
+  // ⚠️ 輸出會因 view(bartender/full) 與 _role(PM 剝金流) 而異 → **每個變體各自一把 key**，
+  //    絕不像 recipeList 那樣共用（沿用 _filterRecipeListByRole_ 的教訓：過濾結果不得寫回共用 cache）。
+  //    TTL 僅 30 秒，且任何訂單寫入 action 成功後由 _bustOrderCache_ 立即清除。
+  const _ck = _ordersCacheKey_(p);
+  try {
+    const _hit = CacheService.getScriptCache().get(_ck);
+    if (_hit) return JSON.parse(_hit);
+  } catch (e) {}
   const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
   const ws = ss.getSheetByName('訂單主表');
   if (!ws) return { ok: true, orders: [] };
@@ -1018,7 +1037,9 @@ function getOrders(p) {
   if (view === 'bartender') {
     orders.sort(function (a, b) { return (a.deliveryDate || '').localeCompare(b.deliveryDate || ''); });
   }
-  return { ok: true, orders: orders };
+  const _out = { ok: true, orders: orders };
+  try { CacheService.getScriptCache().put(_ck, JSON.stringify(_out), 300); } catch (e) {} // v3.14.4 TTL 5 分鐘：一致性靠「寫入即失效」而非短 TTL；使用者按 ↻ 會帶 fresh=1 強制繞過
+  return _out;
 }
 
 // 確認/修正實際出貨日（L 實際出貨日、M 已確認）
@@ -2309,6 +2330,9 @@ function _bottleStockOf_(rows, item) {
 
 // ── 玻璃瓶庫存總覽：固定 5 款 ∪ ledger 出現過的瓶型 ──
 function getBottleOverview() {
+  // v3.14.4 快取 60 秒（無參數＝無 role/view 變體，單一 key 天然安全）；
+  //   bottleIn/bottleOut/addBottleItem 成功後由 _bustOrderCache_ 立即清除。
+  try { const h = CacheService.getScriptCache().get('bottleOv_v1'); if (h) return JSON.parse(h); } catch (e) {}
   const rows = _bottleRows_();
   const smap = _safetyMap_();
   const names = {};
@@ -2331,7 +2355,9 @@ function getBottleOverview() {
       safety: smap['玻璃瓶||' + item] || 0, ng: ngQty,
       reserved: rsv.qty, reservedDetail: rsv.detail.join('、') };
   });
-  return { ok: true, list: list };
+  const _o = { ok: true, list: list };
+  try { CacheService.getScriptCache().put('bottleOv_v1', JSON.stringify(_o), 1800); } catch (e) {}
+  return _o;
 }
 
 // ── 入庫 ──
@@ -2494,6 +2520,8 @@ function setSafetyLevel(p) {
 
 // 低於安全水位的品項（登入後警告用）；水位=0 視為未設不警告
 function getStockAlerts() {
+  // v3.14.4 快取 60 秒；庫存/水位/出貨/完工異動後立即清除
+  try { const h = CacheService.getScriptCache().get('stockAlerts_v1'); if (h) return JSON.parse(h); } catch (e) {}
   const rows = _safetyRows_();
   if (!rows.length) return { ok: true, count: 0, alerts: [] };
   const stockRows = _stockRows_();
@@ -2511,7 +2539,9 @@ function getStockAlerts() {
     else return;
     if (stock < level) alerts.push({ category: cat, client: client, item: item, stock: stock, level: level });
   });
-  return { ok: true, count: alerts.length, alerts: alerts };
+  const _o = { ok: true, count: alerts.length, alerts: alerts };
+  try { CacheService.getScriptCache().put('stockAlerts_v1', JSON.stringify(_o), 1800); } catch (e) {}
+  return _o;
 }
 
 // ============================================================
@@ -2684,6 +2714,8 @@ function getRunCards(p) {
 }
 // v2.9.3 輕量索引：只回 訂單編號+酒款（不含明細 JSON），供訂單列表判斷哪些酒款已建卡
 function getRunCardIndex() {
+  // v3.14.4 快取 60 秒；saveRunCard/deleteRunCard 成功後立即清除
+  try { const h = CacheService.getScriptCache().get('rcIdx_v1'); if (h) return JSON.parse(h); } catch (e) {}
   const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
   const ws = ss.getSheetByName(RUNCARD_SHEET_NAME);
   if (!ws) return { ok: true, index: [] };
@@ -2702,7 +2734,9 @@ function getRunCardIndex() {
     // v3.8.4 補 id/client：讓前端能列出「無訂單之獨立卡」並直接開啟(孤兒卡救援)
     index.push({ id: String(r[0] || ''), orderNo: String(r[1] || ''), client: String(r[2] || ''), product: String(r[3] || ''), status: String(r[11] || ''), finalDone: finalDone });
   }
-  return { ok: true, index: index };
+  const _o = { ok: true, index: index };
+  try { CacheService.getScriptCache().put('rcIdx_v1', JSON.stringify(_o), 1800); } catch (e) {}
+  return _o;
 }
 function getRunCard(p) {
   if (!p || !p.id) return { ok: false, error: '缺少 id' };
@@ -2736,4 +2770,110 @@ function deleteRunCard(p) {
     }
     return { ok: false, error: '找不到 Run Card：' + p.id };
   } finally { lock.releaseLock(); }
+}
+
+
+// ============================================================
+// v3.14.4 A 止血包：保溫觸發器 ／ 開機打包 ／ 訂單快取工具
+//   背景：2026-08-20 實測 —— GAS 固定往返 1.8~2.5 秒（連不碰試算表的 getEnvInfo 都這麼久）、
+//   getRecipeList 冷啟動 20.2 秒、getOrders 4.7 秒；且開 APP 瞬間打 8 個請求會觸發 Google 限流，
+//   後端改回 HTML 錯誤頁 → 前端解析失敗 → 列表空白＝接手文件 §42.21「訂單不見了」的真因。
+// ============================================================
+
+// ── 訂單快取 key：view(bartender/full) × role(PM/std) 四種變體各自一把 ──
+function _ordersCacheKey_(p) {
+  var view = (p && p.view === 'bartender') ? 'bartender' : 'full';
+  var role = (p && p._role === 'PM') ? 'PM' : 'std';
+  return 'orders_v1_' + view + '_' + role;
+}
+var ORDERS_CACHE_KEYS = ['orders_v1_full_std', 'orders_v1_full_PM',
+                         'orders_v1_bartender_std', 'orders_v1_bartender_PM'];
+// 任何會改動「訂單主表」的 action 成功後，立即清掉四把訂單快取。
+// 放在 doGet 派發層＝單一出口，日後新增寫入函式也不會忘記清（只要列進本表）。
+var ORDER_MUTATING_ACTIONS = {
+  createOrder:1, updateOrder:1, updateOrderFinance:1, updateOrderDelivery:1, deleteOrder:1,
+  completeOrderItem:1, confirmShipDate:1, shipOrder:1,
+  migrateOrderNos:1, migrateOrderTypes:1, backfillOrderCreators:1
+};
+// 其餘讀取快取的失效對應（action → 要清掉的 key）。
+// 新增寫入函式時只要在這裡登記一行，就不會出現「改了資料卻還看到舊值」。
+var CACHE_BUST_MAP = {
+  bottleIn:['bottleOv_v1'], bottleOut:['bottleOv_v1'], addBottleItem:['bottleOv_v1'],
+  saveRunCard:['rcIdx_v1'], deleteRunCard:['rcIdx_v1'],
+  stockIn:['stockAlerts_v1'], stockOut:['stockAlerts_v1'], setSafetyLevel:['stockAlerts_v1'],
+  // 出貨/完工會動成品庫存與卡片狀態 → 水位警示與 run card 索引一併重算
+  shipOrder:['stockAlerts_v1'], completeOrderItem:['stockAlerts_v1','rcIdx_v1']
+};
+// ↻ 強制刷新對應表：action → 該清掉的讀取快取
+var FRESH_BUST_MAP = {
+  getOrders: ORDERS_CACHE_KEYS,
+  getBottleOverview: ['bottleOv_v1'], getRunCardIndex: ['rcIdx_v1'], getStockAlerts: ['stockAlerts_v1'],
+  getRecipeList: ['recipeList_v1'], getInventory: ['inventory_v2'],
+  bootstrap: ORDERS_CACHE_KEYS.concat(['bottleOv_v1', 'rcIdx_v1', 'stockAlerts_v1'])
+};
+function _bustOrderCache_(action, result) {
+  if (!result || result.ok !== true) return;   // 失敗的寫入不必清
+  var keys = [];
+  if (ORDER_MUTATING_ACTIONS[action]) keys = keys.concat(ORDERS_CACHE_KEYS);
+  if (CACHE_BUST_MAP[action]) keys = keys.concat(CACHE_BUST_MAP[action]);
+  if (!keys.length) return;
+  try { CacheService.getScriptCache().removeAll(keys); } catch (e) {}
+}
+
+// ── 開機打包：把原本 6~8 個請求併成 1 個（每個請求都要付 ~2 秒固定往返）──
+// ⚠️ 只打包「未列於 ROLE_MATRIX 的讀取型 action」＝任何已登入者本來就能呼叫，無權限提升。
+//    子項目各自 try/catch：單項失敗不拖垮整個開機（前端會退回舊路徑補抓）。
+function bootstrap(p) {
+  var role = p && p._role;
+  var out = { ok: true, role: role || '' };
+  function safe(fn) { try { return fn(); } catch (e) { return { ok: false, error: String((e && e.message) || e) }; } }
+  out.recipeList = safe(function () { return getRecipeList(p); });
+  if (role === 'FB觀看') return out;   // FB觀看 只看酒譜，其餘一律不回
+  out.inventory     = safe(function () { return getInventory(); });
+  out.orders        = safe(function () { return getOrders(p); });   // view 由前端帶，PM 剝除照舊
+  out.runCardIndex  = safe(function () { return getRunCardIndex(); });
+  out.bottles       = safe(function () { return getBottleOverview(); });
+  out.stockAlerts   = safe(function () { return getStockAlerts(); });
+  return out;
+}
+
+// ── 保溫：每 5 分鐘把「最貴的快取」重新烘熱，使用者永遠打不到冷路徑 ──
+// 直接重建 recipeList_v1／inventory_v2（TTL 600 秒 > 觸發間隔 300 秒＝永不留空窗），
+// 並 ping 自己的 /exec 讓 Web App 服務路徑本身保持溫熱（取本部署網址，測試/正式各自 ping 自己）。
+function keepWarm_() {
+  // ⚠️ 配額紀律：GAS 觸發器每日總執行時間上限 90 分鐘。getRecipeList 要掃遍所有酒譜表（冷啟實測 20 秒），
+  //   若每 5 分鐘無條件重建＝288 次/天，必爆配額。故**只在快取真的不在時才重建**（等於每個 TTL 週期最多一次），
+  //   平時只做極輕量的 ping 讓容器保持溫熱。
+  var _c = CacheService.getScriptCache();
+  try { if (!_c.get('recipeList_v1')) getRecipeList({}); } catch (e) {}
+  try { if (!_c.get('inventory_v2')) getInventory(); } catch (e) {}
+  try {
+    var url = ScriptApp.getService().getUrl();
+    if (url) UrlFetchApp.fetch(url + '?action=getEnvInfo', { muteHttpExceptions: true });
+  } catch (e) {}
+  try {
+    CacheService.getScriptCache().put('keepwarm_at',
+      Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss'), 3600);
+  } catch (e) {}
+}
+// 安裝/移除保溫觸發器（admin 限定，走 HTTP 呼叫免開編輯器）。remove=1 即移除。
+function __installKeepWarm(p) {
+  var removed = 0;
+  var all = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < all.length; i++) {
+    if (all[i].getHandlerFunction() === 'keepWarm_') { ScriptApp.deleteTrigger(all[i]); removed++; }
+  }
+  if (p && String(p.remove) === '1') return { ok: true, action: 'removed', removed: removed };
+  ScriptApp.newTrigger('keepWarm_').timeBased().everyMinutes(5).create();
+  keepWarm_();   // 立刻先烘一次，不必等 5 分鐘
+  return { ok: true, action: 'installed', everyMinutes: 5, replaced: removed };
+}
+function __keepWarmStatus() {
+  var list = ScriptApp.getProjectTriggers()
+    .filter(function (t) { return t.getHandlerFunction() === 'keepWarm_'; })
+    .map(function (t) { return { id: t.getUniqueId(), type: String(t.getEventType()) }; });
+  var last = '';
+  try { last = CacheService.getScriptCache().get('keepwarm_at') || ''; } catch (e) {}
+  return { ok: true, triggers: list.length, detail: list, lastRun: last,
+           recipeListCached: !!CacheService.getScriptCache().get('recipeList_v1') };
 }
