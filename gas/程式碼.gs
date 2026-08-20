@@ -510,8 +510,12 @@ function getRecipe(p) {
     const vol = parseFloat(row[2]) || 0;
     const ingAbv = parseFloat(row[3]) || 0;
     const cost = parseFloat(row[8]) || 0;
+    // v3.14.3 製作方式：E 欄(index 4)＝該原料的製法備註（酒譜表為單一事實來源，APP 唯讀帶出）
+    //   例：(茶葉重 : RO水量 = 4g : 100ml, 定溫冷萃24小時)；舊酒款多為簡寫 (2:100)，原樣顯示即可。
+    const method = String(row[4] == null ? '' : row[4]).trim();
     if (name && (pct > 0 || vol > 0)) {
       const ing = { name, pct, vol, abv: ingAbv, cost };
+      if (method) ing.method = method;   // 無值不回傳（前端以「有值才顯示」判斷）
       // 複合原料偵測：F 欄(index 5)是公式 → 解析子料(第十八章 18.5)
       const fFormula = (formulas[i] && formulas[i][5]) ? String(formulas[i][5]) : '';
       const cpd = parseCompoundFormula(fFormula, subMap);
@@ -564,6 +568,7 @@ function _stripRecipeCosts_(r) {
     ingredients: [], processNote: r.processNote };
   (r.ingredients || []).forEach(function (ing) {
     const c = { name: ing.name, pct: ing.pct, vol: ing.vol, abv: ing.abv };
+    if (ing.method) c.method = ing.method;   // v3.14.3 製作方式非成本資訊，FB觀看 亦可見
     if (ing.isCompound) {
       c.isCompound = true;
       c.hasLoss = ing.hasLoss;
@@ -656,6 +661,7 @@ function getRecipeForProduction(p) {
       perBatchVol: _round(ing.vol, 1),       // 單批用量(參考)
       orderVol: _round(ing.vol * scale, 1)   // 整單用量
     };
+    if (ing.method) o.method = ing.method;   // v3.14.3 製作方式（非成本，調酒師/潔淨室需要）
     if (ing.isCompound) {
       o.isCompound = true;
       o.hasLoss = ing.hasLoss;               // 旗標顯示用，用量不自動加耗損(決議 #9)
@@ -2514,7 +2520,7 @@ function getStockAlerts() {
 //   欄位 A卡號 B訂單編號 C客戶 D酒款 E酒譜sheet F瓶型 G生產日期 H產品PM
 //        I Lot批號 J版本 K資料JSON L狀態 M建立人 N建立時間 O更新人 P更新時間
 //   資料JSON = { totalVol, bottles, labelFront, labelBack, processNote,
-//     liquids:[{name,pct,abv,vol,fed,ordered,note}],
+//     liquids:[{name,pct,abv,vol,fed,ordered,note,method}],   // method=製作方式(v3.14.3)
 //     solids:[{name,ratio,fed,note}],
 //     stations:[{no,name,note,operator,done}] }
 //   一張訂單多酒款＝每酒款一張卡；同酒款可多次生產＝多張卡（歷史）。
