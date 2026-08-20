@@ -223,6 +223,12 @@ tbody tr:hover td{background:#faf3e8;}
 .cpd-sub-contrib{font-size:11px;color:var(--gold-dk);font-weight:600;white-space:nowrap;min-width:54px;text-align:right;}
 .total-bar{font-size:12px;color:var(--ink2);padding:6px 0;border-top:1px solid var(--border);}
 .ing-list{margin:8px 0;}
+/* ── 製作方式（v3.14.3；酒譜頁唯讀顯示／Run Card 可編輯）── */
+.ing-method{margin-top:6px;padding:5px 8px;background:rgba(201,170,120,.10);border-left:3px solid var(--gold);border-radius:5px;font-size:12px;color:var(--ink2);line-height:1.5;word-break:break-word;}
+.ing-method b{color:var(--gold-dk);font-weight:600;}
+.rc-method-row{display:flex;align-items:center;gap:6px;margin-top:6px;}
+.rc-method-row label{font-size:11px;color:var(--gold-dk);font-weight:600;white-space:nowrap;}
+.rc-method{flex:1;min-width:0;padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--ink1);}
 /* ── 資材費用 ── */
 .mat-list{font-size:13px;}
 .mat-row{display:flex;gap:0;padding:5px 0;border-bottom:1px solid var(--border);}
@@ -397,7 +403,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.14.2';
+const APP_VERSION='v3.14.3';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -842,6 +848,7 @@ function renderRecipeDetail(area) {
         <span class="ing-abv">ABV ${nt(ing.abv,1)}%</span>
       </div>
       ${subHtml}
+      ${ing.method ? `<div class="ing-method"><b>製作方式：</b>${rcEsc(ing.method)}</div>` : ''}
     </div>`;
   }).join('');
 
@@ -3560,7 +3567,7 @@ function rcOpenFromRecipe(){
   st.liquids=(rdata.ingredients||[]).map(ing=>({
     name:ing.name, pct:Math.round((+ing.pct||0)*10)/10, abv:+ing.abv||0,
     vol:Math.round(+ing.vol||0), fed:false, ordered:false, note:'',
-    subs:rcSubs(ing), hasLoss:!!ing.hasLoss,
+    subs:rcSubs(ing), hasLoss:!!ing.hasLoss, method:String(ing.method||''),
     locked:true, origPct:Math.round((+ing.pct||0)*10)/10, origName:String(ing.name||'').trim() }));
   rcOpenEditor(st);
 }
@@ -3656,7 +3663,7 @@ async function rcFillFromOrderItem(st, o, it){
     st.liquids=(res.ingredients||[]).map(g=>{
       const p=st.totalVol>0?Math.round((+g.orderVol||0)/st.totalVol*1000)/10:0;
       return { name:g.name, pct:p, abv:+g.abv||0, vol:Math.round(+g.orderVol||0),
-        fed:false, ordered:false, note:'', subs:rcSubs(g), hasLoss:!!g.hasLoss,
+        fed:false, ordered:false, note:'', subs:rcSubs(g), hasLoss:!!g.hasLoss, method:String(g.method||''),
         locked:true, origPct:p, origName:String(g.name||'').trim() }; });
   } else toast('酒譜帶入失敗：'+(res.error||'')+'，請手動填原料');
   return st;
@@ -3794,6 +3801,7 @@ function rcRenderBody(){
         <span class="ing-unit">%</span>
       </div>
       ${subHtml}
+      <div class="rc-method-row"><label>製作方式</label><input type="text" class="rc-method" value="${rcEsc(g.method||'')}" oninput="rcState.liquids[${i}].method=this.value" placeholder="如：(茶葉重 : RO水量 = 4g : 100ml, 定溫冷萃24小時)"></div>
       <input type="text" class="rc-note" style="width:100%;margin-top:6px;padding:4px 6px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--bg2);color:var(--ink1);" value="${rcEsc(g.note||'')}" oninput="rcState.liquids[${i}].note=this.value;rcDevUpd(${i})" placeholder="備註（製法）">
     </div>`; }).join('');
   const sol=st.solids.map((g,i)=>`
@@ -3860,7 +3868,7 @@ function rcRenderBody(){
     </div>
     ${st.liquids.some(g=>g.origPct!=null||g.origName!=null)?'<div style="margin:2px 0 4px;"><button class="btn btn-ghost btn-sm" onclick="rcResetPct()">↩ 一鍵回到原配方（占比＋品名）</button></div>':''}
     ${liq||'<div style="color:var(--ink3);font-size:12px;padding:6px 0;">尚無液體原料——可由上方選訂單帶入，或點下方新增。</div>'}
-    <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.liquids.push({name:'',pct:0,abv:0,vol:0,fed:false,ordered:false,note:'',subs:[],locked:false,origPct:null,origName:null});rcRenderBody()">＋ 加液體原料</button>
+    <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.liquids.push({name:'',pct:0,abv:0,vol:0,fed:false,ordered:false,note:'',method:'',subs:[],locked:false,origPct:null,origName:null});rcRenderBody()">＋ 加液體原料</button>
     <div class="rc-sec">🧂 固體原料</div>
     ${sol||'<div style="color:var(--ink3);font-size:12px;padding:6px 0;">尚無固體原料。</div>'}
     <button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="rcState.solids.push({name:'',ratio:'',fed:false,note:''});rcRenderBody()">＋ 加固體原料</button>
@@ -3999,7 +4007,7 @@ function rcPrintHtml(st){
     const subs=(g.subs||[]).map(s=>`<div class="sub">└ ${e(s.name)} × ${e(s.ratio)}</div>`).join('');
     return `<tr>
       <td class="c">${i+1}</td>
-      <td>${e(g.name)}${g.subs&&g.subs.length?(g.hasLoss?' <span class="tag">÷0.8耗損</span>':'')+subs:''}</td>
+      <td>${e(g.name)}${g.subs&&g.subs.length?(g.hasLoss?' <span class="tag">÷0.8耗損</span>':'')+subs:''}${g.method?`<div class="sub">製作方式：${e(g.method)}</div>`:''}</td>
       <td class="c">${g.pct||0}%</td><td class="r">${g.vol||0} ml</td><td class="c">${g.abv||0}%</td>
       <td class="c big">${chk(g.fed)}</td><td class="wr">${e(g.note||'')}</td>
     </tr>`; }).join('');
