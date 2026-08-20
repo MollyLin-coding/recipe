@@ -403,7 +403,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.14.3';
+const APP_VERSION='v3.14.4';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -427,21 +427,40 @@ async function api(params, silent) {
   // v2.1：登入後所有呼叫自動附帶 session token；token 逾時 → 提示並回登入頁
   const send = { ...params };
   if (curToken && send.token == null) send.token = curToken;
-  const url = API + '?' + Object.entries(send).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
   if (!silent) apiLoadStart();
+  // v3.14.4：開 APP 瞬間連打多個請求會觸發 Google 限流 → GAS 改回 HTML 錯誤頁 → JSON 解析失敗
+  //   → 列表空白＝接手文件 §42.21「訂單不見了」的真因（2026-08-20 實測連打 12 個即重現）。
+  // 修＝讀取型 action 自動退避重試 400/1200/2500ms。
+  // ⚠️ 只重試「讀取型」：寫入型重試有冪等風險（重複建單/重複入庫），維持單次不重試。
+  const _act = String(send.action || '');
+  const _isRead = /^get/i.test(_act) || _act === 'bootstrap';
+  // v3.14.4 使用者按 ↻ 後的 8 秒內，讀取一律帶 fresh=1 繞過後端快取（強制刷新逃生口）
+  if (_isRead && window._apiFreshUntil && Date.now() < window._apiFreshUntil && send.fresh == null) send.fresh = '1';
+  const _delays = _isRead ? [400, 1200, 2500] : [];
+  const url = API + '?' + Object.entries(send).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
+  let _lastErr = '';
   try {
-    const res = await fetch(url);
-    const j = await res.json();
-    if (j && j.error === 'SESSION_EXPIRED' && curUser && !_sessExpiredShown) {
-      _sessExpiredShown = true;
-      toast('登入逾時，請重新登入');
-      doLogout();
-      setTimeout(() => { _sessExpiredShown = false; }, 2000);
+    for (let _try = 0; ; _try++) {
+      try {
+        const res = await fetch(url);
+        const txt = await res.text();
+        if (txt.trim().charAt(0) === '<') throw new Error('THROTTLED_HTML'); // 限流/錯誤頁，不是 JSON
+        const j = JSON.parse(txt);
+        if (j && j.error === 'SESSION_EXPIRED' && curUser && !_sessExpiredShown) {
+          _sessExpiredShown = true;
+          toast('登入逾時，請重新登入');
+          doLogout();
+          setTimeout(() => { _sessExpiredShown = false; }, 2000);
+        }
+        return j;
+      } catch (e) {
+        _lastErr = e.message || String(e);
+        if (_try >= _delays.length) break;
+        await new Promise(r => setTimeout(r, _delays[_try]));
+      }
     }
-    return j;
-  } catch(e) {
-    if (!silent) toast('網路錯誤');
-    return { ok: false, error: e.message, _offline: true };
+    if (!silent) toast(_lastErr === 'THROTTLED_HTML' ? '系統忙碌中，已自動重試仍失敗，請按 ↻ 再試' : '網路錯誤');
+    return { ok: false, error: _lastErr, _offline: true };
   } finally {
     if (!silent) apiLoadEnd();
   }
@@ -586,10 +605,28 @@ async function doLogin() {
 async function _bootApp(username, role) {
   curUser = { username, role };
   document.body.classList.toggle('fbviewer', role === 'FB觀看');
-  const [invRes, lr] = await Promise.all([
-    api({ action: 'getInventory' }, true),
-    api({ action: 'getRecipeList' }, true),
-  ]);
+  // v3.14.4 開機打包：原本登入後要打 8 個請求（getInventory／getRecipeList／getOrders×2／
+  //   getBottleOverview／getRunCardIndex／getStockAlerts），每個都要付 ~2 秒 GAS 固定往返，
+  //   而且瞬間連打正是限流元兇。改成 bootstrap 一次取回，其餘函式吃預抓結果。
+  const _bootView = (role === 'admin' || isFinanceUser() || isPM()) ? null : 'bartender';
+  const _b = await api(_bootView ? { action: 'bootstrap', view: _bootView } : { action: 'bootstrap' }, true);
+  let invRes, lr;
+  if (_b && _b.ok) {
+    lr     = _b.recipeList || { ok: false };
+    invRes = _b.inventory  || { ok: false };
+    // 預抓結果分送各自的既有快取（下方函式看到快取新鮮就不會再打一次）
+    if (_b.orders && _b.orders.ok) { window._bootOrders = _b.orders; }
+    if (_b.bottles && _b.bottles.ok) { window._bottleOv = _b.bottles.list || []; window._bottleOvAt = Date.now(); }
+    if (_b.runCardIndex && _b.runCardIndex.ok) _rcIdxApply(_b.runCardIndex);
+    window._bootStockAlerts = (_b.stockAlerts && _b.stockAlerts.ok) ? _b.stockAlerts : null;
+  } else {
+    // bootstrap 失敗 → 退回舊路徑，開機絕不因新機制而掛掉
+    const _pair = await Promise.all([
+      api({ action: 'getInventory' }, true),
+      api({ action: 'getRecipeList' }, true),
+    ]);
+    invRes = _pair[0]; lr = _pair[1];
+  }
   if (invRes.ok) C.inv = invRes.items || [];
   if (lr.ok) {
     recipeList = lr.list || [];
@@ -625,8 +662,10 @@ async function _bootApp(username, role) {
     });
     switchTab('batch'); // v3.9.2 登入預設=訂單分頁(主公指示)
   }
-  showStockAlerts();
-  showShipDateAlerts();
+  showStockAlerts(window._bootStockAlerts);
+  showShipDateAlerts(window._bootOrders);   // v3.14.4 與訂單列表共用同一份，不再重複打 getOrders
+  window._bootStockAlerts = null;
+  window._bootOrders = null;   // 開機預抓用完即丟：之後的 ↻／切分頁一律重新取
 }
 // ── v3.12 F5 重新整理不掉線（主公拍板）──────────────────────
 // session 存 sessionStorage：同分頁重新整理存活、關閉分頁即清；token 仍受後端 6h TTL 管
@@ -689,6 +728,7 @@ function showChangePwModal() {
 
 // ── 重整 ─────────────────────────────────────────────────────
 function doRefresh() {
+  window._apiFreshUntil = Date.now() + 8000; // v3.14.4 接下來 8 秒的讀取一律繞過後端快取
   Object.assign(C, { inv:null, profit:{}, recipes:{}, batch:null });
   api({ action:'getInventory' }, true).then(r => { if(r.ok) C.inv = r.items||[]; });
   api({ action:'getRecipeList' }, true).then(lr => {
@@ -2261,7 +2301,10 @@ async function loadOrderMgmt(_retried) {
   const isAdmin = curUser && curUser.role === 'admin';
   const canSeeMoney = isAdmin || isFinanceUser();
   // v3.9 PM 走 full view(含已完成單+total 基本盤，編輯不蓋 0)；後端對 PM 剝除金流明細 N~V
-  const res = await api((canSeeMoney || isPM()) ? { action: 'getOrders' } : { action: 'getOrders', view: 'bartender' });
+  // v3.14.4 開機時 bootstrap 已帶回訂單 → 直接用，省一趟 ~4.7 秒的 getOrders（只吃一次，之後照常重抓）
+  let res;
+  if (window._bootOrders) { res = window._bootOrders; }   // 不在此清空：開機後段的 showShipDateAlerts 要吃同一份（由 _bootApp 末尾統一清）
+  else res = await api((canSeeMoney || isPM()) ? { action: 'getOrders' } : { action: 'getOrders', view: 'bartender' });
   const area = document.getElementById('monthOrderArea');
   if (!res.ok) {
     // v3.13.1（主公 8/19「樣品單不見了」案）：GAS 偶發回 HTML 錯誤頁→列表變空像訂單消失。
@@ -3204,11 +3247,12 @@ function showConfirmShipModal(oi) {
   });
 }
 // 登入後：到表訂出貨日未確認實際出貨日 → 提醒 admin+倉管（水位回升同理，確認後消失）
-async function showShipDateAlerts() {
+async function showShipDateAlerts(pre) {
   const old = document.getElementById('shipDateAlertBar'); if (old) old.remove();
   if (!curUser || !(curUser.role === 'admin' || curUser.role === '倉管')) return;
   const isAdmin = curUser.role === 'admin';
-  const res = await api(isAdmin ? { action: 'getOrders' } : { action: 'getOrders', view: 'bartender' }, true);
+  const res = (pre && pre.ok) ? pre                                            // v3.14.4 開機吃 bootstrap 預抓
+    : await api(isAdmin ? { action: 'getOrders' } : { action: 'getOrders', view: 'bartender' }, true);
   if (!res || !res.ok) return;
   const today = _localDate();
   const due = (res.orders || []).filter(o => o.status !== '已完成' && !o.shipDateConfirmed && o.deliveryDate && o.deliveryDate <= today);
@@ -3259,9 +3303,9 @@ async function saveSafety(category, client, item, value, el) {
   } else toast('設定失敗：' + (res.error || ''));
 }
 // 登入後：低於安全水位則頂端橫幅警告（水位回升後下次登入自動消失）
-async function showStockAlerts() {
+async function showStockAlerts(pre) {
   const old = document.getElementById('stockAlertBar'); if (old) old.remove();
-  const res = await api({ action: 'getStockAlerts' }, true);
+  const res = (pre && pre.ok) ? pre : await api({ action: 'getStockAlerts' }, true); // v3.14.4 開機吃 bootstrap 預抓
   if (!res || !res.ok || !(res.count > 0)) return;
   const lines = res.alerts.map(a => `${a.category === '玻璃瓶' ? '🍾' : '📦'}${a.item}（${a.stock}/${a.level}）`).join('、');
   const bar = document.createElement('div');
@@ -3573,22 +3617,22 @@ function rcOpenFromRecipe(){
 }
 // 入口②：訂單詳情 → 該酒款 Run Card 歷史清單
 // v2.9.3 Run Card 索引快取（訂單列表鈕條件顯示；60 秒內不重抓）
+// v3.14.4 索引建法抽成函式，供 ensureRcIndex 與開機 bootstrap 共用（避免兩處邏輯走樣）
+function _rcIdxApply(r) {
+  if (!r || !r.ok) return;
+  const m = new Map(); // key → {done:任一卡狀態=完成}
+  (r.index || []).forEach(x => {
+    const k = x.orderNo + '||' + x.product;
+    const cur = m.get(k) || { done: false };
+    if (x.status === '完成' || x.finalDone) cur.done = true; // v3.6 第11站完成也算已完成
+    m.set(k, cur);
+  });
+  window._rcIdx = m; window._rcIdxAt = Date.now();
+  window._rcIdxRows = r.index || []; // v3.8.4 原始列(含 id/client)：無訂單獨立卡區用
+}
 async function ensureRcIndex(force) {
   if (!force && window._rcIdx && Date.now() - (window._rcIdxAt || 0) < 60000) return;
-  try {
-    const r = await api({ action: 'getRunCardIndex' }, true);
-    if (r && r.ok) {
-      const m = new Map(); // key → {done:任一卡狀態=完成}
-      (r.index || []).forEach(x => {
-        const k = x.orderNo + '||' + x.product;
-        const cur = m.get(k) || { done: false };
-        if (x.status === '完成' || x.finalDone) cur.done = true; // v3.6 第11站完成也算已完成
-        m.set(k, cur);
-      });
-      window._rcIdx = m; window._rcIdxAt = Date.now();
-      window._rcIdxRows = r.index || []; // v3.8.4 原始列(含 id/client)：無訂單獨立卡區用
-    }
-  } catch (e) { }
+  try { _rcIdxApply(await api({ action: 'getRunCardIndex' }, true)); } catch (e) { }
 }
 // v2.9.1 訂單列表卡片鈕入口：以訂單編號找回 _mgmtOrders 索引再開歷史
 function rcShowHistoryByNo(orderNo, ii){
