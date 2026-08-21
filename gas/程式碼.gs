@@ -127,7 +127,6 @@ var ROLE_MATRIX = {
   migrateOrderNos: ['admin'], migrateOrderTypes: ['admin'], backfillOrderCreators: ['admin'],
   deleteBatchRecord: ['admin'], deleteRunCard: ['admin'], deleteRdRecord: ['admin'],
   checkUser: ['admin'],
-  __installKeepWarm: ['admin'], __keepWarmStatus: ['admin'],   // v3.14.4 保溫觸發器管理
   // 完成回報/確認出貨日/出貨扣庫、成品與玻璃瓶庫存異動、新增瓶品項、安全水位 → admin + 倉管
   completeOrderItem: ['admin', '倉管'], confirmShipDate: ['admin', '倉管'], shipOrder: ['admin', '倉管'],
   stockIn: ['admin', '倉管'], stockOut: ['admin', '倉管'],
@@ -164,7 +163,23 @@ function doGet(e) {
       try { CacheService.getScriptCache().removeAll(FRESH_BUST_MAP[action]); } catch (e) {}
     }
     switch(action) {
-      case 'getEnvInfo':     result = getEnvInfo(); break;                        // 環境探針(確認打到哪份主表)
+      case 'getEnvInfo':
+        try { CacheService.getScriptCache().removeAll(V3144_CACHE_KEYS); } catch (e) {}
+        result = getEnvInfo();
+        // v3.14.5 診斷：CacheService 到底能不能用（put→get→remove 全程回報例外）
+        result.cacheDiag = (function () {
+          var d = {};
+          try {
+            var c = CacheService.getScriptCache();
+            var k = 'diag_' + Utilities.getUuid();
+            c.put(k, 'hello', 60);
+            d.readBack = c.get(k);
+            d.works = (d.readBack === 'hello');
+            c.remove(k);
+          } catch (e) { d.error = String((e && e.message) || e); }
+          return d;
+        })();
+        break;                        // 環境探針(確認打到哪份主表)
       case 'login':          result = login(p); break;
       case 'changePassword': result = changePassword(p); break;
       case 'checkUser':      result = checkUser(p); break;               // 帳號診斷(遮罩、不回密碼)
@@ -172,8 +187,6 @@ function doGet(e) {
       case '__readLoginLog':  result = __readLoginLog(); break;          // 沙盒限定：讀登入紀錄供自動驗收(PROD 直接拒絕)
       case '__readAuditLog':  result = __readAuditLog(); break;          // 沙盒限定：讀操作紀錄供自動驗收(PROD 直接拒絕, v3.8)
       case 'bootstrap':      result = bootstrap(p); break;                    // v3.14.4 開機一次打包(取代 6~8 個請求)
-      case '__installKeepWarm': result = __installKeepWarm(p); break;          // v3.14.4 安裝/移除保溫觸發器(admin)
-      case '__keepWarmStatus':  result = __keepWarmStatus(); break;            // v3.14.4 查保溫狀態(admin)
       case 'getRecipeList':  result = getRecipeList(p); break;
       case 'getRecipe':      result = getRecipe(p); break;
       case 'getClientRecipeList':    result = getClientRecipeList(p); break;     // Phase C 訂單系統
@@ -276,6 +289,18 @@ function _logAction_(action, p, result) {
 // ── 登入 ─────────────────────────────────────────────────────
 // v2.1 session：token 存 ScriptCache（key=sess_<uuid>，TTL 6h=CacheService 上限），過期即需重新登入
 var SESSION_TTL_SEC = 21600;
+// ── v3.14.5 緊急（2026-08-21）────────────────────────────────────────────────
+// 事故：v3.14.4 把訂單/瓶/卡片/水位等**大型資料**塞進 CacheService.getScriptCache()，
+//   而**登入 session 也存在同一個 Script Cache**（key=sess_<uuid>）。資料快取把 cache 佔滿後，
+//   session 的 put 失敗／get 讀不回 → `_getSession_` 的 try/catch 靜默回 null → **全員 SESSION_EXPIRED**
+//   （症狀＝登入後訂單列表顯示「載入失敗」，主公 8/21 由小李畫面回報）。
+// 止血：資料快取總開關預設 **false**（session 獨佔 Script Cache）；bootstrap 保留（收益不靠快取）。
+// 教訓：**session 與資料不可共用同一個有限的 Script Cache**。日後要恢復快取，
+//   必須改用不與 session 競爭的儲存（或嚴格限制筆數與大小）並實測 session 存活。
+var DATA_CACHE_ON = false;
+var V3144_CACHE_KEYS = ['orders_v1_full_std', 'orders_v1_full_PM',
+  'orders_v1_bartender_std', 'orders_v1_bartender_PM',
+  'bottleOv_v1', 'rcIdx_v1', 'stockAlerts_v1'];
 function _getSession_(token) {
   if (!token) return null;
   try {
@@ -977,10 +1002,12 @@ function getOrders(p) {
   //    絕不像 recipeList 那樣共用（沿用 _filterRecipeListByRole_ 的教訓：過濾結果不得寫回共用 cache）。
   //    TTL 僅 30 秒，且任何訂單寫入 action 成功後由 _bustOrderCache_ 立即清除。
   const _ck = _ordersCacheKey_(p);
-  try {
-    const _hit = CacheService.getScriptCache().get(_ck);
-    if (_hit) return JSON.parse(_hit);
-  } catch (e) {}
+  if (DATA_CACHE_ON) {
+    try {
+      const _hit = CacheService.getScriptCache().get(_ck);
+      if (_hit) return JSON.parse(_hit);
+    } catch (e) {}
+  }
   const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
   const ws = ss.getSheetByName('訂單主表');
   if (!ws) return { ok: true, orders: [] };
@@ -1049,7 +1076,7 @@ function getOrders(p) {
     orders.sort(function (a, b) { return (a.deliveryDate || '').localeCompare(b.deliveryDate || ''); });
   }
   const _out = { ok: true, orders: orders };
-  try { CacheService.getScriptCache().put(_ck, JSON.stringify(_out), 300); } catch (e) {} // v3.14.4 TTL 5 分鐘：一致性靠「寫入即失效」而非短 TTL；使用者按 ↻ 會帶 fresh=1 強制繞過
+  if (DATA_CACHE_ON) { try { CacheService.getScriptCache().put(_ck, JSON.stringify(_out), 300); } catch (e) {} } // v3.14.4 TTL 5 分鐘：一致性靠「寫入即失效」而非短 TTL；使用者按 ↻ 會帶 fresh=1 強制繞過
   return _out;
 }
 
@@ -2343,7 +2370,7 @@ function _bottleStockOf_(rows, item) {
 function getBottleOverview() {
   // v3.14.4 快取 60 秒（無參數＝無 role/view 變體，單一 key 天然安全）；
   //   bottleIn/bottleOut/addBottleItem 成功後由 _bustOrderCache_ 立即清除。
-  try { const h = CacheService.getScriptCache().get('bottleOv_v1'); if (h) return JSON.parse(h); } catch (e) {}
+  if (DATA_CACHE_ON) { try { const h = CacheService.getScriptCache().get('bottleOv_v1'); if (h) return JSON.parse(h); } catch (e) {} }
   const rows = _bottleRows_();
   const smap = _safetyMap_();
   const names = {};
@@ -2367,7 +2394,7 @@ function getBottleOverview() {
       reserved: rsv.qty, reservedDetail: rsv.detail.join('、') };
   });
   const _o = { ok: true, list: list };
-  try { CacheService.getScriptCache().put('bottleOv_v1', JSON.stringify(_o), 1800); } catch (e) {}
+  if (DATA_CACHE_ON) { try { CacheService.getScriptCache().put('bottleOv_v1', JSON.stringify(_o), 1800); } catch (e) {} }
   return _o;
 }
 
@@ -2532,7 +2559,7 @@ function setSafetyLevel(p) {
 // 低於安全水位的品項（登入後警告用）；水位=0 視為未設不警告
 function getStockAlerts() {
   // v3.14.4 快取 60 秒；庫存/水位/出貨/完工異動後立即清除
-  try { const h = CacheService.getScriptCache().get('stockAlerts_v1'); if (h) return JSON.parse(h); } catch (e) {}
+  if (DATA_CACHE_ON) { try { const h = CacheService.getScriptCache().get('stockAlerts_v1'); if (h) return JSON.parse(h); } catch (e) {} }
   const rows = _safetyRows_();
   if (!rows.length) return { ok: true, count: 0, alerts: [] };
   const stockRows = _stockRows_();
@@ -2551,7 +2578,7 @@ function getStockAlerts() {
     if (stock < level) alerts.push({ category: cat, client: client, item: item, stock: stock, level: level });
   });
   const _o = { ok: true, count: alerts.length, alerts: alerts };
-  try { CacheService.getScriptCache().put('stockAlerts_v1', JSON.stringify(_o), 1800); } catch (e) {}
+  if (DATA_CACHE_ON) { try { CacheService.getScriptCache().put('stockAlerts_v1', JSON.stringify(_o), 1800); } catch (e) {} }
   return _o;
 }
 
@@ -2726,7 +2753,7 @@ function getRunCards(p) {
 // v2.9.3 輕量索引：只回 訂單編號+酒款（不含明細 JSON），供訂單列表判斷哪些酒款已建卡
 function getRunCardIndex() {
   // v3.14.4 快取 60 秒；saveRunCard/deleteRunCard 成功後立即清除
-  try { const h = CacheService.getScriptCache().get('rcIdx_v1'); if (h) return JSON.parse(h); } catch (e) {}
+  if (DATA_CACHE_ON) { try { const h = CacheService.getScriptCache().get('rcIdx_v1'); if (h) return JSON.parse(h); } catch (e) {} }
   const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
   const ws = ss.getSheetByName(RUNCARD_SHEET_NAME);
   if (!ws) return { ok: true, index: [] };
@@ -2746,7 +2773,7 @@ function getRunCardIndex() {
     index.push({ id: String(r[0] || ''), orderNo: String(r[1] || ''), client: String(r[2] || ''), product: String(r[3] || ''), status: String(r[11] || ''), finalDone: finalDone });
   }
   const _o = { ok: true, index: index };
-  try { CacheService.getScriptCache().put('rcIdx_v1', JSON.stringify(_o), 1800); } catch (e) {}
+  if (DATA_CACHE_ON) { try { CacheService.getScriptCache().put('rcIdx_v1', JSON.stringify(_o), 1800); } catch (e) {} }
   return _o;
 }
 function getRunCard(p) {
@@ -2848,43 +2875,10 @@ function bootstrap(p) {
   return out;
 }
 
-// ── 保溫：每 5 分鐘把「最貴的快取」重新烘熱，使用者永遠打不到冷路徑 ──
-// 直接重建 recipeList_v1／inventory_v2（TTL 600 秒 > 觸發間隔 300 秒＝永不留空窗），
-// 並 ping 自己的 /exec 讓 Web App 服務路徑本身保持溫熱（取本部署網址，測試/正式各自 ping 自己）。
-function keepWarm_() {
-  // ⚠️ 配額紀律：GAS 觸發器每日總執行時間上限 90 分鐘。getRecipeList 要掃遍所有酒譜表（冷啟實測 20 秒），
-  //   若每 5 分鐘無條件重建＝288 次/天，必爆配額。故**只在快取真的不在時才重建**（等於每個 TTL 週期最多一次），
-  //   平時只做極輕量的 ping 讓容器保持溫熱。
-  var _c = CacheService.getScriptCache();
-  try { if (!_c.get('recipeList_v1')) getRecipeList({}); } catch (e) {}
-  try { if (!_c.get('inventory_v2')) getInventory(); } catch (e) {}
-  try {
-    var url = ScriptApp.getService().getUrl();
-    if (url) UrlFetchApp.fetch(url + '?action=getEnvInfo', { muteHttpExceptions: true });
-  } catch (e) {}
-  try {
-    CacheService.getScriptCache().put('keepwarm_at',
-      Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss'), 3600);
-  } catch (e) {}
-}
-// 安裝/移除保溫觸發器（admin 限定，走 HTTP 呼叫免開編輯器）。remove=1 即移除。
-function __installKeepWarm(p) {
-  var removed = 0;
-  var all = ScriptApp.getProjectTriggers();
-  for (var i = 0; i < all.length; i++) {
-    if (all[i].getHandlerFunction() === 'keepWarm_') { ScriptApp.deleteTrigger(all[i]); removed++; }
-  }
-  if (p && String(p.remove) === '1') return { ok: true, action: 'removed', removed: removed };
-  ScriptApp.newTrigger('keepWarm_').timeBased().everyMinutes(5).create();
-  keepWarm_();   // 立刻先烘一次，不必等 5 分鐘
-  return { ok: true, action: 'installed', everyMinutes: 5, replaced: removed };
-}
-function __keepWarmStatus() {
-  var list = ScriptApp.getProjectTriggers()
-    .filter(function (t) { return t.getHandlerFunction() === 'keepWarm_'; })
-    .map(function (t) { return { id: t.getUniqueId(), type: String(t.getEventType()) }; });
-  var last = '';
-  try { last = CacheService.getScriptCache().get('keepwarm_at') || ''; } catch (e) {}
-  return { ok: true, triggers: list.length, detail: list, lastRun: last,
-           recipeListCached: !!CacheService.getScriptCache().get('recipeList_v1') };
-}
+// ⚠️ v3.14.5（2026-08-21 事故）已移除 keepWarm_／__installKeepWarm／__keepWarmStatus。
+//   原因：它們用到 ScriptApp.getProjectTriggers 與 UrlFetchApp.fetch，會讓腳本要求新的 OAuth scope，
+//   而本部署的既有授權沒有涵蓋 → 整個執行落入「授權不足」狀態，**連帶把 CacheService 打壞**
+//   （實測：put 一個 5 bytes 的全新 key 後立刻 get 回 null，且不拋任何例外）
+//   → session 存不住 → **全站所有角色 SESSION_EXPIRED**（症狀＝登入後訂單列表顯示「載入失敗」）。
+//   ⚠️ 保溫要復活，必須先由 joyhouse.rental 在 Apps Script 編輯器完成一次授權，
+//      且部署後**實測 CacheService 仍正常**（getEnvInfo 的 cacheDiag）才可再加回。
