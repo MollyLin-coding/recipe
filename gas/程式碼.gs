@@ -46,6 +46,14 @@ const CLIENTS = {
     prefix: /調酒$/, strip: /調酒$/,
     profitSheet: '報價毛利', profitFmt: 'jrp-1row',
   },
+  // v3.15 全客製-昭和浪漫冰室 轉正式客戶（主公提供「昭和浪漫冰室_酒譜資料庫」20260821）
+  // 分頁前綴 SH_（主公已於試算表加好）；毛利分頁名為「報價毛利分析」。
+  // 未建譜 3 款（百香果碧螺春/紅袍羅漢萊姆酒/錫蘭紅茶hot zombie）成本欄空白 → getProfitData 會標 warn，屬預期。
+  '全客製-昭和浪漫冰室': {
+    id: '1OhqlXI7kDOH_SvwXblnx8ltzEXsGuFud2ZTNWQk39NA',
+    prefix: /^SH_/i, strip: /^SH_/i,
+    profitSheet: '報價毛利分析', profitFmt: 'sh-1row',
+  },
 };
 // 主表 ID：優先讀 Script Property 'SHEET_ID'（測試部署指向沙盒副本用），
 // 找不到時 fallback 正式硬編碼 ID（向後相容：正式部署不設此屬性，行為與改版前完全一致）。
@@ -66,6 +74,9 @@ const PROFIT_COLS = {
   'bf-2row':    { price: 1, cost: 3, twoRow: true, noAbv: true },
   // 全客製-酒肉朋友：A品名 B容量 C含稅單價 D成本 …… G使用瓶型，單列式
   'jrp-1row':   { price: 2, cost: 3, capCol: 1, bottleCol: 6 },
+  // 昭和浪漫冰室：A品名 B容量 C含稅單價 D成本 E報價 F毛利 G毛利率 H使用瓶型，單列式
+  // 售價讀 C 含稅單價（主公拍板）；比 jrp-1row 多一欄「報價」，故 bottleCol=7 而非 6
+  'sh-1row':    { price: 2, cost: 3, capCol: 1, bottleCol: 7 },
 };
 
 // 取得客戶設定（唯一入口，未知客戶直接擋下）
