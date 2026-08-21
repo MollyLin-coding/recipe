@@ -312,12 +312,57 @@ var DATA_CACHE_ON = false;
 var V3144_CACHE_KEYS = ['orders_v1_full_std', 'orders_v1_full_PM',
   'orders_v1_bartender_std', 'orders_v1_bartender_PM',
   'bottleOv_v1', 'rcIdx_v1', 'stockAlerts_v1'];
+// v3.14.6 session 儲存：CacheService 優先，失效時自動 fallback 到 PropertiesService。
+//   ⚠️ 2026-08-21 事故：CacheService 整個服務失效（put 後立刻 get 回 null 且不拋例外），
+//   session 只存在那裡 → 全站 SESSION_EXPIRED、所有人無法使用。實測 Properties/Lock 正常。
+//   Properties 沒有 TTL，故 payload 自帶 exp，並在 login 時順手清理過期項目。
+function _sessKey_(token) { return 'sess_' + token; }
+function _sessPut_(token, obj) {
+  var payload = JSON.stringify({ u: obj.username, r: obj.role, exp: (new Date()).getTime() + SESSION_TTL_SEC * 1000 });
+  var ok = false;
+  try {
+    var c = CacheService.getScriptCache();
+    c.put(_sessKey_(token), payload, SESSION_TTL_SEC);
+    ok = (c.get(_sessKey_(token)) === payload);   // 寫完立刻讀回確認（不能只信 put 沒拋錯）
+  } catch (e) { ok = false; }
+  if (!ok) {
+    // CacheService 不可用 → 落到 Properties（服務恢復後會自動走回 cache）
+    try { PropertiesService.getScriptProperties().setProperty(_sessKey_(token), payload); } catch (e) {}
+  }
+  return ok ? 'cache' : 'props';
+}
 function _getSession_(token) {
   if (!token) return null;
+  var raw = null;
+  try { raw = CacheService.getScriptCache().get(_sessKey_(token)); } catch (e) {}
+  if (!raw) { try { raw = PropertiesService.getScriptProperties().getProperty(_sessKey_(token)); } catch (e) {} }
+  if (!raw) return null;
+  var o = null;
+  try { o = JSON.parse(raw); } catch (e) { return null; }
+  if (!o) return null;
+  if (o.exp && (new Date()).getTime() > o.exp) {   // Properties 無 TTL → 自行判過期
+    try { PropertiesService.getScriptProperties().deleteProperty(_sessKey_(token)); } catch (e) {}
+    return null;
+  }
+  // 相容舊格式 {username, role}（v3.14.6 之前寫入的 cache 項目）
+  var u = (o.u != null) ? o.u : o.username;
+  var r = (o.r != null) ? o.r : o.role;
+  if (!u) return null;
+  return { username: u, role: r };
+}
+// 清掉 Properties 裡已過期的 session（login 時呼叫；Properties 總量上限 500KB，不清會累積）
+function _sessSweep_() {
   try {
-    const raw = CacheService.getScriptCache().get('sess_' + token);
-    return raw ? JSON.parse(raw) : null;
-  } catch (e) { return null; }
+    var pr = PropertiesService.getScriptProperties();
+    var all = pr.getProperties();
+    var now = (new Date()).getTime();
+    Object.keys(all).forEach(function (k) {
+      if (k.indexOf('sess_') !== 0) return;
+      var ok = false;
+      try { var o = JSON.parse(all[k]); ok = !!(o && o.exp && now <= o.exp); } catch (e) { ok = false; }
+      if (!ok) pr.deleteProperty(k);
+    });
+  } catch (e) {}
 }
 // v2.1 登入紀錄：成功/失敗全記（分頁自動建立；失敗紀錄不回洩帳號存在與否給前端）
 var LOGIN_LOG_SHEET = '登入紀錄';
@@ -353,8 +398,8 @@ function login(p) {
     if (pwOk) {
       const finalRole = role || 'user';
       const token = Utilities.getUuid();
-      CacheService.getScriptCache().put('sess_' + token,
-        JSON.stringify({ username: String(username).trim(), role: finalRole }), SESSION_TTL_SEC);
+      _sessPut_(token, { username: String(username).trim(), role: finalRole });
+      _sessSweep_();   // 順手清掉過期的 Properties session
       _logLogin_(username, finalRole, '成功');
       return { ok: true, role: finalRole, token: token };
     }
