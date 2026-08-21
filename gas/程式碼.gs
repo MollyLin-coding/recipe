@@ -188,6 +188,15 @@ function doGet(e) {
           } catch (e) { d.propsError = String((e && e.message) || e); }
           try { var lk = LockService.getScriptLock(); lk.waitLock(2000); lk.releaseLock(); d.lockWorks = true; }
           catch (e) { d.lockError = String((e && e.message) || e); }
+          // v3.14.6 session 端到端自我測試：不需要任何人的密碼，即可證明登入憑證存得住、讀得回
+          try {
+            var tk = 'diag_' + Utilities.getUuid();
+            d.sessionStore = _sessPut_(tk, { username: '__diag__', role: '__diag__' });
+            var back = _getSession_(tk);
+            d.sessionWorks = !!(back && back.username === '__diag__' && back.role === '__diag__');
+            try { PropertiesService.getScriptProperties().deleteProperty('sess_' + tk); } catch (e2) {}
+            try { CacheService.getScriptCache().remove('sess_' + tk); } catch (e2) {}
+          } catch (e) { d.sessionError = String((e && e.message) || e); }
           return d;
         })();
         break;                        // 環境探針(確認打到哪份主表)
