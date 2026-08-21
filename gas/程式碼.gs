@@ -177,6 +177,17 @@ function doGet(e) {
             d.works = (d.readBack === 'hello');
             c.remove(k);
           } catch (e) { d.error = String((e && e.message) || e); }
+          // v3.14.5 併測 PropertiesService／LockService，判斷是否為專案授權整體失效
+          try {
+            var pr = PropertiesService.getScriptProperties();
+            var pk = 'diag_p_' + Utilities.getUuid();
+            pr.setProperty(pk, 'hello');
+            d.propsReadBack = pr.getProperty(pk);
+            d.propsWorks = (d.propsReadBack === 'hello');
+            pr.deleteProperty(pk);
+          } catch (e) { d.propsError = String((e && e.message) || e); }
+          try { var lk = LockService.getScriptLock(); lk.waitLock(2000); lk.releaseLock(); d.lockWorks = true; }
+          catch (e) { d.lockError = String((e && e.message) || e); }
           return d;
         })();
         break;                        // 環境探針(確認打到哪份主表)
