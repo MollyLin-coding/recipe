@@ -403,7 +403,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.14.4';
+const APP_VERSION='v3.15';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2436,6 +2436,7 @@ const TYPE_CLIENTS = {
   '代工訂單(全客製/換前標)': [
     ['OEM-Babyface', '全客製-Babyface'], ['OEM-Lane72', '全客製-Lane72'], ['OEM-好野吧', '全客製-好野吧'],
     ['全客製-雋荖&拾山', '全客製-雋荖&拾山'], ['全客製-酒肉朋友', '全客製-酒肉朋友'],
+    ['全客製-昭和浪漫冰室', '全客製-昭和浪漫冰室'],
     ['Feeling Bar', '全客製-Feeling Bar'], ['換前標-滿枝枒', '換前標-滿枝枒']
   ],
   '南坡萬自有酒款投產單，無金流': [['南坡萬v.2', '補充自廠酒款水位']],
@@ -2509,6 +2510,7 @@ function _isGongbanType() {
 // v3.1 換前標客戶／v3.1.3 庫存出貨／v3.1.4 投產單：瓶型預設 100ml山形香水瓶（南坡萬自有品牌酒瓶型）
 function _defaultBottleFor(client) {
   if (client === '全客製-酒肉朋友') return '500ml大香水瓶'; // v3.9.4 主公指定預設瓶型
+  if (client === '全客製-昭和浪漫冰室') return '波士頓'; // v3.15 主公指定 500ml 波士頓瓶（下拉字串為「波士頓」）
   if (String(client || '').startsWith('換前標-')) return '100ml山形香水瓶';
   const t = document.getElementById('om_type');
   if (t && (_isOwnStockOutType(t.value) || t.value === TYPE_NO_FINANCE)) return '100ml山形香水瓶'; // v3.13 樣品亦預設 100ml山形香水瓶
