@@ -139,7 +139,7 @@ function doGet(e) {
   let result;
   try {
     // v2.1 輕量 session token：除 login/getEnvInfo 外，所有 action 一律要求有效 token
-    if (action !== 'login' && action !== 'getEnvInfo') {
+    if (action !== 'login' && action !== 'getEnvInfo' && action !== 'crmCashRead' && action !== 'crmCashKeySetup') {
       const sess = _getSession_(p.token);
       if (!sess) {
         return ContentService.createTextOutput(JSON.stringify({ ok: false, error: 'SESSION_EXPIRED' }))
@@ -221,6 +221,8 @@ function doGet(e) {
       case 'updateOrder':            result = updateOrder(p); break;             // 編輯整張訂單(v2.0)
       case 'deleteOrder':            result = deleteOrder(p); break;             // 刪除整張訂單(v2.5, admin 限定)
       case 'getFinanceSummary':      result = getFinanceSummary(p); break;       // 當月金流摘要(v1.6, 財務名單限定)
+      case 'crmCashRead':            result = crmCashRead(p); break;             // 任務卡CRM每客戶當月實收(金鑰限定, 20260824)
+      case 'crmCashKeySetup':        result = crmCashKeySetup(p); break;         // CRM金鑰一次性設定(屬性已存在即拒絕)
       case 'getStockOverview':       result = getStockOverview(p); break;        // 成品庫存
       case 'stockIn':                result = stockIn(p); break;                 // 成品庫存
       case 'stockOut':               result = stockOut(p); break;                // 成品庫存
@@ -1326,6 +1328,51 @@ function updateOrderDelivery(p) {
 // 當月金流摘要（僅財務名單）：
 //   orderRevenue(損益)＝出貨日(實際L優先、否則表訂D)落在該月的訂單總金額；尾款有特殊調整時以差額修正
 //   cashReceived(現金流)＝訂金實際收取日(P)在該月的訂金 ＋ 尾款實際收取日(S)在該月的實際尾款(調整後優先)
+// 任務卡APP CRM 佣金看板專用（2026-08-24 主公指示）：金鑰認證、唯讀、回「每客戶該月實收現金」
+//   實收邏輯與 getFinanceSummary 的 cashReceived 完全一致：P訂金實際收取日在該月的訂金 ＋ S尾款實際收取日在該月的實際尾款(調整後優先)
+//   listAll=1 時另回全部曾出現的客戶名（供任務卡別名對照設定用）
+function _crmCashKey_() { try { return PropertiesService.getScriptProperties().getProperty('CRM_CASH_KEY') || ''; } catch (e) { return ''; } }
+// CRM 金鑰一次性設定：只在 CRM_CASH_KEY 屬性「不存在」時可寫入一次；已設定後永久拒絕（換鑰匙請至 GAS 編輯器改 Script Property）
+function crmCashKeySetup(p) {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('CRM_CASH_KEY')) return { ok: false, error: '金鑰已設定，拒絕覆寫' };
+  const k = String((p && p.key) || '').trim();
+  if (k.length < 20) return { ok: false, error: '金鑰長度不足' };
+  props.setProperty('CRM_CASH_KEY', k);
+  return { ok: true, set: true };
+}
+
+function crmCashRead(p) {
+  const _k = _crmCashKey_();
+  if (!_k || !p || String(p.key || '') !== _k) return { ok: false, error: 'CRM 金鑰錯誤或未設定' };
+  const month = String((p && p.month) || '') || Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM');
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('訂單主表');
+  if (!ws) return { ok: true, month: month, customers: {}, allCustomers: [] };
+  const data = ws.getDataRange().getValues();
+  const byCust = {};
+  const seen = {};
+  for (let i = 1; i < data.length; i++) {
+    const r = data[i];
+    if (!r[0]) continue;
+    const client = String(r[1] || '').trim();
+    if (!client) continue;
+    seen[client] = true;
+    const depositAmt = _numOrBlank_(r[13]);
+    const finalAmt = _numOrBlank_(r[16]);
+    const adjusted = (String(r[19]).toUpperCase() === 'TRUE' || r[19] === true);
+    const adjAmt = _numOrBlank_(r[20]);
+    const effFinal = (adjusted && adjAmt !== '') ? adjAmt : (finalAmt !== '' ? finalAmt : (Number(r[6]) || 0));
+    let cash = 0;
+    if (_fmtDate_(r[15]).slice(0, 7) === month && depositAmt !== '') cash += depositAmt;
+    if (_fmtDate_(r[18]).slice(0, 7) === month) cash += effFinal;
+    if (cash) byCust[client] = (byCust[client] || 0) + cash;
+  }
+  const out = { ok: true, month: month, customers: byCust };
+  if (String((p && p.listAll) || '') === '1') out.allCustomers = Object.keys(seen).sort();
+  return out;
+}
+
 var FINANCE_USERS = ['Kevin', 'Molly', 'Lulu'];
 function getFinanceSummary(p) {
   const user = String((p && p.user) || '');
