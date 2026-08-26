@@ -403,7 +403,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.20';
+const APP_VERSION='v3.21';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -615,10 +615,11 @@ async function _bootApp(username, role) {
   //   而且瞬間連打正是限流元兇。改成 bootstrap 一次取回，其餘函式吃預抓結果。
   const _bootView = (role === 'admin' || isFinanceUser() || isPM()) ? null : 'bartender';
   const _b = await api(_bootView ? { action: 'bootstrap', view: _bootView } : { action: 'bootstrap' }, true);
-  let invRes, lr;
+  // v3.21 bootstrap 減重：inventory(261筆/38.5KB) 不再進開機包——原料/資材庫頁與研發試算頁
+  //   本就 lazy-load(!C.inv 即自抓)，進頁才載，開機回傳量少 2/3
+  let lr;
   if (_b && _b.ok) {
     lr     = _b.recipeList || { ok: false };
-    invRes = _b.inventory  || { ok: false };
     // 預抓結果分送各自的既有快取（下方函式看到快取新鮮就不會再打一次）
     if (_b.orders && _b.orders.ok) { window._bootOrders = _b.orders; }
     if (_b.bottles && _b.bottles.ok) { window._bottleOv = _b.bottles.list || []; window._bottleOvAt = Date.now(); }
@@ -626,13 +627,8 @@ async function _bootApp(username, role) {
     window._bootStockAlerts = (_b.stockAlerts && _b.stockAlerts.ok) ? _b.stockAlerts : null;
   } else {
     // bootstrap 失敗 → 退回舊路徑，開機絕不因新機制而掛掉
-    const _pair = await Promise.all([
-      api({ action: 'getInventory' }, true),
-      api({ action: 'getRecipeList' }, true),
-    ]);
-    invRes = _pair[0]; lr = _pair[1];
+    lr = await api({ action: 'getRecipeList' }, true);
   }
-  if (invRes.ok) C.inv = invRes.items || [];
   if (lr.ok) {
     recipeList = lr.list || [];
     // 從酒譜清單推導客戶清單（不需要獨立 getClientList API）
@@ -748,7 +744,8 @@ function showChangePwModal() {
 function doRefresh() {
   window._apiFreshUntil = Date.now() + 8000; // v3.14.4 接下來 8 秒的讀取一律繞過後端快取
   Object.assign(C, { inv:null, profit:{}, recipes:{}, batch:null });
-  api({ action:'getInventory' }, true).then(r => { if(r.ok) C.inv = r.items||[]; });
+  // v3.21：不再無條件重抓 inventory——C.inv 已清空，若目前就在原料庫/研發試算頁，
+  //   下方 switchTab(curTab) 重新渲染時會自行 lazy-load 抓新資料（且吃到 fresh=1 逃生口）
   api({ action:'getRecipeList' }, true).then(lr => {
     if(lr.ok) {
       recipeList = lr.list||[];
