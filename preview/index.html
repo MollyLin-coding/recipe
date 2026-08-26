@@ -1071,7 +1071,7 @@ function recalcRecipe(restore) {
 }
 function toRd() {
   if (!rdata?.ingredients?.length) { toast('無原料資料'); return; }
-  rdState = { ings:[], tv:rdata.totalVol||4000, bt:'4L桶', title:rdata.recipeName||rdata._dn||'', client:curClient };
+  rdState = { ings:[], tv:rdata.totalVol||4000, bt:'4L桶', title:rdata.recipeName||rdata._dn||'', client:curClient, srcId:null };  // v3.16 全新記錄
   rdata.ingredients.forEach((ing, idx) => {
     const pct = parseFloat(document.getElementById('rp_'+idx)?.value) || ing.pct;
     // v3.5 P0-6：帶入 unitCost=每ml成本(酒譜成本÷體積)，rdCpm 直接吃到，成本不再歸零（原 _cost/_vol 只寫不讀）
@@ -1521,7 +1521,7 @@ function rdLoadFromDetail(id, btn) {
   let ings = r.ingredients || [];
   if (typeof ings === 'string') { try { ings = JSON.parse(ings); } catch (e) { ings = []; } }
   if (!Array.isArray(ings)) ings = [];
-  rdState = { ings, tv: r.volume || 4000, bt: r.bottle || '4L桶', title: r.name || '', client: r.client || '', matSel: {} };
+  rdState = { ings, tv: r.volume || 4000, bt: r.bottle || '4L桶', title: r.name || '', client: r.client || '', matSel: {}, srcId: r.id };  // v3.16 記住來源，儲存時可更新原記錄
   btn.closest('.modal-bg').remove();
   switchTab('rd');
   toast('已載入：' + (r.name || '未命名'));
@@ -1876,12 +1876,33 @@ function rdCalc() {
   // 防重入鎖：rdUpdateMat 結尾會回呼 rdCalc，無鎖會無限遞迴爆栈（v9.3 既有bug）
   if (!window._inMatSync) { window._inMatSync = true; try { rdUpdateMat(); } finally { window._inMatSync = false; } }
 }
+// v3.16 完全空白的原料列（按了「＋」卻沒填任何東西）不入庫，防止髒資料再產生。
+//   判定刻意保守：**名稱空白「且」所有數值皆為 0「且」無子料** —— 只要填了任一項就保留。
+function rdIsBlankIng(g) {
+  if (!g) return true;
+  if (String(g.name || '').trim()) return false;
+  if ((g.subs || []).length) return false;
+  return !((+g.ratio) || (+g.volume) || (+g.abv) || (+g.qty) || (+g.packPrice) || (+g.packSize) || (+g.price));
+}
 async function rdSave() {
   if (!rdState.ings.length) { toast('請先加入原料'); return; }
+  // v3.16 濾掉完全空白的原料列（不靜默改資料：有濾掉會在 toast 告知）
+  const _kept = rdState.ings.filter(function (g) { return !rdIsBlankIng(g); });
+  const _dropped = rdState.ings.length - _kept.length;
+  if (!_kept.length) { toast('原料都是空白列，請先填寫內容'); return; }
+  // v3.16 從既有記錄載入編輯時，由使用者當下決定要覆蓋還是另存
+  //   （原本永遠新增一筆，導致「刪掉的東西在詳情還看得到」＝主公 8/21 回報的問題）
+  let _sid = rdState.srcId || '';
+  if (_sid && !confirm('「' + (rdState.title || '未命名') + '」是從既有記錄載入編輯的。\n\n按「確定」＝更新原記錄（覆蓋舊內容）\n按「取消」＝另存成新的一筆')) _sid = '';
   const sp = window._rdPctSum;
   if (sp !== undefined && Math.abs(sp - 100) >= 0.1 && !confirm(`目前占比總和 ${sp.toFixed(1)}%（與 100% 不符），確定仍要儲存？`)) return;
-  const res = await api({ action:'saveRdRecord', creator:curUser.username, client:rdState.client||'', name:rdState.title||'未命名', volume:rdState.tv, bottle:rdState.bt, ingredients:JSON.stringify(rdState.ings), results:JSON.stringify(window._rdRes||{}) });
-  if (res.ok) { toast('試算已儲存！'); rdRenderSavedList(true); } else toast('儲存失敗:'+res.error); // v3.9.1 存後刷新常駐清單
+  const res = await api({ action:'saveRdRecord', id:_sid, creator:curUser.username, client:rdState.client||'', name:rdState.title||'未命名', volume:rdState.tv, bottle:rdState.bt, ingredients:JSON.stringify(_kept), results:JSON.stringify(window._rdRes||{}) });
+  if (res.ok) {
+    if (_dropped > 0) { rdState.ings = _kept; rdRender(); rdCalc(); }   // 畫面同步濾除結果
+    rdState.srcId = res.id;   // 之後再按儲存，續存同一筆
+    toast((res.updated ? '已更新這筆試算！' : '試算已儲存！') + (_dropped > 0 ? ('（已略過 ' + _dropped + ' 列空白原料）') : ''));
+    rdRenderSavedList(true);
+  } else toast('儲存失敗:'+res.error); // v3.9.1 存後刷新常駐清單
 }
 async function rdLoadList() {
   const res = await api({ action:'getRdRecords' });
@@ -1905,7 +1926,7 @@ function rdLoadOne(i, modalBg) {
   let ings = r.ingredients || [];
   if (typeof ings === 'string') { try { ings = JSON.parse(ings); } catch(e) { ings = []; } }
   if (!Array.isArray(ings)) ings = []; // 防呆：極舊壞資料 ingredients 非陣列(如誤存結果物件)→空列載入不炸頁
-  rdState = { ings, tv:r.volume||4000, bt:r.bottle||'4L桶', title:r.name||'', client:r.client||'' };
+  rdState = { ings, tv:r.volume||4000, bt:r.bottle||'4L桶', title:r.name||'', client:r.client||'', srcId:r.id };  // v3.16
   if (!rdState.matSel) rdState.matSel = {};
   modalBg.remove();
   switchTab('rd');

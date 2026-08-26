@@ -188,6 +188,22 @@ function doGet(e) {
           } catch (e) { d.propsError = String((e && e.message) || e); }
           try { var lk = LockService.getScriptLock(); lk.waitLock(2000); lk.releaseLock(); d.lockWorks = true; }
           catch (e) { d.lockError = String((e && e.message) || e); }
+          // v3.14.7 跨請求 session 診斷（免密碼）：
+          //   ?action=getEnvInfo&diagsess=put → 建立一個測試 session 並回傳 tk
+          //   ?action=getEnvInfo&diagsess=get&tk=<tk> → **在另一個請求中**讀回，才算真的存得住
+          try {
+            var ds = String(p.diagsess || '');
+            if (ds === 'put') {
+              var ntk = 'diag_' + Utilities.getUuid();
+              d.putWhere = _sessPut_(ntk, { username: '__diag__', role: '__diag__' });
+              d.tk = ntk;
+            } else if (ds === 'get' && p.tk) {
+              var got = _getSession_(String(p.tk));
+              d.crossRequestOk = !!(got && got.username === '__diag__');
+              try { PropertiesService.getScriptProperties().deleteProperty('sess_' + String(p.tk)); } catch (e2) {}
+              try { CacheService.getScriptCache().remove('sess_' + String(p.tk)); } catch (e2) {}
+            }
+          } catch (e) { d.diagSessError = String((e && e.message) || e); }
           // v3.14.6 session 端到端自我測試：不需要任何人的密碼，即可證明登入憑證存得住、讀得回
           try {
             var tk = 'diag_' + Utilities.getUuid();
@@ -328,19 +344,16 @@ var V3144_CACHE_KEYS = ['orders_v1_full_std', 'orders_v1_full_PM',
 //   session 只存在那裡 → 全站 SESSION_EXPIRED、所有人無法使用。實測 Properties/Lock 正常。
 //   Properties 沒有 TTL，故 payload 自帶 exp，並在 login 時順手清理過期項目。
 function _sessKey_(token) { return 'sess_' + token; }
+// ⚠️ v3.14.7 修正 v3.14.6 的漏洞：原本「cache 寫完立刻讀回確認，成功就不寫 Properties」。
+//   但 CacheService 目前處於**同一次執行內讀得到、跨請求就消失**的半死狀態
+//   → 每次都誤判為成功而跳過 Properties → 下一個請求仍 SESSION_EXPIRED。
+//   正解：**無條件雙寫**（Properties 才是可靠的那份；cache 只當加速）。多一次 Properties 寫入很便宜。
 function _sessPut_(token, obj) {
   var payload = JSON.stringify({ u: obj.username, r: obj.role, exp: (new Date()).getTime() + SESSION_TTL_SEC * 1000 });
-  var ok = false;
-  try {
-    var c = CacheService.getScriptCache();
-    c.put(_sessKey_(token), payload, SESSION_TTL_SEC);
-    ok = (c.get(_sessKey_(token)) === payload);   // 寫完立刻讀回確認（不能只信 put 沒拋錯）
-  } catch (e) { ok = false; }
-  if (!ok) {
-    // CacheService 不可用 → 落到 Properties（服務恢復後會自動走回 cache）
-    try { PropertiesService.getScriptProperties().setProperty(_sessKey_(token), payload); } catch (e) {}
-  }
-  return ok ? 'cache' : 'props';
+  var where = [];
+  try { CacheService.getScriptCache().put(_sessKey_(token), payload, SESSION_TTL_SEC); where.push('cache'); } catch (e) {}
+  try { PropertiesService.getScriptProperties().setProperty(_sessKey_(token), payload); where.push('props'); } catch (e) {}
+  return where.join('+') || 'none';
 }
 function _getSession_(token) {
   if (!token) return null;
@@ -1782,14 +1795,29 @@ function getHistory() {
 }
 
 // ── 研發試算記錄 ─────────────────────────────────────────────
+// v3.16：帶 id 且找得到該列 → **更新原列**（保留原 id 與建立時間）；否則維持新增。
+//   修正：原本永遠 appendRow，導致「載入編輯→改→儲存」變成新增一筆，
+//   舊記錄不會被覆蓋（主公 8/21 回報：刪掉的空白材料在詳情仍看得到）。
 function saveRdRecord(p) {
   const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
   const ws = ss.getSheetByName('研發試算記錄');
   if (!ws) return { ok: false, error: '找不到研發試算記錄分頁' };
+  const wantId = String((p && p.id) || '').trim();
+  if (wantId) {
+    const data = ws.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === wantId) {
+        // C~I 欄覆寫（A=id、B=建立時間 保留不動）
+        ws.getRange(i + 1, 3, 1, 7).setValues([[p.creator, p.client, p.name, p.volume, p.bottle, p.ingredients, p.results]]);
+        return { ok: true, id: wantId, updated: true };
+      }
+    }
+    // 帶了 id 卻找不到（可能已被刪）→ 落回新增，不讓使用者的編輯憑空消失
+  }
   const id = 'R' + Date.now();
   const now = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
   ws.appendRow([id, now, p.creator, p.client, p.name, p.volume, p.bottle, p.ingredients, p.results]);
-  return { ok: true, id };
+  return { ok: true, id: id, updated: false };
 }
 
 function getRdRecords() {
