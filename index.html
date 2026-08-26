@@ -403,7 +403,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.18';
+const APP_VERSION='v3.19';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -656,16 +656,19 @@ async function _bootApp(username, role) {
   // 角色分頁分流：倉管=run card+庫存；財務(Lulu)=只看訂單/run card(含金流總覽)；FB觀看(上海Jason)=只看酒譜；其餘角色維持原本可見範圍
   const ROLE_TABS = { '倉管': ['batch', 'recipe', 'stock', 'inventory'], '財務': ['batch'], 'FB觀看': ['recipe'] }; // v3.3 主公指示：小李(倉管)加開 酒譜/run card
   const allowed = ROLE_TABS[role];
+  // v3.19 F5 還原到原分頁：_restoreTab 只在 _sessRestore 路徑有值；新登入維持預設分頁
+  const _rt = window._restoreTab || null; window._restoreTab = null;
   if (allowed) {
     document.querySelectorAll('#navbar .nav-tab').forEach(el =>
       el.style.display = allowed.includes(el.dataset.tab) ? '' : 'none');
-    switchTab(allowed.includes(curTab) ? curTab : allowed[0]);
+    switchTab((_rt && allowed.includes(_rt)) ? _rt : (allowed.includes(curTab) ? curTab : allowed[0]));
   } else {
     // 一般/admin：還原非 admin-only 分頁（防同頁切換帳號後殘留隱藏）
     document.querySelectorAll('#navbar .nav-tab').forEach(el => {
       if (!el.classList.contains('admin-only')) el.style.display = '';
     });
-    switchTab('batch'); // v3.9.2 登入預設=訂單分頁(主公指示)
+    const _tabsOK = ['recipe','profit','inventory','rd','batch','stock','apply'];
+    switchTab((_rt && _tabsOK.includes(_rt) && (_rt !== 'apply' || role === 'admin')) ? _rt : 'batch'); // v3.9.2 登入預設=訂單分頁(主公指示)
   }
   showStockAlerts(window._bootStockAlerts);
   showShipDateAlerts(window._bootOrders);   // v3.14.4 與訂單列表共用同一份，不再重複打 getOrders
@@ -676,6 +679,8 @@ async function _bootApp(username, role) {
 // session 存 sessionStorage：同分頁重新整理存活、關閉分頁即清；token 仍受後端 6h TTL 管
 function _sessSave(username, role) { try { sessionStorage.setItem('np_sess', JSON.stringify({ t: curToken, u: username, r: role, at: Date.now() })); } catch (e) {} }
 function _sessClear() { try { sessionStorage.removeItem('np_sess'); } catch (e) {} }
+// v3.19：切分頁即把當前分頁記進 session，F5 還原時回到原分頁（原本一律跳回訂單）
+function _sessTab(tab) { try { const s = JSON.parse(sessionStorage.getItem('np_sess') || 'null'); if (s) { s.tab = tab; sessionStorage.setItem('np_sess', JSON.stringify(s)); } } catch (e) {} }
 async function _sessRestore() {
   let s = null; try { s = JSON.parse(sessionStorage.getItem('np_sess') || 'null'); } catch (e) {}
   if (!s || !s.t || !s.u) return false;
@@ -685,10 +690,18 @@ async function _sessRestore() {
   // 輕量驗 token：getRecipeList 全角色可打(含FB觀看白名單)且後端有 300s 快取；SESSION_EXPIRED/失敗=token失效
   const probe = await api({ action: 'getRecipeList' }, true);
   if (!probe || !probe.ok) {
-    curToken = null; _sessClear();
-    if (err) err.textContent = '';
+    curToken = null;
+    // v3.19：只有 token 真的失效才清 session；網路瞬斷/限流(_offline)保留登入狀態，
+    //   請使用者再重新整理一次即自動還原（原本一律清掉＝暫時斷網也被逼重新登入）
+    if (probe && probe._offline) {
+      if (err) err.textContent = '⚠ 網路連線失敗，請再重新整理一次（登入狀態已保留）';
+    } else {
+      _sessClear();
+      if (err) err.textContent = '';
+    }
     return false;
   }
+  window._restoreTab = s.tab || null; // v3.19 回到重新整理前的分頁
   await _bootApp(s.u, s.r);
   if (err) err.textContent = '';
   return true;
@@ -780,6 +793,8 @@ function wmAttach(box){
 }
 function switchTab(tab) {
   curTab = tab;
+  _sessTab(tab); // v3.19 F5 還原到原分頁：切分頁即記錄
+
   document.querySelectorAll('.nav-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
   const mc = document.getElementById('mainContent'); mc.scrollTop = 0;
   ({ recipe:renderRecipePage, profit:renderProfitPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderRuncardPage, order:renderOrderPage, stock:renderStockPage, apply:renderApplyPage })[tab]?.(mc);
