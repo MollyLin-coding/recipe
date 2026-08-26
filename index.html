@@ -403,7 +403,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.16';
+const APP_VERSION='v3.18';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -540,6 +540,11 @@ function fm0(v){ return 'NT$' + Math.round(+v||0).toLocaleString('zh-TW'); }
 // 原料完整顯示名稱：品牌 品名 類別（彙整價格表把三者分欄存，選入酒譜後須組回完整名稱，
 // 與酒譜頁原有原料的單一完整名稱顯示格式一致；空欄自動略過）。Bug：研發試算選入材料只顯示「品牌｜品名」，名稱不完整。
 function fullIngName(o){ return [o&&o.brand, o&&o.name, o&&o.category].filter(x=>x&&String(x).trim()).join(' '); }
+// v3.18 給客戶看的原料名稱＝**大分類＋小分類，不含品牌**（主公 2026-08-21 指示）。
+//   內部編輯畫面仍用 fullIngName（含品牌）；只有對客戶揭露的地方改用本函式。
+//   起因：只顯示大分類會出現兩個「芭樂」——其實一個是芭樂糖漿、一個是芭樂果汁。
+//   「南坡萬自製」本身就是小分類的值，故自動保留＝客戶仍看得出哪些是我們自備物料。
+function pubIngName(o){ return [o&&o.name, o&&o.category].filter(x=>x&&String(x).trim()).join(' '); }
 // 每ml成本：優先用原料庫 unitCost（GAS算好），無則 price/vol 補算
 function invUC(item){ const uc=+(item.unitCost!==undefined?item.unitCost:item.unit)||0; if(uc>0) return uc; return (item.price>0&&item.vol>0)?item.price/item.vol:0; }
 // 試算每ml成本：選料原料用 unitCost；手動輸入用 單價/容量
@@ -1490,14 +1495,14 @@ function rdShowDetail(id) {
   if (typeof rs === 'string') { try { rs = JSON.parse(rs); } catch (e) { rs = {}; } }
   const ingRows = ings.map(g => {
     if (g.type === 'compound') {
-      const subs = (g.subs || []).map(s => `<div style="padding-left:14px;font-size:11px;color:var(--ink3);">└ ${rcEsc(s.name)}（${rcEsc(s.brand || '')}）${nt(s.volume)}ml</div>`).join('');
-      return `<div style="padding:5px 0;border-bottom:1px dashed var(--border);"><b>${rcEsc(g.name)}</b> <span style="font-size:11px;color:var(--gold-dk);">複合${g.hasLoss ? '·÷0.8耗損' : ''}</span>${subs}</div>`;
+      const subs = (g.subs || []).map(s => `<div style="padding-left:14px;font-size:11px;color:var(--ink3);">└ ${rcEsc(pubIngName(s))} ${nt(s.volume)}ml</div>`).join('');
+      return `<div style="padding:5px 0;border-bottom:1px dashed var(--border);"><b>${rcEsc(pubIngName(g))}</b> <span style="font-size:11px;color:var(--gold-dk);">複合${g.hasLoss ? '·÷0.8耗損' : ''}</span>${subs}</div>`;
     }
     if (g.type === 'free') {
       const u = g.unit === '自訂' ? (g.customUnit || '自訂') : (g.unit || '');
-      return `<div style="padding:5px 0;border-bottom:1px dashed var(--border);"><b>${rcEsc(g.name)}</b> <span style="font-size:11px;color:var(--gold-dk);">自由材料</span> <span style="font-size:12px;">用量 ${rcEsc(g.qty || 0)}${rcEsc(u)}｜進貨 NT$${nt(g.packPrice)}/${rcEsc(g.packSize || 0)}${rcEsc(u)}${(+g.ratio > 0) ? '｜占比 ' + nt(g.ratio, 1) + '%' : ''}${(+g.abv > 0) ? '｜ABV ' + g.abv + '%' : ''}</span></div>`;
+      return `<div style="padding:5px 0;border-bottom:1px dashed var(--border);"><b>${rcEsc(pubIngName(g))}</b> <span style="font-size:11px;color:var(--gold-dk);">自由材料</span> <span style="font-size:12px;">用量 ${rcEsc(g.qty || 0)}${rcEsc(u)}｜進貨 NT$${nt(g.packPrice)}/${rcEsc(g.packSize || 0)}${rcEsc(u)}${(+g.ratio > 0) ? '｜占比 ' + nt(g.ratio, 1) + '%' : ''}${(+g.abv > 0) ? '｜ABV ' + g.abv + '%' : ''}</span></div>`;
     }
-    return `<div style="padding:5px 0;border-bottom:1px dashed var(--border);"><b>${rcEsc(g.name)}</b> <span style="font-size:12px;">占比 ${nt(g.ratio, 1)}%｜用量 ${nt(g.volume)}ml${(+g.abv > 0) ? '｜ABV ' + g.abv + '%' : ''}${g.hasLoss ? '｜÷0.8耗損' : ''}</span></div>`;
+    return `<div style="padding:5px 0;border-bottom:1px dashed var(--border);"><b>${rcEsc(pubIngName(g))}</b> <span style="font-size:12px;">占比 ${nt(g.ratio, 1)}%｜用量 ${nt(g.volume)}ml${(+g.abv > 0) ? '｜ABV ' + g.abv + '%' : ''}${g.hasLoss ? '｜÷0.8耗損' : ''}</span></div>`;
   }).join('') || '<div style="color:var(--ink3);font-size:12px;">（無原料明細）</div>';
   const resRow = (lb, v, unit) => (v == null || v === '' ? '' : `<div class="rm"><div class="lb">${lb}</div><div class="vl">${v}${unit || ''}</div></div>`);
   const isAdmin = curUser && curUser.role === 'admin';
