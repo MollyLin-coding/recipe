@@ -169,14 +169,16 @@ function doGet(e) {
         // v3.14.5 診斷：CacheService 到底能不能用（put→get→remove 全程回報例外）
         result.cacheDiag = (function () {
           var d = {};
+          // 輕量：只驗 CacheService（getEnvInfo 是保溫 ping 的目標，不可拖慢）
           try {
             var c = CacheService.getScriptCache();
             var k = 'diag_' + Utilities.getUuid();
             c.put(k, 'hello', 60);
-            d.readBack = c.get(k);
-            d.works = (d.readBack === 'hello');
+            d.works = (c.get(k) === 'hello');
             c.remove(k);
           } catch (e) { d.error = String((e && e.message) || e); }
+          // 完整診斷（Properties/Lock/跨請求 session）只在 ?diag=1 時做，避免每次都寫 Properties
+          if (String(p.diag || '') !== '1' && !p.diagsess) return d;
           // v3.14.5 併測 PropertiesService／LockService，判斷是否為專案授權整體失效
           try {
             var pr = PropertiesService.getScriptProperties();
@@ -335,7 +337,10 @@ var SESSION_TTL_SEC = 21600;
 // 止血：資料快取總開關預設 **false**（session 獨佔 Script Cache）；bootstrap 保留（收益不靠快取）。
 // 教訓：**session 與資料不可共用同一個有限的 Script Cache**。日後要恢復快取，
 //   必須改用不與 session 競爭的儲存（或嚴格限制筆數與大小）並實測 session 存活。
-var DATA_CACHE_ON = false;
+// 2026-08-21 稍晚：CacheService 服務已恢復（正式與測試專案皆實測 works=true）→ 重新啟用。
+//   ⚠️ 若日後再次故障，最壞情況只是「快取讀不到 → 回去讀試算表」＝變慢，不會出錯；
+//   真正致命的 session 已改為 Cache+Properties **無條件雙寫**（v3.14.7），不再單點依賴 cache。
+var DATA_CACHE_ON = true;
 var V3144_CACHE_KEYS = ['orders_v1_full_std', 'orders_v1_full_PM',
   'orders_v1_bartender_std', 'orders_v1_bartender_PM',
   'bottleOv_v1', 'rcIdx_v1', 'stockAlerts_v1'];
