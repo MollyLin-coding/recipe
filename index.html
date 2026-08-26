@@ -403,7 +403,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.19';
+const APP_VERSION='v3.20';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -1471,7 +1471,7 @@ async function renderRdPage(mc) {
   </div>
 
   <div class="fe" style="gap:6px;flex-wrap:wrap;">
-    <button class="btn btn-ghost btn-sm" onclick="rdStash()" title="存到這台裝置，隨時回來繼續編輯（不會進儲存記錄）">📝 暫存</button>
+    <button class="btn btn-ghost btn-sm" onclick="lockRun(this, rdSaveAs)" title="以新名稱另存一筆新的試算記錄（原記錄不會被改動）">🆕 另存新檔</button>
     <button class="btn btn-ghost btn-sm" onclick="lockRun(this, rdSave)">💾 儲存</button>
     <button class="btn btn-ghost btn-sm" onclick="rdLoadList()">📋 載入</button>
     <button class="btn btn-ghost btn-sm" onclick="rdExportCSV()">⬇ CSV</button>
@@ -1923,6 +1923,28 @@ async function rdSave() {
     toast((res.updated ? '已更新這筆試算！' : '試算已儲存！') + (_dropped > 0 ? ('（已略過 ' + _dropped + ' 列空白原料）') : ''));
     rdRenderSavedList(true);
   } else toast('儲存失敗:'+res.error); // v3.9.1 存後刷新常駐清單
+}
+// v3.20 另存新檔（主公指示，取代原「📝 暫存」）：先命名新版本，再存成一筆全新記錄；原記錄完全不動
+async function rdSaveAs() {
+  if (!rdState.ings.length) { toast('請先加入原料'); return; }
+  const _kept = rdState.ings.filter(function (g) { return !rdIsBlankIng(g); });
+  const _dropped = rdState.ings.length - _kept.length;
+  if (!_kept.length) { toast('原料都是空白列，請先填寫內容'); return; }
+  const _nn = prompt('另存新檔：請輸入新版本的酒譜名稱', rdState.title || '');
+  if (_nn === null) return;                     // 按取消＝不儲存
+  const nm = _nn.trim();
+  if (!nm) { toast('名稱不可空白，未儲存'); return; }
+  const sp = window._rdPctSum;
+  if (sp !== undefined && Math.abs(sp - 100) >= 0.1 && !confirm(`目前占比總和 ${sp.toFixed(1)}%（與 100% 不符），確定仍要另存？`)) return;
+  const res = await api({ action:'saveRdRecord', id:'', creator:curUser.username, client:rdState.client||'', name:nm, volume:rdState.tv, bottle:rdState.bt, ingredients:JSON.stringify(_kept), results:JSON.stringify(window._rdRes||{}) });
+  if (res.ok) {
+    if (_dropped > 0) { rdState.ings = _kept; rdRender(); rdCalc(); }
+    rdState.title = nm;
+    rdState.srcId = res.id;                     // 之後按「儲存」＝續存這筆新檔，不會誤蓋舊版
+    const _t = document.getElementById('rd_title'); if (_t) _t.value = nm;
+    toast('已另存新檔：' + nm + (_dropped > 0 ? ('（已略過 ' + _dropped + ' 列空白原料）') : ''));
+    rdRenderSavedList(true);
+  } else toast('另存失敗:' + res.error);
 }
 async function rdLoadList() {
   const res = await api({ action:'getRdRecords' });
