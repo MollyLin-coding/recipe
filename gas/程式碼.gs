@@ -3012,7 +3012,9 @@ function bootstrap(p) {
   function safe(fn) { try { return fn(); } catch (e) { return { ok: false, error: String((e && e.message) || e) }; } }
   out.recipeList = safe(function () { return getRecipeList(p); });
   if (role === 'FB觀看') return out;   // FB觀看 只看酒譜，其餘一律不回
-  out.inventory     = safe(function () { return getInventory(); });
+  // v3.19b bootstrap 減重：inventory(261筆/38.5KB) 移出開機路徑——開機畫面用不到，
+  //   原料/資材庫頁與研發試算頁本就有 lazy-load(!C.inv 即自抓)，進頁才載。舊版前端拿不到
+  //   _b.inventory 時走 || {ok:false} 分支，同樣落入 lazy-load，向下相容。
   out.orders        = safe(function () { return getOrders(p); });   // view 由前端帶，PM 剝除照舊
   out.runCardIndex  = safe(function () { return getRunCardIndex(); });
   out.bottles       = safe(function () { return getBottleOverview(); });
