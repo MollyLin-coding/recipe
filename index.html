@@ -403,7 +403,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.21';
+const APP_VERSION='v3.22';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -1200,7 +1200,7 @@ function renderProfitData(res) {
         <div class="gonban-name">${name}</div>
         <div class="bottle-row">${allBottles.map(bt => {
           const d = bottles[bt];
-          if (!d) return `<div class="bc"><div class="bt">${bt}</div><div class="bv sub">—</div></div>`;
+          if (!d) return '';   // v3.22 主公指示：該酒款沒有的瓶型不顯示空卡（原本印「—」佔位）
           const best = (d.profitRate||0) === maxRate && maxRate > 0;
           const fallback = d.priceSource === 'fallback';
           const rate = d.profitRate || 0;
@@ -1210,7 +1210,7 @@ function renderProfitData(res) {
             <div style="font-size:10px;color:var(--ink3);margin-bottom:1px;">售價</div>
             <div class="bv">${fm(pr)}</div>
             <div class="br">毛利率 ${nt(rate,1)}%</div>
-            <div class="bt2">毛利 ${fm(d.profit)}</div>
+            <div class="bt2">毛利 NT$${Math.round(d.price) - Math.round(d.totalCostTax)}</div>
             <div class="bt2">總成本 NT$${Math.round(d.totalCostTax)}</div>
           </div>`;
         }).join('')}</div>
