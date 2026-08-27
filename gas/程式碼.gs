@@ -1557,13 +1557,35 @@ function getInventory() {
 }
 
 // ── 毛利分析 ─────────────────────────────────────────────────
+// v3.22 毛利分頁解析：設定名找不到時，退而尋找該書內含「毛利／報價」的分頁當備援。
+//   起因＝昭和浪漫冰室改分頁名加 SH_ 前綴後，設定名對不上導致整頁掛掉（見接手文件）。
+//   規則：① 完全比對設定名 ② 去前綴後比對 ③ 唯一一個含毛利/報價者 ④ 皆失敗→回傳全部分頁名供除錯。
+//   ⚠️ 只在「設定名找不到」時才啟動，既有四家客戶命中①，行為完全不變。
+function _resolveProfitWs_(ss, want) {
+  const all = ss.getSheets().map(function (s) { return s.getName(); });
+  let ws = ss.getSheetByName(want);
+  if (ws) return { ws: ws, used: want, all: all, fallback: false };
+
+  const bare = String(want).replace(/^[A-Za-z0-9.]+_/, '');   // 去掉設定名的前綴，如 SH_ / NO1.V2_
+  const hits = all.filter(function (n) { return n.indexOf('毛利') >= 0 || n.indexOf('報價') >= 0; });
+
+  // ② 去前綴後同名（含對方帶前綴的情況，如 SH_報價毛利分析 ↔ 報價毛利分析）
+  let pick = hits.filter(function (n) { return n.replace(/^[A-Za-z0-9.]+_/, '') === bare; })[0];
+  // ③ 全書只有一個毛利/報價分頁 → 直接用它
+  if (!pick && hits.length === 1) pick = hits[0];
+
+  if (pick) return { ws: ss.getSheetByName(pick), used: pick, all: all, fallback: true };
+  return { ws: null, used: '', all: all, fallback: false };
+}
+
 function getProfitData(p) {
   const client = p.client;
   if (!client) return { ok: false, error: '缺少 client' };
   const ss = getClientSS(client);
   const profitSheetName = getProfitSheetName(client);
-  const ws = ss.getSheetByName(profitSheetName);
-  if (!ws) return { ok: false, error: '找不到' + profitSheetName + '分頁' };
+  const _pf = _resolveProfitWs_(ss, profitSheetName);
+  const ws = _pf.ws;
+  if (!ws) return { ok: false, error: '找不到毛利分頁（設定名「' + profitSheetName + '」）。此書現有分頁：' + _pf.all.join('、') };
 
   const rows = ws.getDataRange().getValues();
   const list = [];
