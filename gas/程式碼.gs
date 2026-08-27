@@ -54,6 +54,16 @@ const CLIENTS = {
     prefix: /^SH_/i, strip: /^SH_/i,
     profitSheet: '報價毛利分析', profitFmt: 'sh-1row',
   },
+  // v3.23 全客製-好野吧 轉正式客戶（主公提供「好野吧_酒譜資料庫」20260827）
+  // 客戶鍵沿用既有的 'OEM-好野吧'（前端 CLIENT_LABELS 顯示「全客製-好野吧」，歷史訂單存的也是這個值）
+  // 分頁前綴＝中文「好野吧-」；主公已將暫不上線的 4 款（老鷹教父40/網球時尚/E式快攻/羽球瘋琴）前綴移除。
+  // capMap：本表無「使用瓶型」欄，改由容量對照瓶型名（否則會顯示 100ml/20000ml 這種假瓶型）。
+  'OEM-好野吧': {
+    id: '1v8WSv-L5Ox-AOcqMBgXyj-HyXwYyIp4FRDVqhwodF1M',
+    prefix: /^好野吧-/, strip: /^好野吧-/,
+    profitSheet: '好野吧-報價毛利分析', profitFmt: 'hyb-1row',
+    capMap: { 100: '100ml江小白', 500: '500ml伏特加瓶', 1800: '1800ml玻璃瓶', 20000: '20公升有水龍頭桶' },
+  },
 };
 // 主表 ID：優先讀 Script Property 'SHEET_ID'（測試部署指向沙盒副本用），
 // 找不到時 fallback 正式硬編碼 ID（向後相容：正式部署不設此屬性，行為與改版前完全一致）。
@@ -77,6 +87,9 @@ const PROFIT_COLS = {
   // 昭和浪漫冰室：A品名 B容量 C含稅單價 D成本 E報價 F毛利 G毛利率 H使用瓶型，單列式
   // 售價讀 C 含稅單價（主公拍板）；比 jrp-1row 多一欄「報價」，故 bottleCol=7 而非 6
   'sh-1row':    { price: 2, cost: 3, capCol: 1, bottleCol: 7 },
+  // 好野吧：A品名 B容量 C含稅單價 D扣除後標費 E客製瓶身LOGO印刷費 F報價 G成本 H毛利 I毛利率，單列式、無瓶型欄
+  // ⚠️ 售價讀 F 報價(5) 而非 C 含稅單價(2)：C 未含印刷費、與成本基準不同，讀 C 會讓 100ml 出現負毛利（主公 20260827 拍板讀 F）
+  'hyb-1row':   { price: 5, cost: 6, capCol: 1 },
 };
 
 // 取得客戶設定（唯一入口，未知客戶直接擋下）
@@ -1628,7 +1641,12 @@ function getProfitData(p) {
       const warn = !(price > 0) || !(totalCostTax > 0);
       const profit = Math.round((price - totalCostTax) * 100) / 100;
       const profitRate = price > 0 ? Math.round(profit / price * 1000) / 10 : 0; // 百分比整數（55.1），與NO1分支統一
-      const bottle = pc.bottleCol != null ? (String(row[pc.bottleCol] || '').trim() || (cap ? cap + 'ml' : '')) : '4L桶';
+      // v3.23 瓶型決定順序：① bottleCol 實際值 ② 客戶 capMap 容量對照 ③ 容量湊字串 ④ 皆無 → 4L桶
+      const capKey = String(Math.round(cap));
+      const mapped = (cfg.capMap && (cfg.capMap[capKey] || cfg.capMap[cap])) || '';
+      const bottle = pc.bottleCol != null
+        ? (String(row[pc.bottleCol] || '').trim() || mapped || (cap ? cap + 'ml' : ''))
+        : (mapped || '4L桶');   // ← FB/FBC 無 capMap 時仍回 '4L桶'，行為不變
       list.push({ recipeName: nm, bottle, price, cap, totalCostTax, profit, profitRate, warn });
     }
   }
