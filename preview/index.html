@@ -403,7 +403,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.23';
+const APP_VERSION='v3.24';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2499,7 +2499,7 @@ const TYPE_CLIENTS = {
     ['Feeling Bar', '全客製-Feeling Bar'], ['換前標-滿枝枒', '換前標-滿枝枒']
   ],
   '南坡萬自有酒款投產單，無金流': [['南坡萬v.2', '補充自廠酒款水位']],
-  [TYPE_SHIP]: [['經銷商－日光貳參', '經銷商－日光貳參'], ['經銷商－文博會', '經銷商－文博會']]
+  [TYPE_SHIP]: [['經銷商－日光貳參', '經銷商－日光貳參'], ['經銷商－文博會', '經銷商－文博會'], ['經銷商－島羽', '經銷商－島羽']]   // v3.24 島羽 Wing Islands（2026-08-29 確認寄售合作；經銷商不需酒譜表/毛利分頁，故僅此一行）
 };
 function orderTypeSelectHtml(selected) {
   const opts = ['<option value="">—選擇訂單類型—</option>'].concat(ORDER_TYPES.map(t => `<option${t === selected ? ' selected' : ''}>${t}</option>`)).join('');
