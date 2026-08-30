@@ -403,7 +403,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.24';
+const APP_VERSION='v3.25';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -1530,8 +1530,130 @@ function rdShowDetail(id) {
       ${isAdmin ? `<button class="btn btn-ghost btn-sm" style="color:#c0392b;" onclick="rdDelFromDetail('${rcEsc(r.id)}',this)">🗑 刪除</button>` : ''}
       <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">關閉</button>
       <button class="btn btn-ghost btn-sm" onclick="rdApplyFromRecord(_rdRecords.find(x=>String(x.id)==='${rcEsc(r.id)}'))">📤 送出申請</button>
+      <button class="btn btn-ghost btn-sm" onclick="rdPrint('${rcEsc(r.id)}')">🖨 列印紙本</button>
       <button class="btn btn-primary btn-sm" onclick="rdLoadFromDetail('${rcEsc(r.id)}',this)">✏️ 載入編輯</button>
     </div>`);
+}
+// ── v3.25 研發試算「一鍵列印紙本」（A4；潔淨室手寫用，回來再謄寫回系統）──
+// 比照 v3.11 Run Card 列印。⚠️ 與對客的試算詳情不同：本表是**內部配料用**，
+//    原料一律用 fullIngName（含品牌）——現場要拿對瓶子，品牌不可省。
+function rdPrintHtml(r, ings, rs) {
+  const e = rcEsc, line = '＿＿＿＿＿＿＿＿';
+  const tv = Number(r.volume) || 0;
+  const rows = ings.map((g, i) => {
+    const nm = fullIngName(g) || g.name || '';
+    if (g.type === 'compound') {
+      const subs = (g.subs || []).map(s => `<div class="sub">└ ${e(fullIngName(s) || s.name || '')}　${nt(s.volume)}ml</div>`).join('');
+      return `<tr>
+        <td class="c">${i + 1}</td>
+        <td><b>${e(nm)}</b> <span class="tag">複合${g.hasLoss ? '·÷0.8耗損' : ''}</span>${subs}</td>
+        <td class="c">${nt(g.ratio, 1)}%</td><td class="r">${nt(g.volume)} ml</td><td class="c">${nt(g.abv, 1)}%</td>
+        <td class="c big">☐</td><td class="wr"></td><td class="wr"></td></tr>`;
+    }
+    if (g.type === 'free') {
+      const u = g.unit === '自訂' ? (g.customUnit || '') : (g.unit || '');
+      return `<tr>
+        <td class="c">${i + 1}</td>
+        <td><b>${e(nm)}</b> <span class="tag">自由材料</span><div class="sub">進貨 NT$${nt(g.packPrice)} / ${e(g.packSize || 0)}${e(u)}</div></td>
+        <td class="c">${(+g.ratio > 0) ? nt(g.ratio, 1) + '%' : '—'}</td>
+        <td class="r">${nt(g.qty)} ${e(u)}</td><td class="c">${(+g.abv > 0) ? nt(g.abv, 1) + '%' : '—'}</td>
+        <td class="c big">☐</td><td class="wr"></td><td class="wr"></td></tr>`;
+    }
+    return `<tr>
+      <td class="c">${i + 1}</td>
+      <td><b>${e(nm)}</b>${g.hasLoss ? ' <span class="tag">÷0.8耗損</span>' : ''}</td>
+      <td class="c">${nt(g.ratio, 1)}%</td><td class="r">${nt(g.volume)} ml</td><td class="c">${nt(g.abv, 1)}%</td>
+      <td class="c big">☐</td><td class="wr"></td><td class="wr"></td></tr>`;
+  }).join('');
+
+  const resCell = (lb, v) => `<div><div class="lb">${lb}</div><div class="vl">${v}</div></div>`;
+  const now = rcNowMin(), by = (curUser && curUser.username) || '';
+
+  return `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><title>研發試算 ${e(r.name || '未命名')}</title>
+<style>
+  @page{size:A4;margin:11mm;}
+  *{box-sizing:border-box;}
+  body{font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;color:#111;font-size:11.5px;margin:0;line-height:1.45;}
+  h1{font-size:17px;margin:0 0 2px;} .sub-t{font-size:11px;color:#555;margin-bottom:8px;}
+  table{width:100%;border-collapse:collapse;margin:4px 0 10px;page-break-inside:auto;}
+  th,td{border:1px solid #333;padding:4px 5px;vertical-align:top;}
+  th{background:#eee;font-size:11px;white-space:nowrap;}
+  td.c{text-align:center;white-space:nowrap;} td.r{text-align:right;white-space:nowrap;}
+  td.big{font-size:15px;} td.wr{min-width:86px;}
+  .meta{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border:1px solid #333;margin-bottom:8px;}
+  .meta>div{border:1px solid #333;margin:-0.5px;padding:4px 6px;}
+  .meta .lb{font-size:9.5px;color:#555;} .meta .vl{font-size:12.5px;font-weight:700;min-height:16px;}
+  .sec{font-size:13px;font-weight:700;margin:8px 0 2px;border-left:4px solid #333;padding-left:6px;}
+  .sub{font-size:10px;color:#444;padding-left:10px;}
+  .tag{font-size:9px;border:1px solid #999;border-radius:3px;padding:0 3px;color:#555;}
+  .notebox{border:1px solid #333;min-height:52px;padding:4px 6px;margin:2px 0 8px;}
+  .foot{margin-top:10px;font-size:10px;color:#555;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+  .remind{font-weight:700;color:#111;}
+</style></head><body>
+  <h1>凱文南坡萬 研發試算紀錄　${e(r.name || '未命名')}</h1>
+  <div class="sub-t">客戶：${e(r.client || '—')}　｜　建立：${e(r.creator || '')} ${e(String(r.createdAt || '').substring(0, 10))}　｜　列印：${e(now)}　${e(by)}</div>
+
+  <div class="meta">
+    <div><div class="lb">試算名稱</div><div class="vl">${e(r.name || '')}</div></div>
+    <div><div class="lb">客戶</div><div class="vl">${e(r.client || '')}</div></div>
+    <div><div class="lb">總量</div><div class="vl">${tv} ml</div></div>
+    <div><div class="lb">瓶型</div><div class="vl">${e(r.bottle || '')}</div></div>
+    <div><div class="lb">實作日期</div><div class="vl">${line}</div></div>
+    <div><div class="lb">實作人員</div><div class="vl">${line}</div></div>
+    <div><div class="lb">實際批量</div><div class="vl">${line} ml</div></div>
+    <div><div class="lb">批號 / 標記</div><div class="vl">${line}</div></div>
+  </div>
+
+  <div class="sec">原料明細（理論值為系統試算；實際用量請現場手寫）</div>
+  <table>
+    <thead><tr>
+      <th style="width:26px;">#</th><th>原料（含品牌）</th><th style="width:52px;">占比</th>
+      <th style="width:70px;">理論用量</th><th style="width:48px;">ABV</th>
+      <th style="width:40px;">已投入</th><th style="width:86px;">實際用量</th><th style="width:86px;">備註</th>
+    </tr></thead>
+    <tbody>${rows || '<tr><td class="c">—</td><td colspan="7" style="color:#888;">（無原料明細）</td></tr>'}</tbody>
+  </table>
+
+  <div class="sec">系統試算結果（實作後如有調整，請記於下方）</div>
+  <div class="meta">
+    ${resCell('酒精濃度', (rs.abv != null ? nt(rs.abv, 1) + '%' : '—'))}
+    ${resCell('酒稅', (rs.tax != null ? 'NT$' + nt(rs.tax, 2) : '—'))}
+    ${resCell('食材成本', (rs.totalCost != null ? 'NT$' + nt(rs.totalCost, 2) : '—'))}
+    ${resCell('食材報價', (rs.quote != null ? 'NT$' + nt(rs.quote, 2) : '—'))}
+    ${resCell('資材成本', (rs.matCost != null ? 'NT$' + nt(rs.matCost, 2) : '—'))}
+    ${resCell('總成本', (rs.totalAll != null ? 'NT$' + nt(rs.totalAll, 2) : '—'))}
+    ${resCell('實測 ABV', line)}
+    ${resCell('實際總量', line + ' ml')}
+  </div>
+
+  <div class="sec">實作調整紀錄（與試算值不同之處）</div>
+  <div class="notebox"></div>
+
+  <div class="sec">風味評估　香氣 / 口感 / 尾韻</div>
+  <div class="notebox"></div>
+
+  <div class="sec">結論與下一步（是否定版、需再調整之處）</div>
+  <div class="notebox"></div>
+
+  <div class="foot">
+    <span class="remind">⚠️ 回到辦公室後，請將本紙本內容謄寫回 APP 研發試算頁（載入編輯 → 更新原記錄），紙本歸檔。</span>
+    <span>研發試算紀錄　${e(r.id || '')}</span>
+  </div>
+</body></html>`;
+}
+function rdPrint(id) {
+  const r = _rdRecords.find(x => String(x.id) === String(id));
+  if (!r) { toast('找不到這筆試算記錄'); return; }
+  let ings = r.ingredients || [];
+  if (typeof ings === 'string') { try { ings = JSON.parse(ings); } catch (e) { ings = []; } }
+  if (!Array.isArray(ings)) ings = [];
+  let rs = r.results || {};
+  if (typeof rs === 'string') { try { rs = JSON.parse(rs); } catch (e) { rs = {}; } }
+  const w = window.open('', '_blank');
+  if (!w) { toast('瀏覽器擋下彈出視窗，請允許本站彈出視窗後再試'); return; }
+  w.document.write(rdPrintHtml(r, ings, rs));
+  w.document.close();
+  toast('已開啟列印視窗');
 }
 function rdLoadFromDetail(id, btn) {
   const r = _rdRecords.find(x => String(x.id) === String(id)); if (!r) return;
