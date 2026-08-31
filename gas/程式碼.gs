@@ -144,7 +144,9 @@ var ROLE_MATRIX = {
   completeOrderItem: ['admin', '倉管'], confirmShipDate: ['admin', '倉管'], shipOrder: ['admin', '倉管'],
   stockIn: ['admin', '倉管'], stockOut: ['admin', '倉管'],
   bottleIn: ['admin', '倉管'], bottleOut: ['admin', '倉管'], addBottleItem: ['admin', '倉管'],
-  setSafetyLevel: ['admin', '倉管']
+  setSafetyLevel: ['admin', '倉管'],
+  // v3.26 實際出貨紀錄：登打出貨＝出貨作業(admin+倉管)；刪除紀錄是破壞性動作＝僅 admin
+  addShipment: ['admin', '倉管'], deleteShipment: ['admin']
 };
 function doGet(e) {
   const p = e.parameter || {};
@@ -259,6 +261,9 @@ function doGet(e) {
       case 'stockOut':               result = stockOut(p); break;                // 成品庫存
       case 'getStockLedger':         result = getStockLedger(p); break;          // 成品庫存
       case 'shipOrder':              result = shipOrder(p); break;               // 成品庫存(出貨連動 hook)
+      case 'addShipment':            result = addShipment(p); break;             // 實際出貨紀錄：新增一次出貨(v3.26)
+      case 'getShipments':           result = getShipments(p); break;            // 實際出貨紀錄：查某單全部批次＋寄倉餘量(v3.26)
+      case 'deleteShipment':         result = deleteShipment(p); break;          // 實際出貨紀錄：刪除某一次出貨(v3.26, admin 限定)
       case 'getBottleOverview':      result = getBottleOverview(); break;        // 玻璃瓶庫存
       case 'bottleIn':               result = bottleIn(p); break;                // 玻璃瓶庫存
       case 'bottleOut':              result = bottleOut(p); break;               // 玻璃瓶庫存
@@ -312,13 +317,14 @@ var AUDIT_ACTIONS = {
   createOrder:1, updateOrder:1, updateOrderFinance:1, updateOrderDelivery:1, deleteOrder:1,
   completeOrderItem:1, confirmShipDate:1, shipOrder:1,
   stockIn:1, stockOut:1, bottleIn:1, bottleOut:1, addBottleItem:1, setSafetyLevel:1,
+  addShipment:1, deleteShipment:1,
   saveRunCard:1, deleteRunCard:1, saveProcessNote:1,
   addBatchRecord:1, updateBatchRecord:1, deleteBatchRecord:1,
   submitApply:1, reviewApply:1, saveRdRecord:1, deleteRdRecord:1, submitRdApply:1, reviewRdApply:1,
   changePassword:1, migrateOrderNos:1, migrateOrderTypes:1, backfillOrderCreators:1,
   getRecipe:1, getRecipeForProduction:1 // 敏感讀取：誰、何時、開了哪張配方(外洩溯源)
 };
-var AUDIT_PARAM_KEYS = ['orderNo','client','sheet','product','item','qty','id','itemIndex','category','name','level','username','approve'];
+var AUDIT_PARAM_KEYS = ['orderNo','client','sheet','product','item','qty','id','itemIndex','category','name','level','username','approve','seq','date'];
 function _logAction_(action, p, result) {
   if (!AUDIT_ACTIONS[action]) return;
   try {
@@ -1110,6 +1116,16 @@ function getOrders(p) {
   const ws = ss.getSheetByName('訂單主表');
   if (!ws) return { ok: true, orders: [] };
   const data = ws.getDataRange().getValues();
+  // v3.26 實際出貨紀錄：一次讀「出貨紀錄」分頁彙總，逐單注入 it.shipped／it.remainStock（寄倉餘量）。
+  //   衍生值不落地 → 前端 items 白名單重組 payload 也洗不掉（避開 v3.11.2 autoStockedIn 那類 bug）。
+  //   刻意不呼叫 _shipSheet_()：讀取路徑不建立分頁，分頁不存在就視為零出貨。
+  let _shipAgg = {};
+  try {
+    const _sws = ss.getSheetByName(SHIP_SHEET_NAME);
+    if (_sws && _sws.getLastRow() > 1) {
+      _shipAgg = _shipAggAll_(_sws.getRange(2, 1, _sws.getLastRow() - 1, SHIP_HEADERS.length).getValues());
+    }
+  } catch (e) { _shipAgg = {}; }
   const orders = [];
   for (let i = 1; i < data.length; i++) {
     const r = data[i];
@@ -1135,12 +1151,31 @@ function getOrders(p) {
       orderCreator: String(r[31] == null ? '' : r[31]), // v3.2 建單人員（兩種 view 皆回，非金額）
       shipFeePayer: String(r[32] == null ? '' : r[32]) // v3.4 運費支付方
     };
+    // v3.26 注入出貨進度：單層 shipBatches/lastShipDate，每款 shipped(已出)/remainStock(寄倉餘量)
+    const _sa = _shipAgg[base.orderNo] || null;
+    base.shipBatches = _sa ? (_sa.batches || 0) : 0;
+    base.lastShipDate = _sa ? (_sa.lastDate || '') : '';
+    // 尚未出貨的單也要注入（shipped=0、remainStock=訂購量）＝寄倉欄位永遠有預設值
+    {
+      const _byKey = _sa ? (_sa.byKey || {}) : {};
+      const _used = {};
+      items.forEach(function (it) {
+        const k = _shipKeyOf_(it.product, it.bottleType);
+        // 同款同瓶型拆成多列時，已出量依序分攤，避免每列都顯示總量
+        const q = Math.floor(Number(it.qty)) || 0;
+        const sh = Math.min(Math.max(0, (_byKey[k] || 0) - (_used[k] || 0)), q);
+        _used[k] = (_used[k] || 0) + sh;
+        it.shipped = sh;
+        it.remainStock = Math.max(0, q - sh);
+      });
+    }
     if (view === 'bartender') {
       if (base.status === '已完成' || base.status === '已出貨') continue; // 不回完成/已出貨單
       base.items = items.map(function (it) {
         const o = {
           product: it.product, sheet: it.sheet, volume: it.volume,
-          bottleType: it.bottleType, qty: it.qty, status: it.status || '待製作'
+          bottleType: it.bottleType, qty: it.qty, status: it.status || '待製作',
+          shipped: it.shipped || 0, remainStock: (it.remainStock != null ? it.remainStock : (Math.floor(Number(it.qty)) || 0))
         };
         if (it.srcClient) o.srcClient = it.srcClient; // 公版酒配方來源（Run Card 預填要用，非金額欄）
         if (it.sample) o.sample = it.sample; // v3.4 試飲/SGS（製作端要看）
@@ -1294,8 +1329,21 @@ function deleteOrder(p) {
       if (String(data[i][0]) === String(orderNo)) {
         const client = String(data[i][1] || '');
         ws.deleteRow(i + 1);
-        _logOrderChange_(orderNo, p._user || '', '刪除訂單', client + '（整張刪除，不可復原）');
-        return { ok: true, orderNo: orderNo };
+        // v3.26：連同該單的出貨紀錄一起清掉。訂單編號會被回收（刪掉當日最後一張，
+        //   下一張就拿到同一個號），紀錄留著會沾到新訂單上。
+        var _shipDel = 0;
+        try {
+          var _sws = ss.getSheetByName(SHIP_SHEET_NAME);
+          if (_sws && _sws.getLastRow() > 1) {
+            var _sr = _sws.getRange(2, 1, _sws.getLastRow() - 1, SHIP_HEADERS.length).getValues();
+            for (var j = _sr.length - 1; j >= 0; j--) {
+              if (String(_sr[j][SHP.orderNo]) === String(orderNo)) { _sws.deleteRow(j + 2); _shipDel++; }
+            }
+          }
+        } catch (e) { /* 清紀錄失敗不阻斷刪單 */ }
+        _logOrderChange_(orderNo, p._user || '', '刪除訂單',
+          client + '（整張刪除，不可復原）' + (_shipDel ? ('｜同時清除出貨紀錄 ' + _shipDel + ' 列') : ''));
+        return { ok: true, orderNo: orderNo, shipRowsRemoved: _shipDel };
       }
     }
     return { ok: false, error: '找不到訂單：' + orderNo };
@@ -2461,6 +2509,247 @@ function shipOrder(p) {
   } finally { lock.releaseLock(); }
 }
 
+// ============================================================
+// v3.26 實際出貨紀錄（寄倉分批出貨）｜ledger 不可變流水帳
+//   分頁：出貨紀錄（於 MAIN_SHEET_ID）
+//   欄位 A出貨ID B訂單編號 C第幾次 D出貨日期 E客戶 F酒款 G瓶型 H出貨瓶數 I操作人 J建立時間 K備註
+//   一次出貨 = 同一個「第幾次(seq)」，該次出的每一款各一列。
+//   ⚠️ 本模組**只記錄、不動成品庫存**——代工訂單的貨本來就不入成品庫存帳；
+//      自有酒款的庫存扣除仍走既有「確認出貨（扣庫存）」shipOrder（未指示變更，兩者互不干擾）。
+//   寄倉餘量 = 訂單該款數量 − Σ已出貨（**衍生值、不落地**，永遠與 ledger 一致，
+//      故前端 items 白名單重組 payload 也洗不掉它——避開 v3.11.2 autoStockedIn 那類 bug）。
+// ============================================================
+const SHIP_SHEET_NAME = '出貨紀錄';
+const SHIP_HEADERS = ['出貨ID', '訂單編號', '第幾次', '出貨日期', '客戶', '酒款', '瓶型', '出貨瓶數', '操作人', '建立時間', '備註'];
+const SHP = { id: 0, orderNo: 1, seq: 2, date: 3, client: 4, product: 5, bottleType: 6, qty: 7, operator: 8, createdAt: 9, note: 10 };
+
+function _shipSheet_() {
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  let ws = ss.getSheetByName(SHIP_SHEET_NAME);
+  if (!ws) {
+    ws = ss.insertSheet(SHIP_SHEET_NAME);
+    ws.getRange(1, 1, 1, SHIP_HEADERS.length).setValues([SHIP_HEADERS]);
+    ws.setFrozenRows(1);
+  } else if (ws.getLastRow() === 0) {
+    ws.getRange(1, 1, 1, SHIP_HEADERS.length).setValues([SHIP_HEADERS]);
+    ws.setFrozenRows(1);
+  }
+  return ws;
+}
+function _shipRows_() {
+  const ws = _shipSheet_();
+  if (ws.getLastRow() < 2) return [];
+  return ws.getRange(2, 1, ws.getLastRow() - 1, SHIP_HEADERS.length).getValues();
+}
+// 款式鍵＝酒款+瓶型（同單同款不同瓶型視為兩個品項）。
+// 刻意**不用 itemIndex**：訂單被編輯（增刪、換順序）後索引會錯位，名稱鍵才對得上。
+function _shipKeyOf_(product, bottleType) {
+  return String(product == null ? '' : product).trim() + '|' + String(bottleType == null ? '' : bottleType).trim();
+}
+// 全部出貨紀錄依訂單彙總：{ orderNo: { byKey:{key:qty}, maxSeq:n, batches:n, lastDate:'' } }
+function _shipAggAll_(rows) {
+  const map = {};
+  (rows || []).forEach(function (r) {
+    const no = String(r[SHP.orderNo] || '');
+    if (!no) return;
+    if (!map[no]) map[no] = { byKey: {}, maxSeq: 0, seqs: {}, batches: 0, lastDate: '' };
+    const m = map[no];
+    const k = _shipKeyOf_(r[SHP.product], r[SHP.bottleType]);
+    m.byKey[k] = (m.byKey[k] || 0) + (Math.floor(Number(r[SHP.qty])) || 0);
+    const sq = Number(r[SHP.seq]) || 0;
+    if (sq > m.maxSeq) m.maxSeq = sq;
+    if (!m.seqs[sq]) { m.seqs[sq] = 1; m.batches++; }
+    const d = _fmtDate_(r[SHP.date]);
+    if (d && d > m.lastDate) m.lastDate = d;
+  });
+  return map;
+}
+// 訂單 items 的訂購量彙總（同款同瓶型合併）
+function _shipOrderedOf_(items) {
+  const ordered = {};
+  (items || []).forEach(function (it) {
+    const k = _shipKeyOf_(it.product, it.bottleType);
+    ordered[k] = (ordered[k] || 0) + (Math.floor(Number(it.qty)) || 0);
+  });
+  return ordered;
+}
+
+// ── 新增一次出貨（admin+倉管）：一次可出多款；擋超過寄倉餘量；seq 自動遞增 ──
+function addShipment(p) {
+  const orderNo = p && p.orderNo;
+  if (!orderNo) return { ok: false, error: '缺少 orderNo' };
+  const date = String((p && p.date) || '').trim();
+  if (!date) return { ok: false, error: '缺少出貨日期' };
+  let lines;
+  try { lines = typeof p.lines === 'string' ? JSON.parse(p.lines) : (p.lines || []); }
+  catch (e) { return { ok: false, error: '出貨明細 JSON 解析失敗' }; }
+  if (!lines || !lines.length) return { ok: false, error: '請至少填一款出貨數量' };
+
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ows = ss.getSheetByName('訂單主表');
+  if (!ows) return { ok: false, error: '找不到訂單主表分頁' };
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const data = ows.getDataRange().getValues();
+    let row = null, rowIdx = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(orderNo)) { row = data[i]; rowIdx = i; break; }
+    }
+    if (!row) return { ok: false, error: '找不到訂單：' + orderNo };
+    const client = String(row[1]);
+    let items = [];
+    try { items = row[4] ? JSON.parse(row[4]) : []; } catch (e) { return { ok: false, error: '訂單酒款明細 JSON 解析失敗' }; }
+    if (!items.length) return { ok: false, error: '訂單無酒款明細' };
+
+    const ordered = _shipOrderedOf_(items);
+    const agg = _shipAggAll_(_shipRows_())[String(orderNo)] || { byKey: {}, maxSeq: 0, batches: 0 };
+
+    const use = [], bad = [];
+    lines.forEach(function (ln) {
+      const q = Math.floor(Number(ln.qty)) || 0;
+      if (q <= 0) return;
+      const k = _shipKeyOf_(ln.product, ln.bottleType);
+      if (ordered[k] == null) { bad.push('「' + String(ln.product || '') + '」不在此訂單的酒款明細內'); return; }
+      const remain = (ordered[k] || 0) - (agg.byKey[k] || 0);
+      if (q > remain) bad.push('「' + String(ln.product || '') + '」本次 ' + q + ' 瓶，超過寄倉餘量 ' + remain + ' 瓶');
+      else use.push({ product: String(ln.product || ''), bottleType: String(ln.bottleType || ''), qty: q, key: k });
+    });
+    if (bad.length) return { ok: false, error: '出貨數量有誤，整批未寫入：' + bad.join('；'), problems: bad };
+    if (!use.length) return { ok: false, error: '本次出貨數量皆為 0，未寫入' };
+
+    const seq = (agg.maxSeq || 0) + 1;
+    const ws = _shipSheet_();
+    const now = _stockNow_();
+    const gid = _stockGenId_();
+    const note = String((p && p.note) || '');
+    const op = String((p && p.operator) || (p && p._user) || '');
+    const out = use.map(function (u, i) {
+      return [gid + '-' + (i + 1), String(orderNo), seq, date, client,
+        u.product, u.bottleType, u.qty, op, now, note];
+    });
+    ws.getRange(ws.getLastRow() + 1, 1, out.length, SHIP_HEADERS.length).setValues(out);
+
+    // 訂單主表：L 實際出貨日＝本次日期、M 已確認；全部出清才把 I 標「已出貨」
+    ows.getRange(rowIdx + 1, 12).setValue(date);
+    ows.getRange(rowIdx + 1, 13).setValue('TRUE');
+    let allShipped = true;
+    Object.keys(ordered).forEach(function (k) {
+      let shipped = agg.byKey[k] || 0;
+      use.forEach(function (u) { if (u.key === k) shipped += u.qty; });
+      if (shipped < ordered[k]) allShipped = false;
+    });
+    if (allShipped) ows.getRange(rowIdx + 1, 9).setValue('已出貨');
+    _logOrderChange_(orderNo, op, '第 ' + seq + ' 次出貨',
+      date + '：' + use.map(function (u) { return u.product + '×' + u.qty; }).join('、') +
+      (allShipped ? '（本單已全部出清）' : '（尚有寄倉未出）') + (note ? ('｜' + note) : ''));
+    return { ok: true, orderNo: orderNo, seq: seq, date: date, lines: use, allShipped: allShipped };
+  } finally { lock.releaseLock(); }
+}
+
+// ── 查某張訂單的出貨紀錄（依「第幾次」分組）＋目前寄倉餘量 ──
+function getShipments(p) {
+  const orderNo = String((p && p.orderNo) || '');
+  const rows = _shipRows_();
+  const groups = {}, out = [];
+  rows.forEach(function (r) {
+    if (orderNo && String(r[SHP.orderNo]) !== orderNo) return;
+    const gk = String(r[SHP.orderNo]) + '#' + String(r[SHP.seq]);
+    if (!groups[gk]) {
+      groups[gk] = {
+        orderNo: String(r[SHP.orderNo]), seq: Number(r[SHP.seq]) || 0,
+        date: _fmtDate_(r[SHP.date]), client: String(r[SHP.client] || ''),
+        operator: String(r[SHP.operator] || ''), createdAt: _fmtDateTime_(r[SHP.createdAt]),
+        note: String(r[SHP.note] || ''), lines: []
+      };
+      out.push(groups[gk]);
+    }
+    groups[gk].lines.push({
+      product: String(r[SHP.product] || ''), bottleType: String(r[SHP.bottleType] || ''),
+      qty: Math.floor(Number(r[SHP.qty])) || 0
+    });
+  });
+  out.sort(function (a, b) { return a.seq - b.seq; });
+
+  // 目前寄倉（＝訂購 − 已出）；找得到訂單才算得出來
+  const remain = [];
+  if (orderNo) {
+    try {
+      const ws = SpreadsheetApp.openById(MAIN_SHEET_ID).getSheetByName('訂單主表');
+      const data = ws.getDataRange().getValues();
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]) !== orderNo) continue;
+        let items = [];
+        try { items = data[i][4] ? JSON.parse(data[i][4]) : []; } catch (e) { items = []; }
+        const ordered = _shipOrderedOf_(items);
+        const agg = _shipAggAll_(rows)[orderNo] || { byKey: {} };
+        items.forEach(function (it) {
+          const k = _shipKeyOf_(it.product, it.bottleType);
+          if (remain.some(function (x) { return x.key === k; })) return;   // 同款同瓶型只列一次
+          remain.push({
+            key: k, product: String(it.product || ''), bottleType: String(it.bottleType || ''),
+            ordered: ordered[k] || 0, shipped: agg.byKey[k] || 0,
+            remain: Math.max(0, (ordered[k] || 0) - (agg.byKey[k] || 0))
+          });
+        });
+        break;
+      }
+    } catch (e) { /* 算不出寄倉不影響紀錄本身 */ }
+  }
+  return { ok: true, orderNo: orderNo, shipments: out, remain: remain };
+}
+
+// ── 刪除某一次出貨（admin 限定）：整批 seq 一起刪；刪完回推訂單狀態 ──
+function deleteShipment(p) {
+  const orderNo = String((p && p.orderNo) || '');
+  const seq = Math.floor(Number(p && p.seq)) || 0;
+  if (!orderNo) return { ok: false, error: '缺少 orderNo' };
+  if (!seq) return { ok: false, error: '缺少 seq（第幾次出貨）' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const ws = _shipSheet_();
+    if (ws.getLastRow() < 2) return { ok: false, error: '尚無出貨紀錄' };
+    const rows = ws.getRange(2, 1, ws.getLastRow() - 1, SHIP_HEADERS.length).getValues();
+    let removed = 0;
+    for (let i = rows.length - 1; i >= 0; i--) {   // 由下往上刪，列號才不會位移
+      if (String(rows[i][SHP.orderNo]) === orderNo && (Number(rows[i][SHP.seq]) || 0) === seq) {
+        ws.deleteRow(i + 2); removed++;
+      }
+    }
+    if (!removed) return { ok: false, error: '找不到 ' + orderNo + ' 的第 ' + seq + ' 次出貨' };
+
+    // 回推訂單主表：L/M 依剩下的紀錄重算；I 若已無「全部出清」則退回製作狀態
+    try {
+      const ows = SpreadsheetApp.openById(MAIN_SHEET_ID).getSheetByName('訂單主表');
+      const data = ows.getDataRange().getValues();
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]) !== orderNo) continue;
+        let items = [];
+        try { items = data[i][4] ? JSON.parse(data[i][4]) : []; } catch (e) { items = []; }
+        const ordered = _shipOrderedOf_(items);
+        const agg = _shipAggAll_(_shipRows_())[orderNo] || { byKey: {}, batches: 0, lastDate: '' };
+        let allShipped = Object.keys(ordered).length > 0;
+        Object.keys(ordered).forEach(function (k) {
+          if ((agg.byKey[k] || 0) < ordered[k]) allShipped = false;
+        });
+        if (agg.batches > 0) { ows.getRange(i + 1, 12).setValue(agg.lastDate || ''); ows.getRange(i + 1, 13).setValue('TRUE'); }
+        else { ows.getRange(i + 1, 12).setValue(''); ows.getRange(i + 1, 13).setValue(''); }
+        if (!allShipped && String(data[i][8] || '').trim() === '已出貨') {
+          const allDone = items.length > 0 && items.every(function (it) { return it.status === '完成'; });
+          ows.getRange(i + 1, 9).setValue(allDone ? '已完成' : '製作中');
+        }
+        break;
+      }
+    } catch (e) { /* 回推失敗不影響刪除本身 */ }
+
+    _logOrderChange_(orderNo, String((p && p.operator) || (p && p._user) || ''),
+      '刪除出貨紀錄', '刪除第 ' + seq + ' 次出貨（' + removed + ' 列）');
+    return { ok: true, orderNo: orderNo, seq: seq, removed: removed };
+  } finally { lock.releaseLock(); }
+}
+
 // ── 環境探針：確認此部署解析到的主表是正式還是沙盒（不回完整 id，只回尾碼）──
 function getEnvInfo() {
   var prod = '1rXmA0ACRwy4jo3XEkXHZzNjJw8uZzX1jzVle-6k0V40';
@@ -3016,7 +3305,8 @@ var ORDERS_CACHE_KEYS = ['orders_v1_full_std', 'orders_v1_full_PM',
 var ORDER_MUTATING_ACTIONS = {
   createOrder:1, updateOrder:1, updateOrderFinance:1, updateOrderDelivery:1, deleteOrder:1,
   completeOrderItem:1, confirmShipDate:1, shipOrder:1,
-  migrateOrderNos:1, migrateOrderTypes:1, backfillOrderCreators:1
+  migrateOrderNos:1, migrateOrderTypes:1, backfillOrderCreators:1,
+  addShipment:1, deleteShipment:1
 };
 // 其餘讀取快取的失效對應（action → 要清掉的 key）。
 // 新增寫入函式時只要在這裡登記一行，就不會出現「改了資料卻還看到舊值」。
