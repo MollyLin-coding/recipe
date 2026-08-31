@@ -403,7 +403,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.25';
+const APP_VERSION='v3.26';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2954,6 +2954,12 @@ function renderMonthOrders(orders) {
   const hd = q ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--gold-dk);font-weight:600;margin:4px 0 2px;"><span>🔍 「${rcEsc(_orderSearch.trim())}」搜尋結果 ${list.length} 張（跨全部月份）</span><button class="btn btn-ghost btn-sm" style="padding:2px 8px;font-size:11px;" onclick="clearOrderSearch()">✕ 清除搜尋</button></div>` : '';
   if (!list.length) { area.innerHTML = hd + `<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">${q ? `找不到符合「${rcEsc(_orderSearch.trim())}」的訂單` : (_orderScopeAll ? '尚無訂單' : `${ym.replace('-', ' 年 ')} 月尚無出貨訂單`)}</div>`; return; }
   const cardOf = (o) => {
+    const _ordTot = (o.items || []).reduce((a, it) => a + (+it.qty || 0), 0);
+    const _shpTot = (o.items || []).reduce((a, it) => a + (+it.shipped || 0), 0);
+    const _left = Math.max(0, _ordTot - _shpTot);
+    const shipLine = (o.shipBatches > 0)
+      ? `<div style="font-size:11px;margin-top:2px;font-weight:600;color:${_left > 0 ? 'var(--gold-dk)' : 'var(--green)'};">🚚 已出貨 ${o.shipBatches} 次・${_shpTot}/${_ordTot} 瓶${_left > 0 ? ('・寄倉 ' + _left + ' 瓶') : '・已全部出清'}${o.lastShipDate ? ('（最近 ' + o.lastShipDate + '）') : ''}</div>`
+      : '';
     const itemsTxt = (o.items || []).map(it => `${it.product}×${it.qty}` + (it.bottleType ? `(${it.bottleType})` : '') + (it.sample && it.sample.qty ? `〔🧪試飲${it.sample.bottleType || ''}×${it.sample.qty}〕` : '')).join('、');
     // v3.6 Run Card 鈕三態（主公指示）：無卡=虛線半透明「尚待PM建立」／進行中=黃底／已完成(狀態=完成或第11站done)=綠底
     const rcBtns = window._rcIdx ? (o.items || []).map((it, i) => {
@@ -2969,6 +2975,7 @@ function renderMonthOrders(orders) {
       <div style="flex:1;min-width:0;">
         <div style="font-weight:600;font-size:13px;">${clientLabel(o.client)} <span style="color:var(--ink3);font-weight:400;font-size:11px;">${o.orderNo}</span> <span style="font-weight:400;font-size:11px;${o.lot ? 'color:var(--gold-dk);' : 'color:var(--red);opacity:.7;'}">${o.lot ? ('Lot ' + o.lot) : '未填寫Lot數'}</span>${o.orderCreator ? ` <span style="font-weight:400;font-size:11px;color:var(--ink3);">建單:${o.orderCreator}</span>` : ''}</div>
         <div style="font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${itemsTxt || '—'}</div>
+        ${shipLine}
         ${(!_isNoFinanceType(o.orderType) && o.depositPaidDate !== undefined) ? `<div style="font-size:11px;margin-top:2px;"><span style="color:${o.depositPaidDate ? 'var(--green)' : 'var(--yellow)'};font-weight:600;">訂金${o.depositPaidDate ? ' ✓已收' : ' 未收'}</span><span style="margin:0 6px;color:var(--border);">|</span><span style="color:${o.finalPaidDate ? 'var(--green)' : 'var(--yellow)'};font-weight:600;">尾款${o.finalPaidDate ? ' ✓已收' : ' 未收'}</span></div>` : ''}
       </div>
       <div style="text-align:right;flex:0 0 auto;">
@@ -3039,7 +3046,7 @@ function showOrderDetail(orderNo) {
   const items = (o.items || []).map((it, i) =>
     `<div style="display:flex;gap:6px;align-items:center;padding:6px 8px;border:1px solid var(--border);border-radius:6px;margin-top:4px;font-size:12px;">
       <span style="color:var(--gold-dk);font-weight:700;">${i + 1}.</span>
-      <span style="flex:1;">${it.product || '（未綁酒譜）'} · ${it.volume || ''} × ${it.qty} 瓶${it.bottleType ? (' · ' + it.bottleType) : ''}${it.sample && it.sample.qty ? `<div style="font-size:11px;color:var(--gold-dk);">🧪 試飲：${it.sample.bottleType || '—'} × ${it.sample.qty}${it.sample.note ? ('（' + it.sample.note + '）') : ''}</div>` : ''}</span>
+      <span style="flex:1;">${it.product || '（未綁酒譜）'} · ${it.volume || ''} × ${it.qty} 瓶${it.bottleType ? (' · ' + it.bottleType) : ''}${it.sample && it.sample.qty ? `<div style="font-size:11px;color:var(--gold-dk);">🧪 試飲：${it.sample.bottleType || '—'} × ${it.sample.qty}${it.sample.note ? ('（' + it.sample.note + '）') : ''}</div>` : ''}${it.shipped != null ? `<div style="font-size:11px;font-weight:600;color:${(+it.remainStock || 0) > 0 ? 'var(--gold-dk)' : 'var(--green)'};">🚚 已出 ${+it.shipped || 0} / ${+it.qty || 0} 瓶${(+it.remainStock || 0) > 0 ? ('・寄倉 ' + (+it.remainStock || 0) + ' 瓶') : '・已出清'}</div>` : ''}</span>
       <span class="badge ${it.status === '完成' ? 'bg-green' : 'bg-yellow'}" style="font-size:9px;">${it.status || '待製作'}</span>
       <button class="btn btn-ghost btn-sm" style="padding:3px 7px;font-size:11px;" onclick="rcShowHistory(${idx},${i})">📋 Run Card</button>
       ${canAct && it.status !== '完成' && it.sheet ? `<button class="btn btn-success btn-sm" style="padding:3px 7px;font-size:11px;" onclick="this.closest('.modal-bg').remove();showCompleteModal(${idx},${i})">完成回報</button>` : ''}
@@ -3072,6 +3079,8 @@ function showOrderDetail(orderNo) {
     ${items}
     ${moneyHtml}
     ${dlvHtml}
+    <div style="margin:10px 0 2px;font-size:13px;font-weight:600;color:var(--gold-dk);">🚚 實際出貨紀錄（寄倉分批出貨）</div>
+    <div id="shipRecArea" style="font-size:11px;color:var(--ink3);">載入中…</div>
     <div style="margin:8px 0 2px;font-size:13px;font-weight:600;color:var(--gold-dk);">📜 修改歷史</div>
     <div id="orderHistArea" style="font-size:11px;color:var(--ink3);">載入中…</div>
     <div class="fe" style="margin-top:10px;gap:6px;flex-wrap:wrap;">
@@ -3080,10 +3089,12 @@ function showOrderDetail(orderNo) {
       ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();showDeliveryModal('${o.orderNo}')">🚚 編輯配送</button>` : ''}
       ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();showFinanceModal(${idx})">💰 金流</button>` : ''}
       ${canAct && !o.shipDateConfirmed ? `<button class="btn btn-sm" style="background:var(--gold-lt);color:var(--gold-dk);border:1px solid var(--gold-dk);" onclick="this.closest('.modal-bg').remove();showConfirmShipModal(${idx})">🚚 確認實際出貨日</button>` : ''}
+      ${canAct ? `<button class="btn btn-sm" style="background:var(--green);color:#fff;border:1px solid var(--green);" onclick="this.closest('.modal-bg').remove();showShipModal(${idx})">🚚 登記實際出貨</button>` : ''}
       ${canAct ? `<button class="btn btn-danger btn-sm" onclick="this.closest('.modal-bg').remove();confirmShip(${idx})">確認出貨（扣庫存）</button>` : ''}
       <button class="btn btn-primary btn-sm" onclick="this.closest('.modal-bg').remove()">關閉</button>
     </div>`);
   loadOrderHistory(o.orderNo);
+  loadShipments(o.orderNo);
 }
 // ✏️ 編輯整張訂單（admin）：帶入既有資料的建單 modal，儲存走 updateOrder
 function editOrder(oi) {
@@ -3116,6 +3127,119 @@ async function loadOrderHistory(orderNo) {
     </div>`).join('');
 }
 
+// ── v3.26 實際出貨紀錄（寄倉分批出貨）─────────────────────────────
+// 資料源＝後端「出貨紀錄」分頁：一次出貨＝一個 seq，該次出的每一款各一列。
+// 寄倉餘量＝訂購 − 已出，全由後端衍生（前端不落地、不回寫），故訂單被編輯也不會失真。
+// ⚠️ 本功能只做「紀錄」，不動成品庫存；自有酒款的扣庫仍走既有「確認出貨（扣庫存）」。
+function _shipToday() {
+  const d = new Date(), p = n => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
+}
+async function loadShipments(orderNo) {
+  const area = document.getElementById("shipRecArea"); if (!area) return;
+  const res = await api({ action: "getShipments", orderNo }, true);
+  if (!res || !res.ok) { area.innerHTML = `<span style="color:var(--red);">（出貨紀錄載入失敗，請關閉重開）</span>`; return; }
+  const isAdmin = curUser && curUser.role === "admin";
+  const list = res.shipments || [];
+  const remain = (res.remain || []).filter(x => x.remain > 0);
+  const hist = !list.length
+    ? `<div style="color:var(--ink3);">（尚無出貨紀錄）</div>`
+    : list.map(sp => `<div style="padding:5px 6px;border-bottom:1px dashed var(--border);">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <b style="color:var(--gold-dk);font-size:12px;">第 ${sp.seq} 次出貨</b>
+          <span style="font-weight:600;">${sp.date || "—"}</span>
+          <span style="color:var(--ink3);">${sp.operator || "—"}</span>
+          ${isAdmin ? `<button class="btn btn-ghost btn-sm" style="padding:1px 6px;font-size:10px;color:#c0392b;border:1px solid #e74c3c;" onclick="delShipment('${sp.orderNo}',${sp.seq})">🗑 刪除此次</button>` : ""}
+        </div>
+        <div style="margin-top:2px;color:var(--ink2);">${sp.lines.map(l => `${rcEsc(l.product)}${l.bottleType ? ("(" + rcEsc(l.bottleType) + ")") : ""} × <b>${l.qty}</b>`).join("、")}</div>
+        ${sp.note ? `<div style="color:var(--ink3);">備註：${rcEsc(sp.note)}</div>` : ""}
+      </div>`).join("");
+  const remainHtml = remain.length
+    ? `<div style="margin-top:6px;padding:6px 8px;background:var(--gold-lt);border:1px solid var(--gold-dk);border-radius:6px;font-size:12px;">
+        <b style="color:var(--gold-dk);">📦 目前寄倉</b>：${remain.map(x => `${rcEsc(x.product)}${x.bottleType ? ("(" + rcEsc(x.bottleType) + ")") : ""} <b>${x.remain}</b> 瓶`).join("、")}
+       </div>`
+    : (list.length ? `<div style="margin-top:6px;color:var(--green);font-weight:600;font-size:12px;">✔ 已全部出清，無寄倉餘量</div>` : "");
+  area.innerHTML = hist + remainHtml;
+}
+// 🗑 刪除某一次出貨（admin）：數量退回寄倉餘量
+async function delShipment(orderNo, seq) {
+  if (!confirm("刪除 " + orderNo + " 的第 " + seq + " 次出貨紀錄？\n該批數量會退回寄倉餘量，不可復原。")) return;
+  const res = await api({ action: "deleteShipment", orderNo, seq, operator: (curUser && curUser.username) || "" });
+  if (res.ok) { toast("已刪除第 " + seq + " 次出貨"); loadShipments(orderNo); loadOrderMgmt(); }
+  else toast("刪除失敗：" + (res.error || ""));
+}
+// ➕ 登記一次出貨（admin+倉管）：每款預設帶入「目前寄倉餘量」＝按下去就是全出，也可改成只出一部分
+function showShipModal(oi) {
+  const o = (window._mgmtOrders || [])[oi]; if (!o) return;
+  const rows = (o.items || []).map(it => {
+    const q = Math.floor(+it.qty) || 0, sh = Math.floor(+it.shipped) || 0;
+    return { product: it.product || "", bottleType: it.bottleType || "", qty: q, shipped: sh, remain: Math.max(0, q - sh) };
+  }).filter(r => r.remain > 0);
+  if (!rows.length) { toast("本單已全部出清，無寄倉餘量"); return; }
+  const seq = (o.shipBatches || 0) + 1;
+  const body = rows.map(r => `
+    <div style="display:flex;gap:6px;align-items:center;padding:6px;border:1px solid var(--border);border-radius:6px;margin-top:5px;font-size:12px;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:600;">${rcEsc(r.product)}${r.bottleType ? ` <span style="color:var(--ink3);font-weight:400;">${rcEsc(r.bottleType)}</span>` : ""}</div>
+        <div style="font-size:11px;color:var(--ink3);">訂購 ${r.qty}・已出 ${r.shipped}・<b style="color:var(--gold-dk);">寄倉 ${r.remain}</b></div>
+      </div>
+      <div style="flex:0 0 88px;">
+        <div style="font-size:10px;color:var(--ink3);">本次出貨</div>
+        <input class="inp sp-q" type="number" min="0" max="${r.remain}" step="1" value="${r.remain}" oninput="spCalc()"
+               data-p="${rcEsc(r.product)}" data-b="${rcEsc(r.bottleType)}" data-r="${r.remain}" style="margin:0;padding:4px 6px;font-size:13px;">
+      </div>
+      <div style="flex:0 0 76px;text-align:right;">
+        <div style="font-size:10px;color:var(--ink3);">出貨後寄倉</div>
+        <b class="sp-left" style="font-size:13px;color:var(--gold-dk);">0</b>
+      </div>
+    </div>`).join("");
+  const modal = makeModal(`
+    <div class="modal-title">🚚 登記第 ${seq} 次出貨</div>
+    <div style="font-size:12px;color:var(--ink3);margin-bottom:8px;">${o.orderNo} · ${clientLabel(o.client)}｜表訂出貨日 ${o.deliveryDate || "—"}</div>
+    <div class="fg" style="margin-bottom:6px;"><label>出貨日期</label><input class="inp" type="date" id="sp_date" value="${_shipToday()}" style="margin:0;"></div>
+    <div style="font-size:12px;font-weight:600;color:var(--gold-dk);margin-top:6px;">出貨款式與數量<span style="font-weight:400;color:var(--ink3);">（預設＝目前寄倉量；只出一部分就把數字改小）</span></div>
+    ${body}
+    <div id="sp_warn" style="display:none;margin-top:6px;padding:6px 8px;border:1px solid #e74c3c;border-radius:6px;color:#c0392b;font-size:12px;font-weight:600;"></div>
+    <div class="fg" style="margin-top:8px;"><label>備註（選填：寄倉／客戶自取／貨運單號…）</label><input class="inp" id="sp_note" style="margin:0;"></div>
+    <div class="fe" style="margin-top:10px;gap:6px;">
+      <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button>
+      <button class="btn btn-primary btn-sm" id="sp_sub">💾 儲存出貨紀錄</button>
+    </div>`, { locked: true });
+  spCalc();
+  const b = modal.querySelector("#sp_sub");
+  b.onclick = () => lockRun(b, async () => {
+    const date = document.getElementById("sp_date").value;
+    if (!date) { toast("請選出貨日期"); return; }
+    const lines = []; let over = false;
+    modal.querySelectorAll(".sp-q").forEach(el => {
+      const q = Math.floor(+el.value) || 0, r = +el.dataset.r || 0;
+      if (q > r) over = true;
+      if (q > 0) lines.push({ product: el.dataset.p, bottleType: el.dataset.b, qty: q });
+    });
+    if (over) { toast("出貨數量不可超過寄倉餘量"); return; }
+    if (!lines.length) { toast("請至少填一款出貨數量"); return; }
+    const res = await api({ action: "addShipment", orderNo: o.orderNo, date, lines: JSON.stringify(lines),
+      note: document.getElementById("sp_note").value || "", operator: (curUser && curUser.username) || "" });
+    if (res.ok) {
+      toast("已登記第 " + res.seq + " 次出貨" + (res.allShipped ? "（本單全部出清）" : ""));
+      modal.remove(); loadOrderMgmt(); showShipDateAlerts();
+    } else toast("登記失敗：" + (res.error || ""));
+  });
+}
+// 即時計算「出貨後寄倉」＋超量紅字警示
+function spCalc() {
+  const qs = document.querySelectorAll(".sp-q"), ls = document.querySelectorAll(".sp-left");
+  const warn = document.getElementById("sp_warn"); const bad = [];
+  qs.forEach((el, i) => {
+    const r = +el.dataset.r || 0, q = Math.floor(+el.value) || 0;
+    if (ls[i]) ls[i].textContent = String(Math.max(0, r - q));
+    if (q > r) bad.push(el.dataset.p + " 最多 " + r + " 瓶");
+  });
+  if (warn) {
+    if (bad.length) { warn.style.display = "block"; warn.textContent = "⚠ 出貨數量超過寄倉餘量：" + bad.join("、"); }
+    else warn.style.display = "none";
+  }
+}
 // 💰 金流編輯（admin）：整組覆寫 N~V 欄
 function showFinanceModal(oi) {
   const o = window._mgmtOrders[oi]; if (!o) return;
