@@ -459,6 +459,13 @@ function _logLogin_(username, role, result) {
       String(username || ''), String(role || ''), String(result || '')]);
   } catch (e) { /* 紀錄失敗不阻斷登入 */ }
 }
+// v3.28 使用者資料「綁定經銷商」欄位定位：表頭列有「綁定經銷商」就用它，否則預設第 6 欄(F)。
+//   ⚠️ 不可用 D 欄：正式表 D=已換密碼(TRUE/FALSE)、E=建立時間，是人工維護欄位。
+function _userDealerCol_(headerRow) {
+  const h = headerRow || [];
+  for (let i = 0; i < h.length; i++) if (String(h[i] == null ? '' : h[i]).trim() === '綁定經銷商') return i;
+  return 5;
+}
 function login(p) {
   const username = p.username, password = p.password;
   if (!username || !password) return { ok: false, error: '請提供帳號密碼' };
@@ -466,9 +473,11 @@ function login(p) {
   let ws = ss.getSheetByName('使用者資料') || ss.getSheetByName('帳號');
   if (!ws) return { ok: false, error: '找不到帳號分頁' };
   const rows = ws.getDataRange().getValues();
+  const dealerCol = _userDealerCol_(rows[0]);   // v3.28 綁定經銷商欄：認表頭「綁定經銷商」，找不到退回 F 欄（正式表 D=已換密碼、E=建立時間 已被佔用）
   let matchedAcc = null; // 帳號存在但密碼錯 → 記「密碼錯誤」
   for (let i = 1; i < rows.length; i++) {
-    const [acc, pwd, role, dealerKey] = rows[i];   // v3.28 D欄=綁定經銷商（僅 經銷商 角色使用）
+    const [acc, pwd, role] = rows[i];
+    const dealerKey = rows[i][dealerCol];
     // 容錯：欄位前後空白一律忽略；純數字密碼容忍 Sheet 吃掉開頭 0（存 50916、輸入 050916 也過）
     const accOk = String(acc == null ? '' : acc).trim() === String(username).trim();
     if (!accOk) continue;
@@ -503,7 +512,15 @@ function __seedTestUsers() {
    ['wtest', '444444', '倉管'], ['utest', '555555', 'user'], ['ftest', '666666', '財務'],
    ['pmtest', '777777', 'PM'],
    ['dtest_sun', '888888', '經銷商', '經銷商－日光貳參'], ['dtest_wing', '888889', '經銷商', '經銷商－島羽']].forEach(function (u) {   // v3.28 沙盒經銷商帳號
-    if (!have[u[0]]) { ws.appendRow(u); added.push(u[0]); }
+    const dc = _userDealerCol_(rows[0]);
+    if (!have[u[0]]) {
+      const row = [u[0], u[1], u[2]];
+      if (u[3]) { while (row.length < dc) row.push(''); row.push(u[3]); }
+      ws.appendRow(row); added.push(u[0]);
+    } else if (u[3]) {
+      // 已存在的沙盒經銷商帳號：把綁定鍵補到正確欄（v3.28 由 D 欄改為認表頭/F 欄）
+      for (let i = 1; i < rows.length; i++) if (String(rows[i][0]).trim() === u[0]) { ws.getRange(i + 1, dc + 1).setValue(u[3]); if (dc !== 3) ws.getRange(i + 1, 4).setValue(''); }
+    }
   });
   return { ok: true, added: added };
 }
