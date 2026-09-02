@@ -146,7 +146,12 @@ var ROLE_MATRIX = {
   bottleIn: ['admin', '倉管'], bottleOut: ['admin', '倉管'], addBottleItem: ['admin', '倉管'],
   setSafetyLevel: ['admin', '倉管'],
   // v3.26 實際出貨紀錄：登打出貨＝出貨作業(admin+倉管)；刪除紀錄是破壞性動作＝僅 admin
-  addShipment: ['admin', '倉管'], deleteShipment: ['admin']
+  addShipment: ['admin', '倉管'], deleteShipment: ['admin'],
+  // v3.28 經銷商寄售：經銷商本人＋admin 可登記售出/異動；對帳單產生/結清/設定/種子 僅 admin；總覽 admin+財務
+  consignMe: ['admin', '財務', '經銷商'], consignSale: ['admin', '經銷商'], consignAdjust: ['admin', '經銷商'],
+  consignLedger: ['admin', '財務', '經銷商'], consignStatements: ['admin', '財務', '經銷商'],
+  consignDealers: ['admin', '財務', 'PM'], consignPrices: ['admin', '財務'], consignOverview: ['admin', '財務'], consignAlerts: ['admin', '財務'],
+  consignSaveDealer: ['admin'], consignStatementCreate: ['admin'], consignStatementSettle: ['admin'], consignSeed: ['admin'], consignStatementDelete: ['admin']
 };
 function doGet(e) {
   const p = e.parameter || {};
@@ -160,7 +165,19 @@ function doGet(e) {
         return ContentService.createTextOutput(JSON.stringify({ ok: false, error: 'SESSION_EXPIRED' }))
           .setMimeType(ContentService.MimeType.JSON);
       }
-      p._user = sess.username; p._role = sess.role;
+      p._user = sess.username; p._role = sess.role; p._dealer = sess.dealer || '';
+      // v3.28 經銷商角色：只准白名單 action，且一律用 session 綁定的經銷商鍵覆寫 p.dealer（絕不信前端參數）
+      if (sess.role === CONSIGN_ROLE) {
+        if (CONSIGN_DEALER_ACTIONS.indexOf(action) < 0) {
+          return ContentService.createTextOutput(JSON.stringify({ ok: false, error: '權限不足' }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+        if (!sess.dealer) {
+          return ContentService.createTextOutput(JSON.stringify({ ok: false, error: '此帳號尚未綁定經銷商，請聯絡南坡萬' }))
+            .setMimeType(ContentService.MimeType.JSON);
+        }
+        p.dealer = sess.dealer;
+      }
       if (sess.role === 'FB觀看' && FBVIEW_ALLOWED_ACTIONS.indexOf(action) < 0) {
         return ContentService.createTextOutput(JSON.stringify({ ok: false, error: '權限不足' }))
           .setMimeType(ContentService.MimeType.JSON);
@@ -238,7 +255,8 @@ function doGet(e) {
       case 'checkUser':      result = checkUser(p); break;               // 帳號診斷(遮罩、不回密碼)
       case '__seedTestUsers': result = __seedTestUsers(); break;         // 沙盒限定：種驗收用測試帳號(PROD 直接拒絕)
       case '__readLoginLog':  result = __readLoginLog(); break;          // 沙盒限定：讀登入紀錄供自動驗收(PROD 直接拒絕)
-      case '__readAuditLog':  result = __readAuditLog(); break;          // 沙盒限定：讀操作紀錄供自動驗收(PROD 直接拒絕, v3.8)
+      case '__readAuditLog':  result = __readAuditLog(); break;
+      case '__consignReset':  result = __consignReset(p); break;         // 沙盒限定：清空寄售流水帳/對帳單供重複驗收(PROD 直接拒絕, v3.28)          // 沙盒限定：讀操作紀錄供自動驗收(PROD 直接拒絕, v3.8)
       case 'bootstrap':      result = bootstrap(p); break;                    // v3.14.4 開機一次打包(取代 6~8 個請求)
       case 'getRecipeList':  result = getRecipeList(p); break;
       case 'getRecipe':      result = getRecipe(p); break;
@@ -263,6 +281,20 @@ function doGet(e) {
       case 'shipOrder':              result = shipOrder(p); break;               // 成品庫存(出貨連動 hook)
       case 'addShipment':            result = addShipment(p); break;             // 實際出貨紀錄：新增一次出貨(v3.26)
       case 'getShipments':           result = getShipments(p); break;            // 實際出貨紀錄：查某單全部批次＋寄倉餘量(v3.26)
+      case 'consignMe':              result = consignMe(p); break;              // v3.28 寄售：經銷商端整頁資料
+      case 'consignSale':            result = consignSale(p); break;            // v3.28 寄售：登記售出（單價凍結）
+      case 'consignAdjust':          result = consignAdjust(p); break;          // v3.28 寄售：退貨/損耗/盤點修正
+      case 'consignLedger':          result = consignLedger(p); break;          // v3.28 寄售：流水帳
+      case 'consignStatements':      result = consignStatements(p); break;      // v3.28 寄售：對帳單清單
+      case 'consignDealers':         result = consignDealers(p); break;         // v3.28 寄售：經銷商設定清單
+      case 'consignSaveDealer':      result = consignSaveDealer(p); break;      // v3.28 寄售：新增/修改經銷商（折扣/結帳日）
+      case 'consignPrices':          result = consignPrices(p); break;          // v3.28 寄售：牌價表
+      case 'consignOverview':        result = consignOverview(p); break;        // v3.28 寄售：南坡萬端期別總覽
+      case 'consignStatementCreate': result = consignStatementCreate(p); break; // v3.28 寄售：產生/重算對帳單
+      case 'consignStatementSettle': result = consignStatementSettle(p); break; // v3.28 寄售：結清＋建認列單
+      case 'consignAlerts':          result = consignAlerts(p); break;          // v3.28 寄售：結帳日到期提醒
+      case 'consignSeed':            result = consignSeed(p); break;            // v3.28 寄售：一次性啟用種子(冪等)
+      case 'consignStatementDelete': result = consignStatementDelete(p); break; // v3.28 寄售：撤銷尚未建認列單的對帳單(admin)
       case 'deleteShipment':         result = deleteShipment(p); break;          // 實際出貨紀錄：刪除某一次出貨(v3.26, admin 限定)
       case 'getBottleOverview':      result = getBottleOverview(); break;        // 玻璃瓶庫存
       case 'bottleIn':               result = bottleIn(p); break;                // 玻璃瓶庫存
@@ -318,13 +350,14 @@ var AUDIT_ACTIONS = {
   completeOrderItem:1, confirmShipDate:1, shipOrder:1,
   stockIn:1, stockOut:1, bottleIn:1, bottleOut:1, addBottleItem:1, setSafetyLevel:1,
   addShipment:1, deleteShipment:1,
+  consignSale:1, consignAdjust:1, consignSaveDealer:1, consignStatementCreate:1, consignStatementSettle:1, consignSeed:1, consignStatementDelete:1,
   saveRunCard:1, deleteRunCard:1, saveProcessNote:1,
   addBatchRecord:1, updateBatchRecord:1, deleteBatchRecord:1,
   submitApply:1, reviewApply:1, saveRdRecord:1, deleteRdRecord:1, submitRdApply:1, reviewRdApply:1,
   changePassword:1, migrateOrderNos:1, migrateOrderTypes:1, backfillOrderCreators:1,
   getRecipe:1, getRecipeForProduction:1 // 敏感讀取：誰、何時、開了哪張配方(外洩溯源)
 };
-var AUDIT_PARAM_KEYS = ['orderNo','client','sheet','product','item','qty','id','itemIndex','category','name','level','username','approve','seq','date'];
+var AUDIT_PARAM_KEYS = ['orderNo','client','sheet','product','item','qty','id','itemIndex','category','name','level','username','approve','seq','date','dealer','period','type','paidDate'];
 function _logAction_(action, p, result) {
   if (!AUDIT_ACTIONS[action]) return;
   try {
@@ -373,7 +406,7 @@ function _sessKey_(token) { return 'sess_' + token; }
 //   → 每次都誤判為成功而跳過 Properties → 下一個請求仍 SESSION_EXPIRED。
 //   正解：**無條件雙寫**（Properties 才是可靠的那份；cache 只當加速）。多一次 Properties 寫入很便宜。
 function _sessPut_(token, obj) {
-  var payload = JSON.stringify({ u: obj.username, r: obj.role, exp: (new Date()).getTime() + SESSION_TTL_SEC * 1000 });
+  var payload = JSON.stringify({ u: obj.username, r: obj.role, d: obj.dealer || '', exp: (new Date()).getTime() + SESSION_TTL_SEC * 1000 }); // v3.28 d=經銷商綁定鍵
   var where = [];
   try { CacheService.getScriptCache().put(_sessKey_(token), payload, SESSION_TTL_SEC); where.push('cache'); } catch (e) {}
   try { PropertiesService.getScriptProperties().setProperty(_sessKey_(token), payload); where.push('props'); } catch (e) {}
@@ -396,7 +429,7 @@ function _getSession_(token) {
   var u = (o.u != null) ? o.u : o.username;
   var r = (o.r != null) ? o.r : o.role;
   if (!u) return null;
-  return { username: u, role: r };
+  return { username: u, role: r, dealer: (o.d != null ? String(o.d) : '') };
 }
 // 清掉 Properties 裡已過期的 session（login 時呼叫；Properties 總量上限 500KB，不清會累積）
 function _sessSweep_() {
@@ -426,6 +459,13 @@ function _logLogin_(username, role, result) {
       String(username || ''), String(role || ''), String(result || '')]);
   } catch (e) { /* 紀錄失敗不阻斷登入 */ }
 }
+// v3.28 使用者資料「綁定經銷商」欄位定位：表頭列有「綁定經銷商」就用它，否則預設第 6 欄(F)。
+//   ⚠️ 不可用 D 欄：正式表 D=已換密碼(TRUE/FALSE)、E=建立時間，是人工維護欄位。
+function _userDealerCol_(headerRow) {
+  const h = headerRow || [];
+  for (let i = 0; i < h.length; i++) if (String(h[i] == null ? '' : h[i]).trim() === '綁定經銷商') return i;
+  return 5;
+}
 function login(p) {
   const username = p.username, password = p.password;
   if (!username || !password) return { ok: false, error: '請提供帳號密碼' };
@@ -433,9 +473,11 @@ function login(p) {
   let ws = ss.getSheetByName('使用者資料') || ss.getSheetByName('帳號');
   if (!ws) return { ok: false, error: '找不到帳號分頁' };
   const rows = ws.getDataRange().getValues();
+  const dealerCol = _userDealerCol_(rows[0]);   // v3.28 綁定經銷商欄：認表頭「綁定經銷商」，找不到退回 F 欄（正式表 D=已換密碼、E=建立時間 已被佔用）
   let matchedAcc = null; // 帳號存在但密碼錯 → 記「密碼錯誤」
   for (let i = 1; i < rows.length; i++) {
     const [acc, pwd, role] = rows[i];
+    const dealerKey = rows[i][dealerCol];
     // 容錯：欄位前後空白一律忽略；純數字密碼容忍 Sheet 吃掉開頭 0（存 50916、輸入 050916 也過）
     const accOk = String(acc == null ? '' : acc).trim() === String(username).trim();
     if (!accOk) continue;
@@ -446,10 +488,10 @@ function login(p) {
     if (pwOk) {
       const finalRole = role || 'user';
       const token = Utilities.getUuid();
-      _sessPut_(token, { username: String(username).trim(), role: finalRole });
+      _sessPut_(token, { username: String(username).trim(), role: finalRole, dealer: String(dealerKey == null ? '' : dealerKey).trim() });
       _sessSweep_();   // 順手清掉過期的 Properties session
       _logLogin_(username, finalRole, '成功');
-      return { ok: true, role: finalRole, token: token };
+      return { ok: true, role: finalRole, token: token, dealer: String(dealerKey == null ? '' : dealerKey).trim() };
     }
   }
   _logLogin_(username, matchedAcc ? matchedAcc.role : '', matchedAcc ? '密碼錯誤' : '帳號不存在');
@@ -468,8 +510,17 @@ function __seedTestUsers() {
   const added = [];
   [['上海Jason', '111111', 'FB觀看'], ['testadmin', '999999', 'admin'],
    ['wtest', '444444', '倉管'], ['utest', '555555', 'user'], ['ftest', '666666', '財務'],
-   ['pmtest', '777777', 'PM']].forEach(function (u) {
-    if (!have[u[0]]) { ws.appendRow(u); added.push(u[0]); }
+   ['pmtest', '777777', 'PM'],
+   ['dtest_sun', '888888', '經銷商', '經銷商－日光貳參'], ['dtest_wing', '888889', '經銷商', '經銷商－島羽']].forEach(function (u) {   // v3.28 沙盒經銷商帳號
+    const dc = _userDealerCol_(rows[0]);
+    if (!have[u[0]]) {
+      const row = [u[0], u[1], u[2]];
+      if (u[3]) { while (row.length < dc) row.push(''); row.push(u[3]); }
+      ws.appendRow(row); added.push(u[0]);
+    } else if (u[3]) {
+      // 已存在的沙盒經銷商帳號：把綁定鍵補到正確欄（v3.28 由 D 欄改為認表頭/F 欄）
+      for (let i = 1; i < rows.length; i++) if (String(rows[i][0]).trim() === u[0]) { ws.getRange(i + 1, dc + 1).setValue(u[3]); if (dc !== 3) ws.getRange(i + 1, 4).setValue(''); }
+    }
   });
   return { ok: true, added: added };
 }
@@ -2696,13 +2747,18 @@ function addShipment(p) {
       sws.getRange(sws.getLastRow() + 1, 1, stkOut.length, STOCK_HEADERS.length).setValues(stkOut);
       _deduct.forEach(function (d) { d.after = d.before - d.qty; });
     }
+    // v3.28 出貨給啟用中的經銷商 → 自動寫「經銷商庫存異動」進貨列（第三本帳的進貨不手打）；失敗不阻斷出貨
+    var _consignIn = null, _consignErr = '';
+    try { _consignIn = _consignOnShipment_(client, orderNo, seq, date, use, items, op); } catch (e) { _consignErr = String((e && e.message) || e); }
     _logOrderChange_(orderNo, op, '第 ' + seq + ' 次出貨',
       date + '：' + use.map(function (u) { return u.product + '×' + u.qty; }).join('、') +
+      (_consignIn ? ('｜經銷商門市在庫 +' + use.reduce(function (a, u) { return a + u.qty; }, 0) + ' 瓶') : '') +
+      (_consignErr ? ('｜⚠ 門市在庫寫入失敗：' + _consignErr) : '') +
       (allShipped ? '（本單已全部出清）' : '（尚有寄倉未出）') +
       (_deduct.length ? ('｜扣成品庫存 ' + _deduct.map(function (d) { return d.product + '−' + d.qty; }).join('、')) : '') +
       (note ? ('｜' + note) : ''));
     return { ok: true, orderNo: orderNo, seq: seq, date: date, lines: use, allShipped: allShipped,
-      stockDeducted: _deduct };
+      stockDeducted: _deduct, consignIn: _consignIn, consignError: _consignErr };
   } finally { lock.releaseLock(); }
 }
 
@@ -2782,8 +2838,10 @@ function deleteShipment(p) {
     const rows = ws.getRange(2, 1, ws.getLastRow() - 1, SHIP_HEADERS.length).getValues();
     let removed = 0;
     const delLines = [];   // v3.27 記下被刪的款式與數量，供成品庫存回沖
+    let _delClient = '';   // v3.28 該批客戶（經銷商門市在庫沖回用）
     for (let i = rows.length - 1; i >= 0; i--) {   // 由下往上刪，列號才不會位移
       if (String(rows[i][SHP.orderNo]) === orderNo && (Number(rows[i][SHP.seq]) || 0) === seq) {
+        if (!_delClient) _delClient = String(rows[i][SHP.client] || '');   // v3.28 門市在庫沖回要用
         delLines.push({ product: String(rows[i][SHP.product] || ''), qty: Math.floor(Number(rows[i][SHP.qty])) || 0 });
         ws.deleteRow(i + 2); removed++;
       }
@@ -2814,6 +2872,10 @@ function deleteShipment(p) {
     } catch (e) { /* 回沖失敗不阻斷刪除，但會少一筆帳 → 由操作紀錄可查 */ }
 
 
+    // v3.28 經銷商門市在庫沖回：當初自動寫的「進貨」列以「進貨取消」負數沖回（流水帳不刪列）
+    let _consignBack = null;
+    try { _consignBack = _consignOnShipmentDelete_(_delClient, orderNo, seq, delLines, String((p && p.operator) || (p && p._user) || '')); } catch (e) {}
+
     // 回推訂單主表：L/M 依剩下的紀錄重算；I 若已無「全部出清」則退回製作狀態
     try {
       const ows = SpreadsheetApp.openById(MAIN_SHEET_ID).getSheetByName('訂單主表');
@@ -2841,7 +2903,7 @@ function deleteShipment(p) {
     _logOrderChange_(orderNo, String((p && p.operator) || (p && p._user) || ''),
       '刪除出貨紀錄', '刪除第 ' + seq + ' 次出貨（' + removed + ' 列）' +
       (_back.length ? ('｜庫存回沖 ' + _back.map(function (b) { return b.product + '+' + b.qty; }).join('、')) : ''));
-    return { ok: true, orderNo: orderNo, seq: seq, removed: removed, stockRestored: _back };
+    return { ok: true, orderNo: orderNo, seq: seq, removed: removed, stockRestored: _back, consignReversed: _consignBack };
   } finally { lock.releaseLock(); }
 }
 
@@ -3401,7 +3463,8 @@ var ORDER_MUTATING_ACTIONS = {
   createOrder:1, updateOrder:1, updateOrderFinance:1, updateOrderDelivery:1, deleteOrder:1,
   completeOrderItem:1, confirmShipDate:1, shipOrder:1,
   migrateOrderNos:1, migrateOrderTypes:1, backfillOrderCreators:1,
-  addShipment:1, deleteShipment:1
+  addShipment:1, deleteShipment:1,
+  consignStatementSettle:1   // v3.28 結清自動建認列單
 };
 // 其餘讀取快取的失效對應（action → 要清掉的 key）。
 // 新增寫入函式時只要在這裡登記一行，就不會出現「改了資料卻還看到舊值」。
@@ -3437,7 +3500,11 @@ function bootstrap(p) {
   var role = p && p._role;
   var out = { ok: true, role: role || '' };
   function safe(fn) { try { return fn(); } catch (e) { return { ok: false, error: String((e && e.message) || e) }; } }
+  if (role === CONSIGN_ROLE) return out;   // v3.28 經銷商角色走 dealer.html／consignMe，不回廠務資料
   out.recipeList = safe(function () { return getRecipeList(p); });
+  // v3.28 經銷商設定（建單判斷寄售客戶用）＋結帳日提醒（admin/財務 登入一天一次）
+  if (role === 'admin' || role === '財務' || role === 'PM') out.consignDealers = safe(function () { return consignDealers(p); });
+  if (role === 'admin' || role === '財務') out.consignAlerts = safe(function () { return consignAlerts(p); });
   if (role === 'FB觀看') return out;   // FB觀看 只看酒譜，其餘一律不回
   // v3.19b bootstrap 減重：inventory(261筆/38.5KB) 移出開機路徑——開機畫面用不到，
   //   原料/資材庫頁與研發試算頁本就有 lazy-load(!C.inv 即自抓)，進頁才載。舊版前端拿不到
