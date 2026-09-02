@@ -143,6 +143,10 @@ function _consignDealerMap_() {
 }
 function consignDealers(p) {
   var map = _consignDealerMap_();
+  // 首次啟用自動種子：admin 第一次登入（bootstrap→consignDealers）若分頁還是空的，就把經銷商設定＋牌價種進去（冪等，正式站免手動打 consignSeed）
+  if (!Object.keys(map).length && p && p._role === 'admin') {
+    try { consignSeed(p); map = _consignDealerMap_(); } catch (e) {}
+  }
   var list = Object.keys(map).map(function (k) { return map[k]; });
   return { ok: true, dealers: list };
 }
