@@ -403,7 +403,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.27';
+const APP_VERSION='v3.27.1';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2979,7 +2979,7 @@ function renderMonthOrders(orders) {
     return `<div onclick="showOrderDetail('${o.orderNo}')" style="cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;background:var(--card);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <div style="flex:1;min-width:0;">
-        <div style="font-weight:600;font-size:13px;">${clientLabel(o.client)} <span style="color:var(--ink3);font-weight:400;font-size:11px;">${o.orderNo}</span> <span style="font-weight:400;font-size:11px;${o.lot ? 'color:var(--gold-dk);' : 'color:var(--red);opacity:.7;'}">${o.lot ? ('Lot ' + o.lot) : '未填寫Lot數'}</span>${o.orderCreator ? ` <span style="font-weight:400;font-size:11px;color:var(--ink3);">建單:${o.orderCreator}</span>` : ''}</div>
+        <div style="font-weight:600;font-size:13px;">${clientLabel(o.client)} <span style="color:var(--ink3);font-weight:400;font-size:11px;">${o.orderNo}</span> <span style="font-weight:400;font-size:11px;${o.lot ? 'color:var(--gold-dk);' : 'color:var(--red);opacity:.7;'}">${o.lot ? ('Lot ' + o.lot) : '未填寫Lot數'}</span>${o.orderCreator ? ` <span style="font-weight:400;font-size:11px;color:var(--ink3);">建單:${o.orderCreator}</span>` : ''}${o.pm ? ` <span style="font-weight:400;font-size:11px;color:var(--ink3);">PM:${o.pm}</span>` : ''}</div>
         <div style="font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${itemsTxt || '—'}</div>
         ${shipLine}
         ${(!_isNoFinanceType(o.orderType) && o.depositPaidDate !== undefined) ? `<div style="font-size:11px;margin-top:2px;"><span style="color:${o.depositPaidDate ? 'var(--green)' : 'var(--yellow)'};font-weight:600;">訂金${o.depositPaidDate ? ' ✓已收' : ' 未收'}</span><span style="margin:0 6px;color:var(--border);">|</span><span style="color:${o.finalPaidDate ? 'var(--green)' : 'var(--yellow)'};font-weight:600;">尾款${o.finalPaidDate ? ' ✓已收' : ' 未收'}</span></div>` : ''}
