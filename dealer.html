@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0">
+<title>凱文南坡萬 寄售夥伴</title>
+<link rel="icon" type="image/png" href="/recipe/knb_head.png">
+<link rel="apple-touch-icon" href="/recipe/knb_head.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="南坡萬寄售">
+<meta name="theme-color" content="#5c4422">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;600&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* v3.28 經銷商寄售夥伴頁（dealer.html）：獨立於廠務 index.html，只載入經銷商需要的東西。視覺語言沿用廠務系統色票。 */
+:root{--bg:#f7f4ee;--card:#fff;--border:#e4ddd0;--ink:#1e1710;--ink2:#6b5e4e;--ink3:#7d6e5d;--gold:#a0722a;--gold-lt:#f5ead8;--gold-dk:#7a5420;--red:#b83232;--green:#2e7d50;--blue:#2563a8;--yellow:#c17d00;--r:12px;--r-sm:8px;--sh:0 2px 12px rgba(0,0,0,.08);--top-h:52px;--safe-b:env(safe-area-inset-bottom,0px);}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.5;}
+#loginWrap{display:flex;align-items:center;justify-content:center;min-height:100vh;min-height:100dvh;padding:24px;}
+#loginBox{width:100%;max-width:380px;}
+.login-head{text-align:center;margin-bottom:28px;}
+.login-head .sub{font-size:13px;color:var(--ink3);margin-top:6px;}
+.login-card{background:var(--card);border-radius:16px;box-shadow:var(--sh);padding:28px 24px;border:1px solid var(--border);}
+.inp{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:15px;font-family:'DM Sans',sans-serif;outline:none;background:#fff;color:var(--ink);transition:border-color .2s;margin-bottom:12px;}
+.inp:focus{border-color:var(--gold);}
+.inp:disabled{background:var(--bg);color:var(--ink3);}
+.inp[type=number]{-moz-appearance:textfield;}
+.inp[type=number]::-webkit-outer-spin-button,.inp[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;}
+select.inp{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath fill='%23a8998a' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:36px;}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:11px 18px;border:none;border-radius:var(--r-sm);font-size:14px;font-family:'DM Sans',sans-serif;font-weight:500;cursor:pointer;transition:all .15s;touch-action:manipulation;white-space:nowrap;}
+.btn:disabled{opacity:.55;cursor:not-allowed;}
+.btn-primary{background:var(--gold-dk);color:#fff;}.btn-primary:hover{background:var(--gold);}
+.btn-sm{padding:7px 13px;font-size:13px;}
+.btn-ghost{background:transparent;color:var(--ink2);border:1.5px solid var(--border);}.btn-ghost:hover{background:var(--bg);}
+.btn-success{background:var(--green);color:#fff;}
+.btn-full{width:100%;}
+#loginErr{color:var(--red);font-size:13px;text-align:center;min-height:18px;margin-top:8px;}
+#app{display:none;flex-direction:column;min-height:100vh;min-height:100dvh;}
+#topbar{background:var(--gold-dk);color:#fff;padding:0 14px;height:var(--top-h);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:8px;position:sticky;top:0;z-index:20;}
+.topbar-title{font-family:'Noto Serif TC',serif;font-size:16px;font-weight:600;display:flex;align-items:center;gap:7px;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+#topBtns{display:flex;gap:6px;flex-shrink:0;}
+#topBtns .btn{color:#fff;border:1px solid rgba(255,255,255,.4);background:transparent;padding:5px 10px;}
+#mainContent{flex:1;padding:14px;padding-bottom:calc(24px + var(--safe-b));max-width:760px;margin:0 auto;width:100%;}
+.card{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:14px;margin-bottom:12px;border:1px solid var(--border);}
+.card-title{font-family:'Noto Serif TC',serif;font-size:15px;font-weight:600;color:var(--gold-dk);margin-bottom:10px;}
+.sec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px;}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
+.chip{background:var(--gold-lt);border:1px solid #e8dcc8;border-radius:99px;padding:4px 11px;font-size:12px;color:var(--gold-dk);font-weight:600;}
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;}
+.stat{background:var(--gold-lt);border-radius:var(--r-sm);padding:9px 11px;border:1px solid #e8dcc8;}
+.stat .lb{font-size:10px;color:var(--ink3);}
+.stat .vl{font-size:18px;font-weight:700;color:var(--gold-dk);line-height:1.3;}
+.stat .vl.acc{color:var(--green);}
+.tbl-wrap{overflow-x:auto;border-radius:var(--r-sm);border:1px solid var(--border);}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;padding:8px 8px;border-bottom:2px solid var(--border);color:var(--ink3);font-weight:500;white-space:nowrap;background:#faf9f6;}
+td{padding:8px 8px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+.tr{text-align:right;}
+.badge{display:inline-block;font-size:11px;padding:2px 7px;border-radius:99px;font-weight:500;}
+.bg-green{background:#e4f4eb;color:#1e6b3e;}.bg-red{background:#fde8e8;color:#9b2222;}
+.bg-yellow{background:#fef3d8;color:#8b5c00;}.bg-blue{background:#e4edf8;color:#1d4e96;}.bg-brown{background:#f0e8da;color:#6b4e1e;}
+.muted{color:var(--ink3);font-size:12px;}
+.fe{display:flex;justify-content:flex-end;gap:7px;flex-wrap:wrap;}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;z-index:500;}
+@media(min-width:600px){.modal-bg{align-items:center;}}
+.modal-box{background:var(--card);border-radius:20px 20px 0 0;padding:20px;width:100%;max-height:92vh;overflow-y:auto;}
+@media(min-width:600px){.modal-box{border-radius:var(--r);max-width:640px;max-height:88vh;}}
+.modal-title{font-family:'Noto Serif TC',serif;font-size:16px;font-weight:600;margin-bottom:14px;color:var(--gold-dk);}
+.toast{position:fixed;bottom:calc(20px + var(--safe-b));left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 18px;border-radius:99px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:10000;max-width:92vw;text-align:center;}
+.toast.show{opacity:1;}
+.btn-spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:btnspin .7s linear infinite;vertical-align:-2px;margin-right:7px;}
+@keyframes btnspin{to{transform:rotate(360deg);}}
+/* 售出登記列：手機優先，每款一列 */
+.sale-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border);}
+.sale-row:last-child{border-bottom:none;}
+.sale-name{flex:1;min-width:0;}
+.sale-name .nm{font-weight:600;font-size:14px;}
+.sale-name .sub{font-size:11px;color:var(--ink3);}
+.qty-ctl{display:flex;align-items:center;gap:0;flex-shrink:0;}
+.qty-ctl button{width:36px;height:36px;border:1.5px solid var(--border);background:#fff;font-size:18px;color:var(--gold-dk);cursor:pointer;border-radius:8px 0 0 8px;touch-action:manipulation;}
+.qty-ctl button.plus{border-radius:0 8px 8px 0;}
+.qty-ctl input{width:48px;height:36px;text-align:center;border:1.5px solid var(--border);border-left:none;border-right:none;font-size:15px;font-weight:700;outline:none;}
+.qty-ctl input.hot{background:#fef3d8;color:#8b5c00;}
+.stock-n{font-size:12px;color:var(--ink2);white-space:nowrap;}
+.stock-n b{font-size:15px;color:var(--gold-dk);}
+.hint{background:#fdf8f0;border:1px solid #e8dcc8;border-radius:var(--r-sm);padding:8px 10px;font-size:12px;color:var(--ink2);margin-top:8px;}
+.warn{background:#fbeaea;border:1px solid #f0c0c0;color:var(--red);border-radius:var(--r-sm);padding:8px 10px;font-size:12px;margin-top:8px;}
+#apiLoadBar{position:fixed;top:0;left:0;height:3px;width:0;background:var(--gold);z-index:9999;transition:width .3s;opacity:0;}
+#apiLoadBar.on{width:80%;opacity:1;}
+</style>
+</head>
+<body>
+
+<div id="loginWrap">
+  <div id="loginBox">
+    <div class="login-head">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+        <span style="width:78px;height:78px;border-radius:50%;overflow:hidden;background:#fff;display:inline-flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(0,0,0,.08);"><img src="/recipe/knb_head.png" alt="凱文南坡萬" style="width:78px;height:78px;object-fit:cover;"></span>
+        <img src="/recipe/knb_logo.png" alt="凱文南坡萬實業社" style="width:100%;max-width:260px;height:auto;">
+      </div>
+      <div class="sub">寄售夥伴專區｜門市在庫・銷售登記・月結對帳</div>
+    </div>
+    <div class="login-card">
+      <input class="inp" id="loginUser" type="text" placeholder="帳號" autocomplete="username" autocapitalize="off">
+      <input class="inp" id="loginPass" type="password" placeholder="密碼" autocomplete="current-password">
+      <button class="btn btn-primary btn-full" id="loginBtn" onclick="doLogin()">登入</button>
+      <div id="loginErr"></div>
+      <div id="appVer" style="text-align:center;font-size:11px;color:var(--ink3);margin-top:6px;letter-spacing:.5px;"></div>
+    </div>
+  </div>
+</div>
+
+<div id="app">
+  <div id="topbar">
+    <span class="topbar-title"><span style="width:26px;height:26px;border-radius:50%;overflow:hidden;background:#fff;display:inline-flex;flex-shrink:0;"><img src="/recipe/knb_head.png" alt="" style="width:26px;height:26px;object-fit:cover;"></span><span id="topTitle">寄售夥伴</span></span>
+    <div id="topBtns">
+      <button class="btn btn-sm" onclick="showChangePw()" title="修改密碼">🔑</button>
+      <button class="btn btn-sm" onclick="reload(true)" title="重新整理">↻</button>
+      <button class="btn btn-sm" onclick="doLogout()">登出</button>
+    </div>
+  </div>
+  <div id="mainContent"></div>
+</div>
+
+<script>
+// ── API（預覽環境指測試 /exec；promote.sh 升正式時 sed 換回正式 /exec）──
+const API='https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5N4uT9RBaqAHiqWBPseCrSvKV3QnC9NK9S2MGnHQvJg/exec';
+if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5N4uT9RBaqAHiqWBPseCrSvKV3QnC9NK9S2MGnHQvJg/exec') {
+  window.addEventListener('DOMContentLoaded', function () {
+    var b = document.createElement('div');
+    b.textContent = '🧪 預覽／測試環境（沙盒資料，非正式站）';
+    b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#2d7d46;color:#fff;font-size:12px;text-align:center;padding:5px;';
+    document.body.appendChild(b);
+  });
+}
+const APP_VERSION='v3.28';
+window.addEventListener('DOMContentLoaded', function () { const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION; });
+// 開頁暖機：趁使用者打密碼時吃掉 GAS 冷啟動
+window.addEventListener('DOMContentLoaded', function () { api({ action: 'getEnvInfo' }, true); });
+setInterval(function () { api({ action: 'getEnvInfo' }, true); }, 270000);
+document.addEventListener('wheel', function (e) { const el = document.activeElement; if (el && el.tagName === 'INPUT' && el.type === 'number') el.blur(); }, { passive: true });
+
+let curToken = null, curUser = null, ME = null;
+let _apiN = 0;
+function _bar() { let b = document.getElementById('apiLoadBar'); if (!b) { b = document.createElement('div'); b.id = 'apiLoadBar'; document.body.appendChild(b); } return b; }
+let _sessExpiredShown = false;
+async function api(params, silent) {
+  const send = { ...params };
+  if (curToken && send.token == null) send.token = curToken;
+  if (!silent) { _apiN++; _bar().classList.add('on'); }
+  const _isRead = /^(get|consignMe|consignLedger|consignStatements)/.test(String(send.action || ''));
+  const _delays = _isRead ? [400, 1200, 2500] : [];
+  const url = API + '?' + Object.entries(send).map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&');
+  let _lastErr = '';
+  try {
+    for (let t = 0; ; t++) {
+      try {
+        const res = await fetch(url);
+        const txt = await res.text();
+        if (txt.trim().charAt(0) === '<') throw new Error('THROTTLED_HTML');
+        const j = JSON.parse(txt);
+        if (j && j.error === 'SESSION_EXPIRED' && curUser && !_sessExpiredShown) {
+          _sessExpiredShown = true; toast('登入逾時，請重新登入'); doLogout();
+          setTimeout(() => { _sessExpiredShown = false; }, 2000);
+        }
+        return j;
+      } catch (e) {
+        _lastErr = e.message || String(e);
+        if (t >= _delays.length) break;
+        await new Promise(r => setTimeout(r, _delays[t]));
+      }
+    }
+    if (!silent) toast(_lastErr === 'THROTTLED_HTML' ? '系統忙碌中，請稍後再按 ↻' : '網路錯誤');
+    return { ok: false, error: _lastErr, _offline: true };
+  } finally {
+    if (!silent) { _apiN--; if (_apiN <= 0) { _apiN = 0; _bar().classList.remove('on'); } }
+  }
+}
+function toast(msg, dur = 2400) {
+  const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; document.body.appendChild(t);
+  setTimeout(() => t.classList.add('show'), 10);
+  setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 300); }, dur);
+}
+function makeModal(inner, opts) {
+  opts = opts || {};
+  const bg = document.createElement('div'); bg.className = 'modal-bg';
+  bg.innerHTML = `<div class="modal-box">${inner}</div>`;
+  if (!opts.locked) {
+    let down = false;
+    bg.addEventListener('mousedown', e => { down = (e.target === bg); });
+    bg.addEventListener('click', e => { if (e.target === bg && down) { down = false; bg.remove(); } });
+  }
+  document.body.appendChild(bg); return bg;
+}
+async function lockRun(btn, fn) {
+  if (!btn || btn.disabled) return;
+  const t = btn.textContent; btn.disabled = true; btn.textContent = '處理中…';
+  try { await fn(); } finally { try { btn.disabled = false; btn.textContent = t; } catch (e) {} }
+}
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const nt = n => 'NT$' + (Math.round(Number(n) || 0)).toLocaleString('zh-TW');
+const pct = d => { const p = Math.round((Number(d) || 0) * 100); return (p % 10 === 0 ? (p / 10) : (p / 10).toFixed(1)) + ' 折'; };
+function _localDate() { const d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+function periodLabel(p) { return p ? (p.slice(0, 4) + ' 年 ' + Number(p.slice(5, 7)) + ' 月') : '—'; }
+
+// ── 登入 / session（sessionStorage：同分頁重新整理不掉線，關分頁即清）──
+function _sessSave() { try { sessionStorage.setItem('np_dealer_sess', JSON.stringify({ t: curToken, u: curUser })); } catch (e) {} }
+function _sessClear() { try { sessionStorage.removeItem('np_dealer_sess'); } catch (e) {} }
+async function doLogin() {
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPass').value;
+  const err = document.getElementById('loginErr');
+  if (!username || !password) { err.textContent = '請輸入帳號與密碼'; return; }
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true; btn.innerHTML = '<span class="btn-spin"></span>登入中…'; err.textContent = '';
+  const res = await api({ action: 'login', username, password });
+  if (!res.ok) { btn.disabled = false; btn.textContent = '登入'; err.textContent = res.error || '登入失敗'; return; }
+  if (res.role !== '經銷商' && res.role !== 'admin' && res.role !== '財務') {
+    btn.disabled = false; btn.textContent = '登入'; err.textContent = '此入口僅供寄售夥伴使用；南坡萬同仁請改用廠務系統'; return;
+  }
+  curToken = res.token; curUser = { username, role: res.role, dealer: res.dealer || '' };
+  btn.innerHTML = '<span class="btn-spin"></span>載入資料中…';
+  const ok = await boot();
+  btn.disabled = false; btn.textContent = '登入';
+  if (!ok) { curToken = null; curUser = null; }
+}
+async function boot() {
+  // admin／財務 進來＝「用經銷商的眼睛看」：先選一家
+  if (curUser.role !== '經銷商' && !curUser.dealer) {
+    const dl = await api({ action: 'consignDealers' }, true);
+    const list = (dl.ok ? dl.dealers : []).filter(d => d.enabled);
+    if (!list.length) { document.getElementById('loginErr').textContent = '尚無啟用中的經銷商'; return false; }
+    curUser.dealer = list[0].key; curUser.dealerList = list;
+  }
+  _sessSave();
+  const ok = await reload(false);
+  if (!ok) return false;
+  document.getElementById('loginWrap').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  return true;
+}
+async function _sessRestore() {
+  let s = null; try { s = JSON.parse(sessionStorage.getItem('np_dealer_sess') || 'null'); } catch (e) {}
+  if (!s || !s.t || !s.u) return;
+  curToken = s.t; curUser = s.u;
+  const err = document.getElementById('loginErr'); if (err) err.textContent = '🔄 恢復登入中…';
+  const ok = await reload(false);
+  if (ok) { document.getElementById('loginWrap').style.display = 'none'; document.getElementById('app').style.display = 'flex'; }
+  else { curToken = null; curUser = null; _sessClear(); }
+  if (err) err.textContent = '';
+}
+_sessRestore();
+function doLogout() {
+  _sessClear(); curToken = null; curUser = null; ME = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('loginWrap').style.display = 'flex';
+  document.getElementById('loginPass').value = '';
+  document.getElementById('loginErr').textContent = '';
+}
+function showChangePw() {
+  if (!curUser) return;
+  const m = makeModal(`
+    <div class="modal-title">🔑 修改密碼（${esc(curUser.username)}）</div>
+    <input class="inp" id="cp_old" type="password" placeholder="舊密碼" autocomplete="off">
+    <input class="inp" id="cp_new" type="password" placeholder="新密碼" autocomplete="off">
+    <input class="inp" id="cp_new2" type="password" placeholder="再次輸入新密碼" autocomplete="off">
+    <div class="fe" style="margin-top:4px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="cp_sub">儲存</button></div>`, { locked: true });
+  const b = m.querySelector('#cp_sub');
+  b.onclick = () => lockRun(b, async () => {
+    const o = m.querySelector('#cp_old').value, n = m.querySelector('#cp_new').value, n2 = m.querySelector('#cp_new2').value;
+    if (!o || !n) { toast('請填舊密碼與新密碼'); return; }
+    if (n !== n2) { toast('兩次新密碼不一致'); return; }
+    const res = await api({ action: 'changePassword', username: curUser.username, oldPassword: o, newPassword: n });
+    if (res.ok) { toast('密碼已更新'); m.remove(); } else toast('修改失敗：' + (res.error || ''));
+  });
+}
+
+// ── 主畫面 ──
+async function reload(showToast) {
+  const p = { action: 'consignMe' };
+  if (curUser && curUser.role !== '經銷商') p.dealer = curUser.dealer;   // 經銷商角色的 dealer 由後端 session 強制，帶了也無效
+  const res = await api(p);
+  if (!res.ok) { if (!res._offline) toast(res.error || '讀取失敗'); const e = document.getElementById('loginErr'); if (e && !ME) e.textContent = res.error || '讀取失敗'; return false; }
+  ME = res; render(); if (showToast) toast('已更新'); return true;
+}
+function render() {
+  const me = ME; if (!me) return;
+  const d = me.dealer;
+  document.getElementById('topTitle').textContent = d.label + '・寄售夥伴';
+  const mc = document.getElementById('mainContent');
+  const cur = me.current, prev = me.previous, ps = me.previousStatement;
+  const stockTotal = (me.stock || []).reduce((a, s) => a + (s.qty || 0), 0);
+  const pickDealer = (curUser.role !== '經銷商' && curUser.dealerList) ? `<div class="hint" style="margin:0 0 10px;">👀 南坡萬檢視模式：<select class="inp" style="margin:0;width:auto;display:inline-block;padding:4px 30px 4px 8px;font-size:13px;" onchange="curUser.dealer=this.value;_sessSave();reload(false)">${curUser.dealerList.map(x => `<option value="${esc(x.key)}"${x.key === curUser.dealer ? ' selected' : ''}>${esc(x.label)}</option>`).join('')}</select>　你現在看到的就是該經銷商登入後的畫面</div>` : '';
+  // 上期狀態
+  let prevLine;
+  if (ps && ps.status === '已結清') prevLine = `<span class="badge bg-green">已結清</span> ${periodLabel(ps.period)}　售出 ${ps.soldQty} 瓶・${nt(ps.amount)}　入帳 ${ps.paidDate || '—'}`;
+  else if (ps) prevLine = `<span class="badge bg-yellow">待結清</span> ${periodLabel(ps.period)}　應付南坡萬 <b>${nt(ps.amount)}</b>（${ps.soldQty} 瓶）　對帳日 ${ps.closeDate}`;
+  else if (prev && (prev.totalSold > 0 || prev.totalOpening > 0 || prev.totalIn > 0)) prevLine = `<span class="badge bg-brown">對帳中</span> ${periodLabel(prev.period)}　售出 ${prev.totalSold} 瓶・${nt(prev.totalAmount)}　對帳日 ${prev.dueDate}（南坡萬尚未產生對帳單）`;
+  else prevLine = `<span class="muted">${periodLabel(prev ? prev.period : '')} 無寄售紀錄</span>`;
+  mc.innerHTML = `
+  ${pickDealer}
+  <div class="chips">
+    <span class="chip">🤝 ${esc(d.label)}</span>
+    <span class="chip">牌價 ${pct(d.discount)}</span>
+    <span class="chip">每月 ${d.closeDay} 日對帳</span>
+    <span class="chip" style="background:#fff;">📅 ${me.today}</span>
+  </div>
+
+  <div class="card">
+    <div class="sec-hd"><div class="card-title" style="margin:0;">🍶 門市在庫・登記售出</div>
+      <div class="muted">在庫共 <b style="color:var(--gold-dk);">${stockTotal}</b> 瓶${me.todaySold ? `・今日已登記售出 ${me.todaySold} 瓶` : ''}</div></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap;">
+      <label class="muted" style="white-space:nowrap;">售出日期</label>
+      <input class="inp" id="saleDate" type="date" value="${me.today}" max="${me.today}" style="margin:0;width:auto;padding:6px 10px;font-size:13px;">
+      <span class="muted">（忘了填的日子可以補登，選那一天即可）</span>
+    </div>
+    <div id="saleRows">${(me.stock || []).length ? me.stock.map(saleRowHtml).join('') : '<div class="muted" style="padding:14px;text-align:center;">尚無在庫。南坡萬出貨後，品項會自動出現在這裡。</div>'}</div>
+    ${(me.stock || []).some(s => s.unitPrice === '' && s.qty > 0) ? '<div class="warn">⚠ 有品項尚未設定牌價，該品項暫時無法登記售出，已通知南坡萬補上。</div>' : ''}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:8px;flex-wrap:wrap;">
+      <div id="saleSum" class="muted">本次登記 0 瓶</div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-ghost btn-sm" onclick="showAdjust()">🧾 盤點／退貨／損耗</button>
+        <button class="btn btn-success" id="saleBtn" onclick="lockRun(this, submitSale)">💾 送出售出登記</button>
+      </div>
+    </div>
+    <div class="hint">每天打烊前，把今天賣掉的瓶數填進去按送出即可；架上還沒賣掉的酒不會被計入請款。</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">💰 本期對帳（${periodLabel(cur.period)}）</div>
+    <div class="stat-row">
+      <div class="stat"><div class="lb">本期已售</div><div class="vl">${cur.totalSold} 瓶</div></div>
+      <div class="stat"><div class="lb">應付南坡萬（結算日結）</div><div class="vl acc">${nt(cur.totalAmount)}</div></div>
+      <div class="stat"><div class="lb">對帳日</div><div class="vl" style="font-size:15px;">${cur.dueDate}</div></div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="toggleDetail('curDetail')">📋 查看本期明細</button>
+    <div id="curDetail" style="display:none;margin-top:8px;">${periodTableHtml(cur)}</div>
+    <div style="margin-top:12px;padding-top:10px;border-top:1px dashed var(--border);font-size:13px;">上期：${prevLine}</div>
+    ${ps ? `<button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="showStatement('${esc(ps.id)}')">📄 查看上期對帳單</button>` : ''}
+  </div>
+
+  <div class="card">
+    <div class="sec-hd"><div class="card-title" style="margin:0;">📦 叫貨補貨</div><span class="badge bg-brown">即將開放</span></div>
+    <div class="muted">下一階段開放：勾選要補的酒款與瓶數送出，南坡萬確認後自動排出貨。目前請先用 LINE 告知 Molly。</div>
+  </div>
+
+  <div class="card">
+    <div class="sec-hd"><div class="card-title" style="margin:0;">📄 歷史對帳單</div></div>
+    ${(me.statements || []).length ? `<div class="tbl-wrap"><table><thead><tr><th>期別</th><th class="tr">售出</th><th class="tr">金額</th><th>狀態</th><th></th></tr></thead><tbody>${me.statements.map(s => `<tr><td>${periodLabel(s.period)}</td><td class="tr">${s.soldQty} 瓶</td><td class="tr">${nt(s.amount)}</td><td>${s.status === '已結清' ? `<span class="badge bg-green">已結清</span><div class="muted">入帳 ${s.paidDate}</div>` : `<span class="badge bg-yellow">待結清</span>`}</td><td class="tr"><button class="btn btn-ghost btn-sm" style="padding:3px 8px;" onclick="showStatement('${esc(s.id)}')">明細</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="muted" style="padding:10px;text-align:center;">尚無對帳單</div>'}
+  </div>
+
+  <div class="card">
+    <div class="sec-hd"><div class="card-title" style="margin:0;">📜 最近異動</div><button class="btn btn-ghost btn-sm" onclick="toggleDetail('recentArea')">展開／收合</button></div>
+    <div id="recentArea" style="display:none;">${recentHtml(me.recent || [])}</div>
+  </div>`;
+  updateSaleSum();
+}
+function saleRowHtml(s, i) {
+  const can = s.qty > 0 && s.unitPrice !== '';
+  return `<div class="sale-row">
+    <div class="sale-name"><div class="nm">${esc(s.pubName || s.product)}</div><div class="sub">${esc(s.volume)}${s.unitPrice !== '' ? `・單價 ${nt(s.unitPrice)}` : '・<span style="color:var(--red);">未設牌價</span>'}</div></div>
+    <div class="stock-n">在庫 <b>${s.qty}</b></div>
+    <div class="qty-ctl">
+      <button type="button" onclick="bump(${i},-1)" ${can ? '' : 'disabled'}>−</button>
+      <input type="number" inputmode="numeric" min="0" max="${s.qty}" value="0" id="sq_${i}" data-i="${i}" oninput="updateSaleSum()" ${can ? '' : 'disabled'}>
+      <button type="button" class="plus" onclick="bump(${i},1)" ${can ? '' : 'disabled'}>＋</button>
+    </div>
+  </div>`;
+}
+function bump(i, d) {
+  const el = document.getElementById('sq_' + i); if (!el || el.disabled) return;
+  const max = Number(el.max) || 0;
+  let v = (parseInt(el.value, 10) || 0) + d;
+  v = Math.max(0, Math.min(max, v)); el.value = v; updateSaleSum();
+}
+function updateSaleSum() {
+  let n = 0, amt = 0, over = false;
+  (ME.stock || []).forEach((s, i) => {
+    const el = document.getElementById('sq_' + i); if (!el) return;
+    const v = parseInt(el.value, 10) || 0;
+    el.classList.toggle('hot', v > 0);
+    if (v > s.qty) over = true;
+    n += v; amt += v * (Number(s.unitPrice) || 0);
+  });
+  const el = document.getElementById('saleSum');
+  if (el) el.innerHTML = over ? '<span style="color:var(--red);font-weight:700;">有品項超過在庫數</span>' : (n ? `本次登記 <b>${n}</b> 瓶・${nt(amt)}` : '本次登記 0 瓶');
+  const b = document.getElementById('saleBtn'); if (b) b.disabled = !n || over;
+}
+async function submitSale() {
+  const date = document.getElementById('saleDate').value || ME.today;
+  const lines = [];
+  (ME.stock || []).forEach((s, i) => {
+    const el = document.getElementById('sq_' + i); if (!el) return;
+    const v = parseInt(el.value, 10) || 0;
+    if (v > 0) lines.push({ product: s.product, volume: s.volume, qty: v });
+  });
+  if (!lines.length) { toast('請先填售出瓶數'); return; }
+  const n = lines.reduce((a, l) => a + l.qty, 0);
+  if (!confirm(`確認登記 ${date} 售出共 ${n} 瓶？\n送出後會列入本期對帳。`)) return;
+  const p = { action: 'consignSale', date, lines: JSON.stringify(lines) };
+  if (curUser.role !== '經銷商') p.dealer = curUser.dealer;
+  const res = await api(p);
+  if (res.ok) { toast(`已登記售出 ${n} 瓶・${nt(res.amount)}`); await reload(false); }
+  else toast(res.error || '登記失敗', 4500);
+}
+function showAdjust() {
+  const stock = ME.stock || [];
+  if (!stock.length) { toast('尚無在庫可調整'); return; }
+  const m = makeModal(`
+    <div class="modal-title">🧾 盤點修正／退貨／損耗</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+      <select class="inp" id="adjType" style="margin:0;flex:1;" onchange="adjTypeChange()">
+        <option value="盤點修正">盤點修正（填實際盤點數，系統自動算差額）</option>
+        <option value="退貨">退貨（退回南坡萬的瓶數）</option>
+        <option value="損耗">損耗（破損／過期／試飲用掉）</option>
+      </select>
+      <input class="inp" id="adjDate" type="date" value="${ME.today}" max="${ME.today}" style="margin:0;width:auto;">
+    </div>
+    <div class="tbl-wrap"><table><thead><tr><th>酒款</th><th class="tr">在庫</th><th class="tr" id="adjColHd">實際盤點數</th></tr></thead><tbody>
+      ${stock.map((s, i) => `<tr><td>${esc(s.pubName || s.product)}<div class="muted">${esc(s.volume)}</div></td><td class="tr">${s.qty}</td><td class="tr"><input type="number" inputmode="numeric" min="0" id="aq_${i}" value="${s.qty}" style="width:70px;padding:6px;text-align:right;border:1.5px solid var(--border);border-radius:6px;font-size:14px;"></td></tr>`).join('')}
+    </tbody></table></div>
+    <input class="inp" id="adjNote" placeholder="原因（必填，例：月底盤點／破損 1 瓶／退回南坡萬）" style="margin:10px 0 4px;">
+    <div class="fe" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="adjSub">送出</button></div>`, { locked: true });
+  const b = m.querySelector('#adjSub');
+  b.onclick = () => lockRun(b, async () => {
+    const type = m.querySelector('#adjType').value, date = m.querySelector('#adjDate').value || ME.today, note = m.querySelector('#adjNote').value.trim();
+    if (!note) { toast('請填原因'); return; }
+    const lines = [];
+    stock.forEach((s, i) => {
+      const el = m.querySelector('#aq_' + i); const v = parseInt(el.value, 10);
+      if (type === '盤點修正') { if (!isNaN(v) && v !== s.qty) lines.push({ product: s.product, volume: s.volume, qty: v }); }
+      else if (v > 0) lines.push({ product: s.product, volume: s.volume, qty: v });
+    });
+    if (!lines.length) { toast(type === '盤點修正' ? '盤點數與在庫相同，無需修正' : '請填瓶數'); return; }
+    const p = { action: 'consignAdjust', type, date, note, lines: JSON.stringify(lines) };
+    if (curUser.role !== '經銷商') p.dealer = curUser.dealer;
+    const res = await api(p);
+    if (res.ok) { toast('已登記 ' + type); m.remove(); await reload(false); } else toast(res.error || '登記失敗', 4500);
+  });
+}
+function adjTypeChange() {
+  const t = document.getElementById('adjType').value;
+  document.getElementById('adjColHd').textContent = t === '盤點修正' ? '實際盤點數' : (t + '瓶數');
+  (ME.stock || []).forEach((s, i) => { const el = document.getElementById('aq_' + i); if (el) el.value = t === '盤點修正' ? s.qty : 0; });
+}
+function periodTableHtml(c) {
+  const items = (c && c.items) || [];
+  if (!items.length) return '<div class="muted" style="padding:8px;">本期無異動</div>';
+  return `<div class="tbl-wrap"><table><thead><tr><th>酒款</th><th class="tr">期初</th><th class="tr">進貨</th><th class="tr">售出</th><th class="tr">其他</th><th class="tr">期末</th><th class="tr">單價</th><th class="tr">小計</th></tr></thead><tbody>
+    ${items.map(it => `<tr><td>${esc(it.product)}<div class="muted">${esc(it.volume)}</div></td><td class="tr">${it.opening}</td><td class="tr">${it.inQty || '—'}</td><td class="tr"><b>${it.sold || '—'}</b></td><td class="tr">${it.other ? (it.other > 0 ? '+' + it.other : it.other) : '—'}</td><td class="tr">${it.closing}</td><td class="tr">${it.unitPrice !== '' && it.unitPrice != null ? it.unitPrice : '—'}</td><td class="tr">${it.soldAmt ? nt(it.soldAmt) : '—'}</td></tr>`).join('')}
+    <tr style="background:#faf9f6;font-weight:700;"><td>合計</td><td class="tr">${c.totalOpening}</td><td class="tr">${c.totalIn}</td><td class="tr">${c.totalSold}</td><td class="tr"></td><td class="tr">${c.totalClosing}</td><td></td><td class="tr">${nt(c.totalAmount)}</td></tr>
+  </tbody></table></div>
+  <div class="muted" style="margin-top:6px;">「其他」＝退貨／損耗／盤點修正。期末＝期初＋進貨−售出＋其他；請款只算「售出」。</div>`;
+}
+function showStatement(id) {
+  const s = (ME.statements || []).find(x => x.id === id); if (!s) return;
+  const c = { items: s.detail || [], totalOpening: (s.detail || []).reduce((a, i) => a + (i.opening || 0), 0), totalIn: (s.detail || []).reduce((a, i) => a + (i.inQty || 0), 0), totalSold: s.soldQty, totalClosing: (s.detail || []).reduce((a, i) => a + (i.closing || 0), 0), totalAmount: s.amount };
+  makeModal(`
+    <div class="modal-title">📄 ${periodLabel(s.period)} 對帳單</div>
+    <div class="muted" style="margin-bottom:8px;">${esc(ME.dealer.label)}　期間 ${s.from} ～ ${s.to}　對帳日 ${s.closeDate}</div>
+    <div class="stat-row"><div class="stat"><div class="lb">售出</div><div class="vl">${s.soldQty} 瓶</div></div><div class="stat"><div class="lb">應付南坡萬</div><div class="vl acc">${nt(s.amount)}</div></div><div class="stat"><div class="lb">狀態</div><div class="vl" style="font-size:14px;">${s.status}${s.paidDate ? '<div class="muted">入帳 ' + s.paidDate + '</div>' : ''}</div></div></div>
+    ${periodTableHtml(c)}
+    ${s.note ? `<div class="hint">備註：${esc(s.note)}</div>` : ''}
+    <div class="fe" style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="this.closest('.modal-bg').remove()">關閉</button></div>`);
+}
+function recentHtml(list) {
+  if (!list.length) return '<div class="muted" style="padding:8px;">尚無異動</div>';
+  const tag = t => ({ '進貨': 'bg-blue', '進貨取消': 'bg-red', '售出': 'bg-green', '退貨': 'bg-brown', '損耗': 'bg-red', '盤點修正': 'bg-yellow' }[t] || 'bg-brown');
+  return `<div class="tbl-wrap"><table><thead><tr><th>日期</th><th>類型</th><th>酒款</th><th class="tr">數量</th><th>備註</th></tr></thead><tbody>
+    ${list.map(r => `<tr><td style="white-space:nowrap;">${r.date}</td><td><span class="badge ${tag(r.type)}">${r.type}</span></td><td>${esc(r.product)}<div class="muted">${esc(r.volume)}</div></td><td class="tr" style="font-weight:700;">${r.qty > 0 ? '+' + r.qty : r.qty}</td><td class="muted">${esc(r.note)}${r.orderNo ? ' ' + esc(r.orderNo) : ''}</td></tr>`).join('')}
+  </tbody></table></div>`;
+}
+function toggleDetail(id) { const el = document.getElementById(id); if (el) el.style.display = el.style.display === 'none' ? '' : 'none'; }
+</script>
+</body>
+</html>
