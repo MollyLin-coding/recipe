@@ -1155,6 +1155,7 @@ function getOrders(p) {
     const _sa = _shipAgg[base.orderNo] || null;
     base.shipBatches = _sa ? (_sa.batches || 0) : 0;
     base.lastShipDate = _sa ? (_sa.lastDate || '') : '';
+    base.shipLog = _sa ? (_sa.log || []).slice().sort(function (a, b) { return a.seq - b.seq; }) : [];
     // 尚未出貨的單也要注入（shipped=0、remainStock=訂購量）＝寄倉欄位永遠有預設值
     {
       const _byKey = _sa ? (_sa.byKey || {}) : {};
@@ -2519,6 +2520,12 @@ function shipOrder(p) {
 //   寄倉餘量 = 訂單該款數量 − Σ已出貨（**衍生值、不落地**，永遠與 ledger 一致，
 //      故前端 items 白名單重組 payload 也洗不掉它——避開 v3.11.2 autoStockedIn 那類 bug）。
 // ============================================================
+// ⭐ v3.27：出貨紀錄合併「扣成品庫存」（主公拍板，取代原本另一顆「確認出貨(扣庫存)」鈕）。
+//   **成品庫存只有「南坡萬v.2」一本帳**（投產單完工 _rcAutoStockIn_ 入庫、手動 stockIn 入庫）。
+//   舊 shipOrder 拿「訂單的客戶」去扣 → 出貨給 經銷商－日光貳參／島羽 等永遠找到 0 瓶被擋，
+//   正式庫存流水帳 0 筆出庫可證＝那顆鈕實際上一直是壞的。此處一律扣 STOCK_OWNER_CLIENT 的帳。
+//   代工酒款（不在這本帳裡）＝只記錄、不扣，避免把不存在的帳扣成負數。
+const STOCK_OWNER_CLIENT = '南坡萬v.2';
 const SHIP_SHEET_NAME = '出貨紀錄';
 const SHIP_HEADERS = ['出貨ID', '訂單編號', '第幾次', '出貨日期', '客戶', '酒款', '瓶型', '出貨瓶數', '操作人', '建立時間', '備註'];
 const SHP = { id: 0, orderNo: 1, seq: 2, date: 3, client: 4, product: 5, bottleType: 6, qty: 7, operator: 8, createdAt: 9, note: 10 };
@@ -2552,13 +2559,15 @@ function _shipAggAll_(rows) {
   (rows || []).forEach(function (r) {
     const no = String(r[SHP.orderNo] || '');
     if (!no) return;
-    if (!map[no]) map[no] = { byKey: {}, maxSeq: 0, seqs: {}, batches: 0, lastDate: '' };
+    if (!map[no]) map[no] = { byKey: {}, maxSeq: 0, seqs: {}, batches: 0, lastDate: '', log: [] };
     const m = map[no];
     const k = _shipKeyOf_(r[SHP.product], r[SHP.bottleType]);
     m.byKey[k] = (m.byKey[k] || 0) + (Math.floor(Number(r[SHP.qty])) || 0);
     const sq = Number(r[SHP.seq]) || 0;
     if (sq > m.maxSeq) m.maxSeq = sq;
-    if (!m.seqs[sq]) { m.seqs[sq] = 1; m.batches++; }
+    if (!m.seqs[sq]) { m.seqs[sq] = 1; m.batches++; m.log.push({ seq: sq, date: _fmtDate_(r[SHP.date]), qty: 0 }); }
+    const _lg = m.log.filter(function (x) { return x.seq === sq; })[0];
+    if (_lg) _lg.qty += (Math.floor(Number(r[SHP.qty])) || 0);
     const d = _fmtDate_(r[SHP.date]);
     if (d && d > m.lastDate) m.lastDate = d;
   });
@@ -2572,6 +2581,21 @@ function _shipOrderedOf_(items) {
     ordered[k] = (ordered[k] || 0) + (Math.floor(Number(it.qty)) || 0);
   });
   return ordered;
+}
+
+// 成品庫存帳本中「有帳」的酒款集合（南坡萬v.2 曾有任何異動列即算有帳）＋目前庫存。
+// 用資料判定而非訂單類型字串＝日後新增訂單類型不必回來改這裡。
+function _ownStockMap_(rows) {
+  const m = {};
+  (rows || []).forEach(function (r) {
+    if (String(r[SK.client]) !== STOCK_OWNER_CLIENT) return;
+    const it = String(r[SK.item] || ''); if (!it) return;
+    const q = Math.floor(Number(r[SK.qty])) || 0;
+    if (m[it] == null) m[it] = 0;
+    if (String(r[SK.type]) === '入庫') m[it] += q;
+    else if (String(r[SK.type]) === '出庫') m[it] -= q;
+  });
+  return m;   // { 酒款: 目前庫存 }；key 存在＝這款有成品庫存帳，要扣
 }
 
 // ── 新增一次出貨（admin+倉管）：一次可出多款；擋超過寄倉餘量；seq 自動遞增 ──
@@ -2625,6 +2649,25 @@ function addShipment(p) {
     const gid = _stockGenId_();
     const note = String((p && p.note) || '');
     const op = String((p && p.operator) || (p && p._user) || '');
+
+    // v3.27 扣成品庫存（合併原 shipOrder）：只扣在 STOCK_OWNER_CLIENT 帳本裡有帳的酒款。
+    //   先整批驗足額，任一款不足就整張擋下不寫入（沿用舊 shipOrder 的 all-or-nothing 防線）。
+    const _stkRows = _stockRows_();
+    const _stkMap = _ownStockMap_(_stkRows);
+    const _deduct = [], _short = [];
+    const _needBy = {};
+    use.forEach(function (u) {
+      if (_stkMap[u.product] == null) return;   // 代工酒款沒有成品庫存帳 → 只記錄
+      _needBy[u.product] = (_needBy[u.product] || 0) + u.qty;
+    });
+    Object.keys(_needBy).forEach(function (prod) {
+      const have = _stkMap[prod] || 0;
+      if (_needBy[prod] > have) _short.push('「' + prod + '」需 ' + _needBy[prod] + '、現有 ' + have);
+      else _deduct.push({ product: prod, qty: _needBy[prod], before: have });
+    });
+    if (_short.length) {
+      return { ok: false, error: '成品庫存不足，本次出貨未登記：' + _short.join('；'), shortages: _short };
+    }
     const out = use.map(function (u, i) {
       return [gid + '-' + (i + 1), String(orderNo), seq, date, client,
         u.product, u.bottleType, u.qty, op, now, note];
@@ -2641,10 +2684,25 @@ function addShipment(p) {
       if (shipped < ordered[k]) allShipped = false;
     });
     if (allShipped) ows.getRange(rowIdx + 1, 9).setValue('已出貨');
+
+    // 扣庫存：一款一筆「出庫」，關聯訂單編號＋備註標明第幾次（可回溯、可回沖）
+    if (_deduct.length) {
+      const sws = _stockSheet_();
+      const today = _stockToday_();
+      const stkOut = _deduct.map(function (d, i) {
+        return [_stockGenId_() + '-s' + (i + 1), today, STOCK_OWNER_CLIENT, d.product, '出庫', d.qty,
+          '', String(orderNo), op, now, '訂單出貨 第 ' + seq + ' 次（客戶：' + client + '）'];
+      });
+      sws.getRange(sws.getLastRow() + 1, 1, stkOut.length, STOCK_HEADERS.length).setValues(stkOut);
+      _deduct.forEach(function (d) { d.after = d.before - d.qty; });
+    }
     _logOrderChange_(orderNo, op, '第 ' + seq + ' 次出貨',
       date + '：' + use.map(function (u) { return u.product + '×' + u.qty; }).join('、') +
-      (allShipped ? '（本單已全部出清）' : '（尚有寄倉未出）') + (note ? ('｜' + note) : ''));
-    return { ok: true, orderNo: orderNo, seq: seq, date: date, lines: use, allShipped: allShipped };
+      (allShipped ? '（本單已全部出清）' : '（尚有寄倉未出）') +
+      (_deduct.length ? ('｜扣成品庫存 ' + _deduct.map(function (d) { return d.product + '−' + d.qty; }).join('、')) : '') +
+      (note ? ('｜' + note) : ''));
+    return { ok: true, orderNo: orderNo, seq: seq, date: date, lines: use, allShipped: allShipped,
+      stockDeducted: _deduct };
   } finally { lock.releaseLock(); }
 }
 
@@ -2697,7 +2755,17 @@ function getShipments(p) {
       }
     } catch (e) { /* 算不出寄倉不影響紀錄本身 */ }
   }
-  return { ok: true, orderNo: orderNo, shipments: out, remain: remain };
+  // v3.27：每款是否會扣成品庫存＋目前庫存（登記表單要顯示「將扣庫存 X（現有 Y）」）
+  const stockInfo = {};
+  try {
+    const _m = _ownStockMap_(_stockRows_());
+    remain.forEach(function (x) {
+      stockInfo[x.product] = (_m[x.product] == null)
+        ? { tracked: false, stock: null }
+        : { tracked: true, stock: _m[x.product] };
+    });
+  } catch (e) { /* 算不出庫存不影響紀錄顯示 */ }
+  return { ok: true, orderNo: orderNo, shipments: out, remain: remain, stockInfo: stockInfo };
 }
 
 // ── 刪除某一次出貨（admin 限定）：整批 seq 一起刪；刪完回推訂單狀態 ──
@@ -2713,12 +2781,38 @@ function deleteShipment(p) {
     if (ws.getLastRow() < 2) return { ok: false, error: '尚無出貨紀錄' };
     const rows = ws.getRange(2, 1, ws.getLastRow() - 1, SHIP_HEADERS.length).getValues();
     let removed = 0;
+    const delLines = [];   // v3.27 記下被刪的款式與數量，供成品庫存回沖
     for (let i = rows.length - 1; i >= 0; i--) {   // 由下往上刪，列號才不會位移
       if (String(rows[i][SHP.orderNo]) === orderNo && (Number(rows[i][SHP.seq]) || 0) === seq) {
+        delLines.push({ product: String(rows[i][SHP.product] || ''), qty: Math.floor(Number(rows[i][SHP.qty])) || 0 });
         ws.deleteRow(i + 2); removed++;
       }
     }
     if (!removed) return { ok: false, error: '找不到 ' + orderNo + ' 的第 ' + seq + ' 次出貨' };
+
+    // v3.27 回沖成品庫存：刪掉的那批若曾扣庫存，補寫「入庫」沖回。
+    //   刻意不刪成品庫存的列＝流水帳保持不可變，一出一進看得出來龍去脈。
+    const _back = [];
+    try {
+      const _m = _ownStockMap_(_stockRows_());
+      const _sum = {};
+      delLines.forEach(function (l) {
+        if (_m[l.product] == null) return;
+        _sum[l.product] = (_sum[l.product] || 0) + l.qty;
+      });
+      const keys = Object.keys(_sum);
+      if (keys.length) {
+        const sws = _stockSheet_();
+        const rowsIn = keys.map(function (prod, i) {
+          _back.push({ product: prod, qty: _sum[prod] });
+          return [_stockGenId_() + '-r' + (i + 1), _stockToday_(), STOCK_OWNER_CLIENT, prod, '入庫', _sum[prod],
+            '', String(orderNo), String((p && p.operator) || (p && p._user) || ''), _stockNow_(),
+            '刪除第 ' + seq + ' 次出貨紀錄，庫存回沖'];
+        });
+        sws.getRange(sws.getLastRow() + 1, 1, rowsIn.length, STOCK_HEADERS.length).setValues(rowsIn);
+      }
+    } catch (e) { /* 回沖失敗不阻斷刪除，但會少一筆帳 → 由操作紀錄可查 */ }
+
 
     // 回推訂單主表：L/M 依剩下的紀錄重算；I 若已無「全部出清」則退回製作狀態
     try {
@@ -2745,8 +2839,9 @@ function deleteShipment(p) {
     } catch (e) { /* 回推失敗不影響刪除本身 */ }
 
     _logOrderChange_(orderNo, String((p && p.operator) || (p && p._user) || ''),
-      '刪除出貨紀錄', '刪除第 ' + seq + ' 次出貨（' + removed + ' 列）');
-    return { ok: true, orderNo: orderNo, seq: seq, removed: removed };
+      '刪除出貨紀錄', '刪除第 ' + seq + ' 次出貨（' + removed + ' 列）' +
+      (_back.length ? ('｜庫存回沖 ' + _back.map(function (b) { return b.product + '+' + b.qty; }).join('、')) : ''));
+    return { ok: true, orderNo: orderNo, seq: seq, removed: removed, stockRestored: _back };
   } finally { lock.releaseLock(); }
 }
 
@@ -3315,7 +3410,9 @@ var CACHE_BUST_MAP = {
   saveRunCard:['rcIdx_v1'], deleteRunCard:['rcIdx_v1'],
   stockIn:['stockAlerts_v1'], stockOut:['stockAlerts_v1'], setSafetyLevel:['stockAlerts_v1'],
   // 出貨/完工會動成品庫存與卡片狀態 → 水位警示與 run card 索引一併重算
-  shipOrder:['stockAlerts_v1'], completeOrderItem:['stockAlerts_v1','rcIdx_v1']
+  shipOrder:['stockAlerts_v1'], completeOrderItem:['stockAlerts_v1','rcIdx_v1'],
+  // v3.27 出貨紀錄合併扣庫存 → 水位警示同步失效
+  addShipment:['stockAlerts_v1'], deleteShipment:['stockAlerts_v1']
 };
 // ↻ 強制刷新對應表：action → 該清掉的讀取快取
 var FRESH_BUST_MAP = {
