@@ -151,7 +151,9 @@ var ROLE_MATRIX = {
   consignMe: ['admin', '財務', '經銷商'], consignSale: ['admin', '經銷商'], consignAdjust: ['admin', '經銷商'],
   consignLedger: ['admin', '財務', '經銷商'], consignStatements: ['admin', '財務', '經銷商'],
   consignDealers: ['admin', '財務', 'PM'], consignPrices: ['admin', '財務'], consignOverview: ['admin', '財務'], consignAlerts: ['admin', '財務'],
-  consignSaveDealer: ['admin'], consignStatementCreate: ['admin'], consignStatementSettle: ['admin'], consignSeed: ['admin'], consignStatementDelete: ['admin']
+  consignSaveDealer: ['admin'], consignStatementCreate: ['admin'], consignStatementSettle: ['admin'], consignSeed: ['admin'], consignStatementDelete: ['admin'],
+  // v3.29 叫貨：送出＝經銷商本人或 admin 代填；放行/駁回/測試信 僅 admin
+  consignRestockCreate: ['admin', '經銷商'], consignRestockList: ['admin', '財務', '經銷商'], consignRestockApprove: ['admin'], consignRestockReject: ['admin'], consignMailTest: ['admin']
 };
 function doGet(e) {
   const p = e.parameter || {};
@@ -296,6 +298,11 @@ function doGet(e) {
       case 'consignAlerts':          result = consignAlerts(p); break;          // v3.28 寄售：結帳日到期提醒
       case 'consignSeed':            result = consignSeed(p); break;            // v3.28 寄售：一次性啟用種子(冪等)
       case 'consignStatementDelete': result = consignStatementDelete(p); break; // v3.28 寄售：撤銷尚未建認列單的對帳單(admin)
+      case 'consignRestockCreate':   result = consignRestockCreate(p); break;   // v3.29 叫貨：店長送出（FOQ 檢查＋email）
+      case 'consignRestockList':     result = consignRestockList(p); break;     // v3.29 叫貨：清單（經銷商=自己／admin=全部）
+      case 'consignRestockApprove':  result = consignRestockApprove(p); break;  // v3.29 叫貨：放行→自動建出貨訂單(admin)
+      case 'consignRestockReject':   result = consignRestockReject(p); break;   // v3.29 叫貨：駁回(admin)
+      case 'consignMailTest':        result = consignMailTest(p); break;        // v3.29 叫貨：寄信授權驗證(admin)
       case 'deleteShipment':         result = deleteShipment(p); break;          // 實際出貨紀錄：刪除某一次出貨(v3.26, admin 限定)
       case 'getBottleOverview':      result = getBottleOverview(); break;        // 玻璃瓶庫存
       case 'bottleIn':               result = bottleIn(p); break;                // 玻璃瓶庫存
@@ -352,6 +359,7 @@ var AUDIT_ACTIONS = {
   stockIn:1, stockOut:1, bottleIn:1, bottleOut:1, addBottleItem:1, setSafetyLevel:1,
   addShipment:1, deleteShipment:1,
   consignSale:1, consignAdjust:1, consignSaveDealer:1, consignStatementCreate:1, consignStatementSettle:1, consignSeed:1, consignStatementDelete:1,
+  consignRestockCreate:1, consignRestockApprove:1, consignRestockReject:1, consignMailTest:1,
   saveRunCard:1, deleteRunCard:1, saveProcessNote:1,
   addBatchRecord:1, updateBatchRecord:1, deleteBatchRecord:1,
   submitApply:1, reviewApply:1, saveRdRecord:1, deleteRdRecord:1, submitRdApply:1, reviewRdApply:1,
@@ -3465,7 +3473,8 @@ var ORDER_MUTATING_ACTIONS = {
   completeOrderItem:1, confirmShipDate:1, shipOrder:1,
   migrateOrderNos:1, migrateOrderTypes:1, backfillOrderCreators:1,
   addShipment:1, deleteShipment:1,
-  consignStatementSettle:1   // v3.28 結清自動建認列單
+  consignStatementSettle:1,  // v3.28 結清自動建認列單
+  consignRestockApprove:1    // v3.29 叫貨放行自動建出貨單
 };
 // 其餘讀取快取的失效對應（action → 要清掉的 key）。
 // 新增寫入函式時只要在這裡登記一行，就不會出現「改了資料卻還看到舊值」。
@@ -3552,7 +3561,7 @@ function bootstrap(p) {
 // ============================================================
 var CONSIGN_ROLE = '經銷商';
 // 經銷商角色可呼叫的 action 白名單（比照 FBVIEW_ALLOWED_ACTIONS，未列者一律 403）
-var CONSIGN_DEALER_ACTIONS = ['changePassword', 'consignMe', 'consignSale', 'consignAdjust', 'consignLedger', 'consignStatements'];
+var CONSIGN_DEALER_ACTIONS = ['changePassword', 'consignMe', 'consignSale', 'consignAdjust', 'consignLedger', 'consignStatements', 'consignRestockCreate', 'consignRestockList'];
 var TYPE_CONSIGN_SETTLE = '經銷商寄售月結認列單';
 
 var CONSIGN_CFG_SHEET = '經銷商設定';
@@ -3923,8 +3932,11 @@ function consignMe(p) {
   rows.forEach(function (r) { if (String(r[CLG.dealer]) === dealer && String(r[CLG.type]) === '售出' && _fmtDate_(r[CLG.date]) === today) todaySold += -Math.round(Number(r[CLG.qty]) || 0); });
   var recent = rows.filter(function (r) { return String(r[CLG.dealer]) === dealer; }).map(_consignRowObj_).reverse().slice(0, 40);
   var lockedPeriods = stmts.filter(function (s) { return s.status === '已結清'; }).map(function (s) { return s.period; });
+  var catalog = _consignCatalog_(cfg);   // v3.29 叫貨目錄（牌價表全款＋折扣後單價＋FOQ）
+  var restocks = _consignRestockRows_().filter(function (r) { return String(r[CRS.dealer]) === dealer; }).map(_consignRestockObj_).reverse().slice(0, 10);
   return { ok: true, dealer: cfg, today: today, stock: stock, todaySold: todaySold,
-    current: cur, previous: prev, previousStatement: prevStmt, statements: stmts, recent: recent, lockedPeriods: lockedPeriods };
+    current: cur, previous: prev, previousStatement: prevStmt, statements: stmts, recent: recent, lockedPeriods: lockedPeriods,
+    catalog: catalog, restocks: restocks };
 }
 
 // ── 登記售出（經銷商本人／admin 代登）：lines=[{product, volume, qty}]，單價當下凍結 ──
@@ -4071,7 +4083,8 @@ function consignOverview(p) {
     return { cfg: cfg, calc: calc, statement: s ? _consignStmtObj_(s.row) : null, stockNow: stockNow, stockItems: stockItems,
       isDue: (today >= calc.dueDate) && !(s && String(s.row[CST.status]) === '已結清'), missingPrices: missing };
   });
-  return { ok: true, period: period, today: today, dealers: dealers };
+  var pending = _consignRestockRows_().filter(function (r) { return String(r[CRS.status]) === '待放行'; }).map(_consignRestockObj_).reverse();   // v3.29
+  return { ok: true, period: period, today: today, dealers: dealers, pendingRestocks: pending };
 }
 // ── 產生／重算對帳單（admin）：已結清者拒絕；待結清者可重算覆蓋（結清前數字可變）──
 function consignStatementCreate(p) {
@@ -4204,5 +4217,171 @@ function consignAlerts(p) {
       per = _consignPrevPeriod_(per);
     }
   });
-  return { ok: true, alerts: alerts };
+  var restocks = _consignRestockRows_().filter(function (r) { return String(r[CRS.status]) === '待放行'; }).map(_consignRestockObj_);   // v3.29 待放行叫貨
+  return { ok: true, alerts: alerts, pendingRestocks: restocks.map(function (q) { return { id: q.id, dealer: q.dealer, label: (map[q.dealer] || {}).label || q.dealer, date: q.date, totalQty: q.totalQty, emailed: q.emailed }; }) };
+}
+
+
+// ############################################################
+// ##  v3.29 P2 經銷商叫貨系統（2026-09-03 主公拍板：人工放行＋email 通知）
+// ##  流程：店長 dealer.html 送叫貨（FOQ 檢查）→ 寫「經銷商叫貨單」待放行 ＋ MailApp 通知 Molly/Kevin
+// ##        → admin 在「經銷商寄售」分頁放行 → 自動建「自有酒款出貨訂單(有金流)」(金額 0、寄售) ／ 或駁回填原因
+// ##  ⚠️ MailApp 需要新的 OAuth scope（script.send_mail）：部署前須由 joyhouse.rental 在編輯器跑一次 __authMail 授權；
+// ##     寄信一律 try/catch＝授權前叫貨照樣成立，只是 emailSent=false（回傳與分頁都會標示）。
+// ############################################################
+var CONSIGN_NOTIFY_EMAILS = ['molly_lin@kevinnumber1-cocktail.com', 'kevin_huang@kevinnumber1-cocktail.com'];
+var TYPE_CONSIGN_SHIP = '自有酒款出貨訂單(有金流)';   // 與前端 TYPE_SHIP 同字串（後端原本沒有這個常數）
+var CONSIGN_RESTOCK_SHEET = '經銷商叫貨單';
+var CONSIGN_RESTOCK_HEADERS = ['叫貨ID', '經銷商', '申請日期', '狀態', '明細JSON', '希望到貨日', '備註', '申請人', '建立時間', '審核人', '審核時間', '審核備註', '建立訂單編號', 'email通知'];
+var CRS = { id: 0, dealer: 1, date: 2, status: 3, detail: 4, wishDate: 5, note: 6, applicant: 7, createdAt: 8, reviewer: 9, reviewedAt: 10, reviewNote: 11, orderNo: 12, emailed: 13 };
+// 合作寄售 FOQ（Molly 202609 報價單）：100ml 每款 25 瓶／500ml、700ml 每款 12 瓶
+function _consignFoqOf_(volume) { return (String(volume) === '100ml') ? 25 : 12; }
+// 依規格預設瓶型（建單頁同一套慣例；700ml 尚無庫存瓶型，留空讓 admin 在訂單補）
+function _consignBottleFor_(volume) { return ({ '100ml': '100ml山形香水瓶', '500ml': '500ml大香水瓶' })[String(volume)] || ''; }
+function _consignRestockRows_() { return _consignRowsRO_(CONSIGN_RESTOCK_SHEET, CONSIGN_RESTOCK_HEADERS); }
+function _consignRestockObj_(r) {
+  var detail = [];
+  try { detail = r[CRS.detail] ? JSON.parse(r[CRS.detail]) : []; } catch (e) { detail = []; }
+  return {
+    id: String(r[CRS.id] || ''), dealer: String(r[CRS.dealer] || ''), date: _fmtDate_(r[CRS.date]), status: String(r[CRS.status] || ''),
+    lines: detail, wishDate: _fmtDate_(r[CRS.wishDate]), note: String(r[CRS.note] || ''), applicant: String(r[CRS.applicant] || ''),
+    createdAt: _fmtDateTime_(r[CRS.createdAt]), reviewer: String(r[CRS.reviewer] || ''), reviewedAt: _fmtDateTime_(r[CRS.reviewedAt]),
+    reviewNote: String(r[CRS.reviewNote] || ''), orderNo: String(r[CRS.orderNo] || ''), emailed: _consignBool_(r[CRS.emailed]),
+    totalQty: detail.reduce(function (a, l) { return a + (Number(l.qty) || 0); }, 0)
+  };
+}
+// 經銷商可叫貨的目錄＝牌價表全款（含該經銷商折扣後單價）
+function _consignCatalog_(cfg) {
+  var pm = _consignPriceMap_();
+  return Object.keys(pm).map(function (k) {
+    var e = pm[k];
+    return { product: e.product, pubName: e.pubName, volume: e.volume, listPrice: e.price, unitPrice: _consignUnitPrice_(e, cfg.discount), foq: _consignFoqOf_(e.volume), bottleType: _consignBottleFor_(e.volume) };
+  }).sort(function (a, b) { return a.product.localeCompare(b.product) || (parseInt(a.volume, 10) - parseInt(b.volume, 10)); });
+}
+// ── 送出叫貨（經銷商本人／admin 代填）：lines=[{product, volume, qty}]；每款須 ≥ FOQ；寫單＋寄信 ──
+function consignRestockCreate(p) {
+  var dealer = String((p && p.dealer) || '').trim();
+  if (!dealer) return { ok: false, error: '缺少經銷商' };
+  var cfg = _consignDealerMap_()[dealer];
+  if (!cfg) return { ok: false, error: '找不到經銷商設定：' + dealer };
+  if (!cfg.enabled) return { ok: false, error: '此經銷商已停用' };
+  var lines;
+  try { lines = typeof p.lines === 'string' ? JSON.parse(p.lines) : (p.lines || []); }
+  catch (e) { return { ok: false, error: '明細 JSON 解析失敗' }; }
+  if (!lines || !lines.length) return { ok: false, error: '請至少選一款' };
+  var wish = String((p && p.wishDate) || '').trim();
+  if (wish && !/^\d{4}-\d{2}-\d{2}$/.test(wish)) return { ok: false, error: '希望到貨日格式須為 YYYY-MM-DD' };
+  var pm = _consignPriceMap_();
+  var use = [], bad = [];
+  lines.forEach(function (ln) {
+    var q = Math.floor(Number(ln.qty)) || 0; if (q <= 0) return;
+    var prod = String(ln.product || '').trim(), vol = _consignVolOf_(ln.volume, ln.bottleType);
+    var pe = _consignPriceOf_(pm, prod, vol);
+    if (!pe) { bad.push('「' + prod + ' ' + vol + '」不在牌價表／目錄內'); return; }
+    var foq = _consignFoqOf_(vol);
+    if (q < foq) { bad.push('「' + pe.pubName + ' ' + vol + '」' + q + ' 瓶，低於最低叫貨量 ' + foq + ' 瓶'); return; }
+    use.push({ product: pe.product, pubName: pe.pubName, volume: vol, bottleType: _consignBottleFor_(vol), qty: q, unitPrice: _consignUnitPrice_(pe, cfg.discount) });
+  });
+  if (bad.length) return { ok: false, error: '叫貨內容有誤，未送出：' + bad.join('；'), problems: bad };
+  if (!use.length) return { ok: false, error: '叫貨數量皆為 0，未送出' };
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    var ws = _consignSheet_(CONSIGN_RESTOCK_SHEET, CONSIGN_RESTOCK_HEADERS);
+    var id = _consignGenId_('RQ'), now = _consignNow_(), today = _consignToday_();
+    var op = String((p && p._user) || ''), note = String((p && p.note) || '');
+    var totalQty = use.reduce(function (a, l) { return a + l.qty; }, 0);
+    // email 通知（授權前會丟例外 → 不阻斷；狀態記進 N 欄與回傳）
+    var emailed = false, emailErr = '';
+    try {
+      var subj = '【南坡萬】' + cfg.label + ' 叫貨申請 ' + totalQty + ' 瓶（' + today + '）';
+      var body = cfg.label + '（' + dealer + '）於 ' + now + ' 送出叫貨申請，請至廠務 APP「經銷商寄售」分頁放行或駁回。\n\n'
+        + use.map(function (l) { return '・' + l.pubName + ' ' + l.volume + ' × ' + l.qty + ' 瓶（單價 NT$' + l.unitPrice + '）'; }).join('\n')
+        + '\n\n合計 ' + totalQty + ' 瓶' + (wish ? '　希望到貨日 ' + wish : '') + (note ? '\n備註：' + note : '')
+        + '\n申請人：' + op + '\n叫貨單號：' + id
+        + '\n\n廠務 APP：https://mollylin-coding.github.io/recipe/\n（此信由系統自動寄出）';
+      MailApp.sendEmail({ to: CONSIGN_NOTIFY_EMAILS.join(','), subject: subj, body: body, name: '南坡萬廠務系統' });
+      emailed = true;
+    } catch (e) { emailErr = String((e && e.message) || e); }
+    var row = [id, dealer, today, '待放行', JSON.stringify(use), wish, note, op, now, '', '', '', '', emailed ? 'TRUE' : 'FALSE'];
+    var r = ws.getLastRow() + 1;
+    ws.getRange(r, CRS.date + 1).setNumberFormat('@'); ws.getRange(r, CRS.wishDate + 1).setNumberFormat('@');
+    ws.getRange(r, 1, 1, CONSIGN_RESTOCK_HEADERS.length).setValues([row]);
+    return { ok: true, id: id, dealer: dealer, lines: use, totalQty: totalQty, emailSent: emailed, emailError: emailErr };
+  } finally { lock.releaseLock(); }
+}
+// ── 叫貨單清單：經銷商＝自己的（session 強制）；admin＝全部，status 可篩 ──
+function consignRestockList(p) {
+  var dealer = String((p && p.dealer) || '').trim();
+  var status = String((p && p.status) || '').trim();
+  var list = _consignRestockRows_().filter(function (r) {
+    if (dealer && String(r[CRS.dealer]) !== dealer) return false;
+    if (status && String(r[CRS.status]) !== status) return false;
+    return true;
+  }).map(_consignRestockObj_).reverse();
+  return { ok: true, list: list };
+}
+function _consignRestockFind_(id) {
+  var ws = _consignSheet_(CONSIGN_RESTOCK_SHEET, CONSIGN_RESTOCK_HEADERS);
+  var rows = _consignRowsOf_(CONSIGN_RESTOCK_SHEET, CONSIGN_RESTOCK_HEADERS);
+  for (var i = 0; i < rows.length; i++) if (String(rows[i][CRS.id]) === id) return { ws: ws, row: rows[i], idx: i };
+  return null;
+}
+// ── 放行（admin）：自動建「自有酒款出貨訂單(有金流)」＝寄售純物流單（金額 0），叫貨單標已放行＋訂單編號 ──
+function consignRestockApprove(p) {
+  var id = String((p && p.id) || '').trim();
+  if (!id) return { ok: false, error: '缺少叫貨單 ID' };
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    var f = _consignRestockFind_(id);
+    if (!f) return { ok: false, error: '找不到叫貨單：' + id };
+    var rq = _consignRestockObj_(f.row);
+    if (rq.status !== '待放行') return { ok: false, error: '此叫貨單狀態為「' + rq.status + '」，不可重複處理' };
+    // 酒譜 sheet 名：對回南坡萬v.2 酒譜清單（Run Card／完成回報要用），對不到留空
+    var sheetOf = {};
+    try { (getClientRecipeList({ client: STOCK_OWNER_CLIENT }).list || []).forEach(function (r) { sheetOf[r.recipeName] = r.sheet; }); } catch (e) {}
+    var items = rq.lines.map(function (l) {
+      return { product: l.product, sheet: sheetOf[l.product] || '', volume: l.volume, bottleType: l.bottleType || _consignBottleFor_(l.volume), qty: Number(l.qty) || 0, status: '待製作' };
+    });
+    var op = String((p && p._user) || '');
+    var deliveryDate = rq.wishDate || String((p && p.deliveryDate) || '') || _consignToday_();
+    var res = createOrder({
+      client: rq.dealer, orderType: TYPE_CONSIGN_SHIP, deliveryDate: deliveryDate, actualDeliveryDate: deliveryDate,
+      items: items, total: 0, balance: 0, depositStatus: '寄售', pm: String((p && p.pm) || 'Molly'),
+      orderCreator: op, user: op, _user: op, _role: 'admin'
+    });
+    if (!res || !res.ok) return { ok: false, error: '建立出貨訂單失敗：' + ((res && res.error) || '') };
+    var row = f.row.slice();
+    row[CRS.status] = '已放行'; row[CRS.reviewer] = op; row[CRS.reviewedAt] = _consignNow_();
+    row[CRS.reviewNote] = String((p && p.note) || ''); row[CRS.orderNo] = res.orderNo;
+    f.ws.getRange(f.idx + 2, 1, 1, CONSIGN_RESTOCK_HEADERS.length).setValues([row]);
+    _logOrderChange_(res.orderNo, op, '叫貨放行建單', rq.dealer + '／叫貨單 ' + id + '／' + rq.totalQty + ' 瓶');
+    return { ok: true, id: id, orderNo: res.orderNo, dealer: rq.dealer, totalQty: rq.totalQty };
+  } finally { lock.releaseLock(); }
+}
+// ── 駁回（admin）：原因必填 ──
+function consignRestockReject(p) {
+  var id = String((p && p.id) || '').trim();
+  var note = String((p && p.note) || '').trim();
+  if (!id) return { ok: false, error: '缺少叫貨單 ID' };
+  if (!note) return { ok: false, error: '請填駁回原因（店長會看到）' };
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    var f = _consignRestockFind_(id);
+    if (!f) return { ok: false, error: '找不到叫貨單：' + id };
+    if (String(f.row[CRS.status]) !== '待放行') return { ok: false, error: '此叫貨單已處理' };
+    var row = f.row.slice();
+    row[CRS.status] = '已駁回'; row[CRS.reviewer] = String((p && p._user) || ''); row[CRS.reviewedAt] = _consignNow_(); row[CRS.reviewNote] = note;
+    f.ws.getRange(f.idx + 2, 1, 1, CONSIGN_RESTOCK_HEADERS.length).setValues([row]);
+    return { ok: true, id: id };
+  } finally { lock.releaseLock(); }
+}
+// ── 授權用：joyhouse.rental 在 Apps Script 編輯器直接「執行」這個函式一次 → 跳出 Google 授權畫面 → 允許 → 收到測試信即完成 ──
+function __authMail() {
+  MailApp.sendEmail({ to: CONSIGN_NOTIFY_EMAILS.join(','), subject: '【南坡萬廠務系統】叫貨 email 通知授權成功', body: '此信由 __authMail 寄出，代表 MailApp 授權已生效（' + _consignNow_() + '）。', name: '南坡萬廠務系統' });
+  return 'sent';
+}
+// API 版測試信（admin）：授權後由前端／curl 驗證寄信通不通
+function consignMailTest(p) {
+  try { __authMail(); return { ok: true, sent: true, to: CONSIGN_NOTIFY_EMAILS }; }
+  catch (e) { return { ok: false, error: String((e && e.message) || e), hint: '請由 joyhouse.rental 在 Apps Script 編輯器執行 __authMail 完成授權' }; }
 }
