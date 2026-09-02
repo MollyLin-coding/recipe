@@ -20,12 +20,13 @@ if [ -z "$TAG" ]; then
   exit 1
 fi
 
-echo "① 複製 preview → 正式前台（index.html / order.html）"
+echo "① 複製 preview → 正式前台（index.html / order.html / dealer.html）"
 cp preview/index.html index.html
 cp preview/order.html order.html
+cp preview/dealer.html dealer.html   # v3.28 經銷商寄售夥伴頁
 
 echo "② 正式前台 API 指回正式 /exec（把預覽的測試 URL 換成正式）"
-sed -i "s|const API='[^']*';|const API='${PROD_API}';|" index.html order.html
+sed -i "s|const API='[^']*';|const API='${PROD_API}';|" index.html order.html dealer.html
 
 echo "②b 版本號自動蓋上 ${TAG}（登入頁 #appVer 顯示用）"
 sed -i "s|const APP_VERSION='[^']*';|const APP_VERSION='${TAG}';|" index.html
@@ -42,10 +43,11 @@ if grep -q "const API=" order.html; then
 else
   echo "   （order.html 為停用告示頁、無 API 行，略過檢查）"
 fi
-echo "   ✅ index.html / order.html 皆指向正式 /exec"
+grep -q "const API='${PROD_API}';" dealer.html || { echo "❌ dealer.html API 置換失敗，已中止（未 commit）"; exit 1; }
+echo "   ✅ index.html / order.html / dealer.html 皆指向正式 /exec"
 
 echo "④ git commit + 打版本標籤 ${TAG}"
-git add index.html order.html preview/
+git add index.html order.html dealer.html preview/
 git commit -m "promote: ${MSG} (${TAG})" || echo "   （無變更可提交，沿用現有內容）"
 git tag -a "${TAG}" -m "${MSG}"
 

@@ -369,6 +369,7 @@ tbody tr:hover td{background:#faf3e8;}
     <div class="nav-tab"        data-tab="inventory" onclick="switchTab('inventory')"><span class="ni">🧪</span><span>原料/資材庫</span></div>
     <div class="nav-tab"        data-tab="rd"        onclick="switchTab('rd')">       <span class="ni">🔬</span><span>研發試算</span></div>
     <div class="nav-tab"        data-tab="stock"     onclick="switchTab('stock')">    <span class="ni">🗄️</span><span>成品庫存</span></div>
+    <div class="nav-tab admin-only" data-tab="consign" onclick="switchTab('consign')"><span class="ni">🤝</span><span>經銷商寄售</span></div><!-- v3.28 -->
     <div class="nav-tab admin-only" data-tab="apply" onclick="switchTab('apply')">   <span class="ni">✏️</span><span>審核</span></div>
   </div>
 </div>
@@ -663,11 +664,12 @@ async function _bootApp(username, role) {
     document.querySelectorAll('#navbar .nav-tab').forEach(el => {
       if (!el.classList.contains('admin-only')) el.style.display = '';
     });
-    const _tabsOK = ['recipe','profit','inventory','rd','batch','stock','apply'];
-    switchTab((_rt && _tabsOK.includes(_rt) && (_rt !== 'apply' || role === 'admin')) ? _rt : 'batch'); // v3.9.2 登入預設=訂單分頁(主公指示)
+    const _tabsOK = ['recipe','profit','inventory','rd','batch','stock','apply','consign'];
+    switchTab((_rt && _tabsOK.includes(_rt) && ((_rt !== 'apply' && _rt !== 'consign') || role === 'admin')) ? _rt : 'batch'); // v3.9.2 登入預設=訂單分頁(主公指示)
   }
   showStockAlerts(window._bootStockAlerts);
   showShipDateAlerts(window._bootOrders);   // v3.14.4 與訂單列表共用同一份，不再重複打 getOrders
+  _consignApplyBoot(_b);                    // v3.28 經銷商設定快取＋結帳日到期提醒（一天一次）
   window._bootStockAlerts = null;
   window._bootOrders = null;   // 開機預抓用完即丟：之後的 ↻／切分頁一律重新取
 }
@@ -794,7 +796,7 @@ function switchTab(tab) {
 
   document.querySelectorAll('.nav-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
   const mc = document.getElementById('mainContent'); mc.scrollTop = 0;
-  ({ recipe:renderRecipePage, profit:renderProfitPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderRuncardPage, order:renderOrderPage, stock:renderStockPage, apply:renderApplyPage })[tab]?.(mc);
+  ({ recipe:renderRecipePage, profit:renderProfitPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderRuncardPage, order:renderOrderPage, stock:renderStockPage, apply:renderApplyPage, consign:renderConsignPage })[tab]?.(mc);
   wmUpdate(); // v3.8 酒譜頁浮水印開/關
 }
 
@@ -2659,10 +2661,23 @@ function omTypeChange() {
 function _syncFinanceVis() {
   const t = document.getElementById('om_type');
   const v = t ? t.value : '';
-  const hideFin = _isNoFinanceType(v);
+  const consign = _isConsignForm();   // v3.28 寄售出貨單：金流整區反灰＋金額鎖 0（主公拍板：出貨單＝純物流單）
+  const hideFin = _isNoFinanceType(v) || consign;
   const hideDlv = (v === TYPE_NO_FINANCE);
   const f = document.getElementById('omFinWrap'); if (f) f.style.display = hideFin ? 'none' : '';
   const d = document.getElementById('omDeliveryWrap'); if (d) d.style.display = hideDlv ? 'none' : '';
+  const h = document.getElementById('omConsignHint'); if (h) h.style.display = consign ? '' : 'none';
+  ['om_total', 'om_balance', 'om_deposit'].forEach(id => {
+    const el = document.getElementById(id); if (!el) return;
+    el.disabled = consign;
+    if (consign) el.value = (id === 'om_deposit') ? '寄售' : 0;
+    else if (id === 'om_deposit' && el.value === '寄售') el.value = '';
+  });
+}
+// v3.28 建單表單目前是否為「寄售出貨單」（類型＝自有酒款出貨訂單(有金流) 且 客戶＝啟用中的寄售經銷商）
+function _isConsignForm() {
+  const t = document.getElementById('om_type'); const c = document.getElementById('om_client');
+  return !!(t && c && _isShipType(t.value) && isConsignDealer(c.value));
 }
 // 取訂單類型送出值：自行keyin＋有輸入 → 存輸入的類型/生產目的文字
 function getOrderTypeValue() {
@@ -2771,6 +2786,7 @@ function orderModalClientChange() {
   document.getElementById('orderItemLines').innerHTML = '';
   orderModalAddLine();
   refillDeliveryDefaults();
+  _syncFinanceVis();   // v3.28 換客戶即重判寄售（金流反灰）
 }
 // v1.6 金流紀錄欄位（建單 modal 與 💰金流編輯 modal 共用；id 固定 fin_*，同時只會有一個 modal）
 function financeFieldsHtml(v) {
@@ -2961,7 +2977,7 @@ function renderMonthOrders(orders) {
     const _logTxt = (o.shipLog || []).map(b => `第${b.seq}次 ${String(b.date || '').slice(5)} ×${b.qty}`).join('・');
     const _remTxt = (o.items || []).filter(it => (+it.remainStock || 0) > 0)
       .map(it => `${it.product} ${+it.remainStock}`).join('、');
-    const shipLine = (o.orderType === TYPE_NO_FINANCE || !_ordTot) ? '' : (
+    const shipLine = (o.orderType === TYPE_NO_FINANCE || o.orderType === TYPE_CONSIGN_SETTLE || !_ordTot) ? '' : (
       o.shipBatches > 0
         ? `<div style="font-size:11px;margin-top:3px;font-weight:600;color:${_left > 0 ? 'var(--gold-dk)' : 'var(--green)'};">🚚 已出 ${_shpTot}/${_ordTot} 瓶${_left > 0 ? ('　📦 寄倉 ' + _left + ' 瓶') : '　✔ 已全部出清'}${_logTxt ? `<span style="font-weight:400;color:var(--ink3);">（${_logTxt}）</span>` : ''}</div>`
           + ((_left > 0 && (o.items || []).length > 1 && _remTxt) ? `<div style="font-size:11px;color:var(--gold-dk);">　📦 寄倉明細：${_remTxt}</div>` : '')
@@ -2982,7 +2998,7 @@ function renderMonthOrders(orders) {
         <div style="font-weight:600;font-size:13px;">${clientLabel(o.client)} <span style="color:var(--ink3);font-weight:400;font-size:11px;">${o.orderNo}</span> <span style="font-weight:400;font-size:11px;${o.lot ? 'color:var(--gold-dk);' : 'color:var(--red);opacity:.7;'}">${o.lot ? ('Lot ' + o.lot) : '未填寫Lot數'}</span>${o.orderCreator ? ` <span style="font-weight:400;font-size:11px;color:var(--ink3);">建單:${o.orderCreator}</span>` : ''}${o.pm ? ` <span style="font-weight:400;font-size:11px;color:var(--ink3);">PM:${o.pm}</span>` : ''}</div>
         <div style="font-size:11px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${itemsTxt || '—'}</div>
         ${shipLine}
-        ${(!_isNoFinanceType(o.orderType) && o.depositPaidDate !== undefined) ? `<div style="font-size:11px;margin-top:2px;"><span style="color:${o.depositPaidDate ? 'var(--green)' : 'var(--yellow)'};font-weight:600;">訂金${o.depositPaidDate ? ' ✓已收' : ' 未收'}</span><span style="margin:0 6px;color:var(--border);">|</span><span style="color:${o.finalPaidDate ? 'var(--green)' : 'var(--yellow)'};font-weight:600;">尾款${o.finalPaidDate ? ' ✓已收' : ' 未收'}</span></div>` : ''}
+        ${isConsignOrder(o) ? `<div style="font-size:11px;margin-top:2px;color:var(--ink3);">🤝 寄售訂單・只看出貨量，金額結算見「經銷商寄售統計」</div>` : o.orderType === TYPE_CONSIGN_SETTLE ? `<div style="font-size:11px;margin-top:2px;color:var(--green);font-weight:600;">🤝 寄售月結認列 NT${(o.total || 0).toLocaleString()}${o.finalPaidDate ? '・入帳 ' + o.finalPaidDate : ''}</div>` : (!_isNoFinanceType(o.orderType) && o.depositPaidDate !== undefined) ? `<div style="font-size:11px;margin-top:2px;"><span style="color:${o.depositPaidDate ? 'var(--green)' : 'var(--yellow)'};font-weight:600;">訂金${o.depositPaidDate ? ' ✓已收' : ' 未收'}</span><span style="margin:0 6px;color:var(--border);">|</span><span style="color:${o.finalPaidDate ? 'var(--green)' : 'var(--yellow)'};font-weight:600;">尾款${o.finalPaidDate ? ' ✓已收' : ' 未收'}</span></div>` : ''}
       </div>
       <div style="text-align:right;flex:0 0 auto;">
         <div style="font-size:12px;font-weight:600;">${o.deliveryDate || '—'}</div>
@@ -3061,7 +3077,7 @@ function showOrderDetail(orderNo) {
   const finShown = o.finalAdjusted && o.finalAdjustedAmount !== '' && o.finalAdjustedAmount != null
     ? `<s style="opacity:.6;">NT$${o.finalAmount !== '' ? o.finalAmount : (o.balance || 0)}</s> → NT$${o.finalAdjustedAmount}（特殊調整）`
     : (o.finalAmount !== '' ? 'NT$' + o.finalAmount : (o.balance ? 'NT$' + o.balance : '—'));
-  const moneyHtml = (canSeeMoney && !_isNoFinanceType(o.orderType)) ? `
+  const moneyHtml = isConsignOrder(o) ? consignHintHtml() : (canSeeMoney && !_isNoFinanceType(o.orderType)) ? `
     <div style="margin:8px 0 2px;font-size:13px;font-weight:600;color:var(--gold-dk);">金流</div>
     ${row('總金額', 'NT$' + (o.total || 0) + '（訂金狀態 ' + (o.depositStatus || '—') + '）')}
     ${row('訂金', (o.depositAmount !== '' && o.depositAmount != null ? 'NT$' + o.depositAmount : '—') + '（預計 ' + (o.depositDueDate || '—') + '｜實收 ' + (o.depositPaidDate || '未收') + '）')}
@@ -3085,8 +3101,8 @@ function showOrderDetail(orderNo) {
     ${items}
     ${moneyHtml}
     ${dlvHtml}
-    <div style="margin:10px 0 2px;font-size:13px;font-weight:600;color:var(--gold-dk);">🚚 實際出貨紀錄（寄倉分批出貨）</div>
-    <div id="shipRecArea" style="font-size:11px;color:var(--ink3);">載入中…</div>
+    ${o.orderType === TYPE_CONSIGN_SETTLE ? '' : `<div style="margin:10px 0 2px;font-size:13px;font-weight:600;color:var(--gold-dk);">🚚 實際出貨紀錄（寄倉分批出貨）</div>
+    <div id="shipRecArea" style="font-size:11px;color:var(--ink3);">載入中…</div>`}
     <div style="margin:10px 0 2px;">
       <button class="btn btn-ghost btn-sm" id="ordHistBtn" style="font-size:12px;" onclick="toggleOrderHistory('${o.orderNo}')">📜 查看訂單歷史修改紀錄</button>
     </div>
@@ -3095,11 +3111,12 @@ function showOrderDetail(orderNo) {
       ${(isAdmin || isPM()) ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();editOrder(${idx})">✏️ 編輯訂單</button>` : ''}
       ${isAdmin ? `<button class="btn btn-ghost btn-sm" style="color:#c0392b;border:1px solid #e74c3c;" onclick="deleteOrderFromDetail('${o.orderNo}')">🗑 刪除訂單</button>` : ''}
       ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();showDeliveryModal('${o.orderNo}')">🚚 編輯配送</button>` : ''}
-      ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();showFinanceModal(${idx})">💰 金流</button>` : ''}
-      ${canAct ? `<button class="btn btn-sm" style="background:var(--green);color:#fff;border:1px solid var(--green);font-weight:700;" onclick="this.closest('.modal-bg').remove();showShipModal(${idx})">🚚 實際出貨紀錄（可分批出貨）</button>` : ''}
+      ${(isAdmin && !isConsignOrder(o)) ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();showFinanceModal(${idx})">💰 金流</button>` : ''}
+      ${(canAct && o.orderType !== TYPE_CONSIGN_SETTLE) ? `<button class="btn btn-sm" style="background:var(--green);color:#fff;border:1px solid var(--green);font-weight:700;" onclick="this.closest('.modal-bg').remove();showShipModal(${idx})">🚚 實際出貨紀錄（可分批出貨）</button>` : ''}
+      ${isConsignOrder(o) ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();switchTab('consign')">🤝 經銷商寄售統計</button>` : ''}
       <button class="btn btn-primary btn-sm" onclick="this.closest('.modal-bg').remove()">關閉</button>
     </div>`);
-  loadShipments(o.orderNo);
+  if (o.orderType !== TYPE_CONSIGN_SETTLE) loadShipments(o.orderNo);
 }
 // ✏️ 編輯整張訂單（admin）：帶入既有資料的建單 modal，儲存走 updateOrder
 function editOrder(oi) {
@@ -3288,6 +3305,7 @@ function spCalc() {
 // 💰 金流編輯（admin）：整組覆寫 N~V 欄
 function showFinanceModal(oi) {
   const o = window._mgmtOrders[oi]; if (!o) return;
+  if (isConsignOrder(o)) { toast('寄售訂單不記金流，請至「經銷商寄售統計」對帳結清'); return; }   // v3.28
   const modal = makeModal(`
     <div class="modal-title">💰 金流紀錄：${o.orderNo}</div>
     <div style="font-size:12px;color:var(--ink3);margin-bottom:8px;">${clientLabel(o.client)} · 總金額 NT$${o.total || 0}</div>
@@ -3426,6 +3444,7 @@ function showOrderModal(edit) {
       <div class="fg"><label>尾款</label><input class="inp" id="om_balance" type="number" min="0" value="${isEdit ? (edit.balance || 0) : 0}" style="margin:0;"></div>
     </div>
     <div class="fg" style="margin-bottom:12px;"><label>訂金狀態</label><input class="inp" id="om_deposit" list="omDepList" value="${isEdit ? (edit.depositStatus || '') : ''}" placeholder="未收 / 已收訂 / 已結清（可自填如 已收訂金 NT$3,000）" style="margin:0;"><datalist id="omDepList"><option>未收</option><option>已收訂</option><option>已結清</option></datalist></div>
+    <div id="omConsignHint" style="display:none;margin:0 0 10px;padding:9px 12px;border:1px dashed var(--border);border-radius:8px;background:var(--bg);color:var(--ink3);font-size:12px;line-height:1.6;">🤝 此為寄售訂單，只看出貨量，金額結算請看「經銷商寄售統計」頁面（總金額／訂金／尾款一律不填，月結後由系統自動建立認列單）</div><!-- v3.28 -->
     <div id="omFinWrap">${isPM() ? '' : financeFieldsHtml(isEdit ? edit : null)}</div><!-- v3.9 PM 不見金流明細；後端 PM 編輯亦不寫 N~V -->
     <div id="omDeliveryWrap">${deliveryFieldsHtml(isEdit ? edit : null)}</div>
     <div class="fe" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="if(confirm('放棄未儲存的變更？')){${isEdit?'':'orderDraftClear();'}this.closest('.modal-bg').remove()}">✕ 取消編輯</button><button class="btn btn-primary btn-sm" id="om_sub">💾 儲存並關閉</button></div>`, { locked: true });
@@ -3525,7 +3544,7 @@ function showOrderModal(edit) {
       total: document.getElementById('om_total').value || 0, balance: document.getElementById('om_balance').value || 0,
       depositStatus: document.getElementById('om_deposit').value || '', pm: document.getElementById('om_pm').value || '', lot: lot,
       orderCreator: (document.getElementById('om_creator') || {}).value || '',
-      ...collectFinanceFields(), ...collectDeliveryFields()
+      ...(_isConsignForm() ? _blankFinanceFields() : collectFinanceFields()), ...collectDeliveryFields()   // v3.28 寄售單金流一律空白
     });
     if (res.ok) { if (!isEdit) orderDraftClear(); toast(isEdit ? ('訂單已更新 ' + edit.orderNo) : ('已建立訂單 ' + res.orderNo)); modal.remove(); loadOrderMgmt(); if (isFinanceUser()) loadFinanceSummary(); }
     else toast((isEdit ? '更新失敗：' : '建單失敗：') + (res.error || ''));
@@ -4557,6 +4576,262 @@ async function rcSrvAutoSave(snap){
     }
   }catch(e){} finally { _rcSaving=false; }
 }
+
+// ════════════════════════════════════════════════
+// ⑦ 經銷商寄售統計（v3.28 P1，2026-09-02 主公拍板）— 南坡萬端
+//   第三本帳：南坡萬成品庫存 →(出貨紀錄)→ 經銷商「門市在庫」→(經銷商登記售出)→ 當期應請款。
+//   ⚠️ 命名：本頁「門市在庫」＝貨在經銷商店裡；系統既有「寄倉」＝訂單未出貨餘量（貨還在南坡萬），兩者相反，勿混用。
+//   經銷商自己用的是獨立頁 dealer.html（同後端），本頁是 Kevin／Molly 的對帳、結清、設定入口。
+//   結清＝方案 B：對帳單標「已結清」＋後端自動建一張「經銷商寄售月結認列單」（金額＝實售請款額、尾款實收日＝入帳日）；
+//   寄售出貨訂單本身金額掛 0＝純物流單（建單／詳情／列表的金流區已改為反灰提示）。
+// ════════════════════════════════════════════════
+const TYPE_CONSIGN_SETTLE = '經銷商寄售月結認列單';
+window._consignDealers = window._consignDealers || [];   // bootstrap 帶回（admin/財務/PM）；[{key,label,discount,closeDay,enabled,...}]
+function isConsignDealer(client) {
+  return (window._consignDealers || []).some(d => d.enabled && d.key === client);
+}
+// 寄售出貨單＝「自有酒款出貨訂單(有金流)」且客戶是啟用中的寄售經銷商
+function isConsignOrder(o) { return !!(o && _isShipType(o.orderType) && isConsignDealer(o.client)); }
+function consignHintHtml() {
+  return `<div style="margin:8px 0 2px;padding:9px 12px;border:1px dashed var(--border);border-radius:8px;background:var(--bg);color:var(--ink3);font-size:12px;line-height:1.6;">🤝 此為寄售訂單，只看出貨量，金額結算請看「經銷商寄售統計」頁面</div>`;
+}
+function _blankFinanceFields() {
+  return { depositAmount: '', depositDueDate: '', depositPaidDate: '', finalAmount: '', finalDueDate: '', finalPaidDate: '', finalAdjusted: '', finalAdjustedAmount: '', finalAdjustNote: '' };
+}
+function _consignApplyBoot(b) {
+  if (b && b.consignDealers && b.consignDealers.ok) window._consignDealers = b.consignDealers.dealers || [];
+  if (b && b.consignAlerts && b.consignAlerts.ok) showConsignReminder(b.consignAlerts);
+}
+// 結帳日到期提醒：admin／財務 登入時彈一次，同一人同一天不重複（主公指示：一天一次即可）
+function showConsignReminder(res) {
+  if (!curUser || !res || !res.ok || !(res.alerts || []).length) return;
+  const key = 'np_consignRemind_' + curUser.username;
+  const today = _localDate();
+  if (lsGet(key) === today) return;
+  lsSet(key, today);
+  const rows = res.alerts.map(a => `<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;font-size:13px;">
+      <div><b>${a.label}</b> <span style="color:var(--ink3);">${_periodLabel(a.period)}</span><div style="font-size:11px;color:var(--ink3);">對帳日 ${a.dueDate}・${a.status}</div></div>
+      <div style="text-align:right;white-space:nowrap;"><b style="color:var(--gold-dk);">NT$${(a.amount || 0).toLocaleString()}</b><div style="font-size:11px;color:var(--ink3);">售出 ${a.soldQty} 瓶</div></div></div>`).join('');
+  const m = makeModal(`
+    <div class="modal-title">💰 經銷商寄售對帳日到了</div>
+    <div style="font-size:13px;color:var(--ink2);">以下期別已到約定對帳日、尚未結清，請產生對帳單向經銷商請款，收到款後登記「已結清」。</div>
+    ${rows}
+    <div class="fe" style="margin-top:12px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">稍後</button><button class="btn btn-primary btn-sm" id="cr_go">前往經銷商寄售統計 ›</button></div>`);
+  m.querySelector('#cr_go').onclick = () => { m.remove(); switchTab('consign'); };
+}
+function _periodLabel(p) { return p ? (p.slice(0, 4) + ' 年 ' + Number(p.slice(5, 7)) + ' 月') : '—'; }
+const _ntf = n => 'NT$' + (Math.round(Number(n) || 0)).toLocaleString('zh-TW');
+const _pctf = d => { const p = Math.round((Number(d) || 0) * 100); return (p % 10 === 0 ? (p / 10) : (p / 10).toFixed(1)) + ' 折'; };
+const _escf = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+let consignPeriod = '';   // YYYY-MM
+let _consignOv = null;
+function renderConsignPage(mc) {
+  if (!consignPeriod) consignPeriod = _localDate().slice(0, 7);
+  mc.innerHTML = `
+  <div class="card" style="margin-bottom:10px;">
+    <div class="sec-hd">
+      <div class="card-title" style="margin:0;">🤝 經銷商寄售統計</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" onclick="consignShiftMonth(-1)">◀</button>
+        <input type="month" class="inp" id="consignMonth" value="${consignPeriod}" style="margin:0;width:auto;padding:6px 10px;font-size:13px;" onchange="consignPeriod=this.value;loadConsignOverview()">
+        <button class="btn btn-ghost btn-sm" onclick="consignShiftMonth(1)">▶</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadConsignOverview()">↻</button>
+        <button class="btn btn-ghost btn-sm" onclick="showConsignPrices()">🏷 牌價表</button>
+        <button class="btn btn-ghost btn-sm" onclick="showConsignDealerModal(null)">＋ 新增經銷商</button>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--ink3);line-height:1.6;">三本帳：南坡萬成品庫存 →（實際出貨紀錄）→ 經銷商<b>門市在庫</b> →（經銷商登記售出）→ <b>當期應請款</b>。請款只算經銷商已登記「售出」的瓶數，門市架上未售出的一瓶都不算。期別＝自然月；對帳日＝次月各家約定的結帳日。經銷商入口：<a href="dealer.html" target="_blank" style="color:var(--gold-dk);">dealer.html</a></div>
+  </div>
+  <div id="consignArea"><div class="card"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div></div>`;
+  loadConsignOverview();
+}
+function consignShiftMonth(d) {
+  const y = Number(consignPeriod.slice(0, 4)), m = Number(consignPeriod.slice(5, 7)) + d;
+  const dt = new Date(y, m - 1, 1);
+  consignPeriod = dt.getFullYear() + '-' + ('0' + (dt.getMonth() + 1)).slice(-2);
+  const el = document.getElementById('consignMonth'); if (el) el.value = consignPeriod;
+  loadConsignOverview();
+}
+async function loadConsignOverview() {
+  const area = document.getElementById('consignArea'); if (!area) return;
+  const res = await api({ action: 'consignOverview', period: consignPeriod });
+  if (!res.ok) { area.innerHTML = `<div class="card"><div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${res.error || ''}</div></div>`; return; }
+  _consignOv = res;
+  if (res.dealers) window._consignDealers = res.dealers.map(d => d.cfg);   // 順手更新快取（建單判斷用）
+  if (!res.dealers.length) { area.innerHTML = '<div class="card"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">尚無經銷商設定，請按「＋ 新增經銷商」</div></div>'; return; }
+  area.innerHTML = res.dealers.map((d, i) => consignDealerCard(d, i)).join('');
+}
+function consignDealerCard(d, i) {
+  const c = d.cfg, k = d.calc, s = d.statement;
+  let stBadge, stLine = '';
+  if (s && s.status === '已結清') { stBadge = '<span class="badge bg-green">已結清</span>'; stLine = `入帳 ${s.paidDate}・結清人 ${_escf(s.settledBy)}${s.orderNo ? `・認列單 <a href="#" onclick="event.preventDefault();showOrderDetailByNo('${s.orderNo}')" style="color:var(--gold-dk);font-weight:600;">${s.orderNo}</a>` : '・金額 0 未建認列單'}`; }
+  else if (s) { stBadge = '<span class="badge bg-yellow">待結清</span>'; stLine = `對帳單 ${_ntf(s.amount)}（${s.soldQty} 瓶）已產生，等經銷商付款`; }
+  else if (d.isDue) { stBadge = '<span class="badge bg-red">⚠ 已到對帳日</span>'; stLine = '尚未產生對帳單'; }
+  else { stBadge = '<span class="badge bg-brown">進行中</span>'; stLine = `對帳日 ${k.dueDate}`; }
+  const settled = !!(s && s.status === '已結清');
+  const stmtMismatch = s && !settled && (s.amount !== k.totalAmount || s.soldQty !== k.totalSold);
+  return `<div class="card" style="margin-bottom:10px;${!c.enabled ? 'opacity:.6;' : ''}">
+    <div class="sec-hd">
+      <div><div class="card-title" style="margin:0;">${_escf(c.label)} ${c.enabled ? '' : '<span class="badge bg-red">停用</span>'}</div>
+        <div style="font-size:11px;color:var(--ink3);">${_escf(c.key)}・牌價 ${_pctf(c.discount)}・每月 ${c.closeDay} 日對帳${c.contact ? '・' + _escf(c.contact) : ''}</div></div>
+      <button class="btn btn-ghost btn-sm" onclick="showConsignDealerModal(${i})">⚙ 設定</button>
+    </div>
+    <div class="recipe-meta" style="grid-template-columns:repeat(4,1fr);">
+      <div class="rm"><div class="lb">門市在庫（現在）</div><div class="vl">${d.stockNow} 瓶</div></div>
+      <div class="rm"><div class="lb">${_periodLabel(k.period)} 進貨</div><div class="vl">${k.totalIn} 瓶</div></div>
+      <div class="rm"><div class="lb">${_periodLabel(k.period)} 售出</div><div class="vl">${k.totalSold} 瓶</div></div>
+      <div class="rm"><div class="lb">應請款（只算售出）</div><div class="vl acc">${_ntf(k.totalAmount)}</div></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;">
+      <div>${stBadge} <span style="color:var(--ink2);">${stLine}</span>${stmtMismatch ? `<div style="font-size:11px;color:var(--red);">⚠ 對帳單產生後帳本又有異動（帳本 ${_ntf(k.totalAmount)}／${k.totalSold} 瓶），請按「重算」</div>` : ''}</div>
+    </div>
+    ${d.missingPrices.length ? `<div style="margin-top:6px;padding:7px 10px;background:#fbeaea;border:1px solid #f0c0c0;border-radius:8px;font-size:12px;color:var(--red);">⚠ 牌價表缺：${d.missingPrices.map(_escf).join('、')} —— 經銷商登記這些品項的售出會被擋下，請至主表「牌價表」分頁補上</div>` : ''}
+    <div class="fe" style="margin-top:10px;gap:6px;">
+      <button class="btn btn-ghost btn-sm" onclick="consignToggleDetail(${i})">📋 明細</button>
+      <button class="btn btn-ghost btn-sm" onclick="showConsignEntryModal(${i})">✍ 代登異動</button>
+      ${settled ? '' : `<button class="btn btn-ghost btn-sm" onclick="consignCreateStatement(${i})">${s ? '🔄 重算對帳單' : '🧾 產生對帳單'}</button>`}
+      ${(s && !settled) ? `<button class="btn btn-ghost btn-sm" style="color:var(--red);" onclick="consignDeleteStatement(${i})">↩ 撤銷</button>` : ''}
+      ${(s && !settled) ? `<button class="btn btn-sm" style="background:var(--green);color:#fff;font-weight:700;" onclick="showConsignSettleModal(${i})">✅ 登記本期帳款已結清</button>` : ''}
+    </div>
+    <div id="consignDetail_${i}" style="display:none;margin-top:10px;">${consignPeriodTable(k, d.stockItems)}</div>
+  </div>`;
+}
+function consignPeriodTable(c, stockItems) {
+  const items = (c && c.items) || [];
+  const nowMap = {}; (stockItems || []).forEach(s => { nowMap[s.key] = s.qty; });
+  const identityOk = items.every(it => it.closing === it.opening + it.inQty - it.sold + it.other);
+  const body = items.length ? items.map(it => `<tr><td>${_escf(it.product)}<div style="font-size:11px;color:var(--ink3);">${_escf(it.volume)}${it.bottleType ? '・' + _escf(it.bottleType) : ''}</div></td>
+      <td class="tr">${it.opening}</td><td class="tr">${it.inQty || '—'}</td><td class="tr"><b>${it.sold || '—'}</b></td><td class="tr">${it.other ? (it.other > 0 ? '+' + it.other : it.other) : '—'}</td><td class="tr">${it.closing}</td>
+      <td class="tr" style="color:var(--ink3);">${nowMap[it.key] != null ? nowMap[it.key] : '—'}</td><td class="tr">${it.unitPrice !== '' && it.unitPrice != null ? it.unitPrice : '—'}</td><td class="tr">${it.soldAmt ? _ntf(it.soldAmt) : '—'}</td></tr>`).join('')
+    : '<tr><td colspan="9" style="text-align:center;color:var(--ink3);">本期無異動</td></tr>';
+  return `<div class="tbl-wrap" style="overflow-x:auto;"><table style="min-width:640px;"><thead><tr><th>酒款</th><th class="tr">期初</th><th class="tr">進貨</th><th class="tr">售出</th><th class="tr">其他</th><th class="tr">期末</th><th class="tr">現在庫</th><th class="tr">單價</th><th class="tr">小計</th></tr></thead><tbody>${body}
+    <tr style="background:#faf9f6;font-weight:700;"><td>合計</td><td class="tr">${c.totalOpening}</td><td class="tr">${c.totalIn}</td><td class="tr">${c.totalSold}</td><td></td><td class="tr">${c.totalClosing}</td><td></td><td></td><td class="tr">${_ntf(c.totalAmount)}</td></tr></tbody></table></div>
+  <div style="font-size:11px;color:${identityOk ? 'var(--green)' : 'var(--red)'};margin-top:6px;">${identityOk ? '✔ 對帳恆等式成立：期初＋進貨−售出＋其他＝期末（庫存與銷售量對得上）' : '✖ 恆等式不成立，請檢查流水帳'}　<span style="color:var(--ink3);">「其他」＝退貨／損耗／盤點修正；「現在庫」＝今天的門市在庫（含本期之後的異動）。</span></div>`;
+}
+function consignToggleDetail(i) { const el = document.getElementById('consignDetail_' + i); if (el) el.style.display = el.style.display === 'none' ? '' : 'none'; }
+function showOrderDetailByNo(orderNo) {
+  // 從寄售頁直達認列單詳情：訂單列表可能還沒載，先抓一次
+  const list = window._mgmtOrders || [];
+  if (list.some(x => x.orderNo === orderNo)) { showOrderDetail(orderNo); return; }
+  api({ action: 'getOrders' }).then(res => { if (res.ok) { window._mgmtOrders = res.orders || []; showOrderDetail(orderNo); } });
+}
+// ⚙ 經銷商設定（新增／修改）：折扣率與結帳日主公/Molly 自己改，不用叫軍師
+function showConsignDealerModal(i) {
+  const d = (i == null) ? null : _consignOv.dealers[i].cfg;
+  const knownKeys = (typeof TYPE_CLIENTS !== 'undefined' && TYPE_CLIENTS[TYPE_SHIP]) ? TYPE_CLIENTS[TYPE_SHIP].map(x => x[0]) : [];
+  const keyField = d ? `<div class="fg"><label>經銷商鍵（＝建單客戶名，不可改）</label><input class="inp" value="${_escf(d.key)}" disabled style="margin:0;"></div>`
+    : `<div class="fg"><label>經銷商鍵（必須＝建單時的客戶名稱，出貨才對得上）</label><input class="inp" id="cd_key" list="cdKeyList" placeholder="例：經銷商－島羽" style="margin:0;"><datalist id="cdKeyList">${knownKeys.map(k => `<option value="${_escf(k)}">`).join('')}</datalist></div>`;
+  const m = makeModal(`
+    <div class="modal-title">⚙ ${d ? '修改經銷商設定' : '新增經銷商'}</div>
+    ${keyField}
+    <div class="form-row" style="margin-top:8px;">
+      <div class="fg"><label>顯示名</label><input class="inp" id="cd_label" value="${_escf(d ? d.label : '')}" style="margin:0;"></div>
+      <div class="fg" style="flex:0 0 110px;"><label>折扣（%）</label><input class="inp" id="cd_disc" type="number" min="1" max="100" step="0.5" value="${d ? Math.round(d.discount * 1000) / 10 : 75}" style="margin:0;"></div>
+      <div class="fg" style="flex:0 0 110px;"><label>結帳日（每月幾號）</label><input class="inp" id="cd_close" type="number" min="1" max="31" step="1" value="${d ? d.closeDay : 5}" style="margin:0;"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>聯絡人／方式</label><input class="inp" id="cd_contact" value="${_escf(d ? d.contact : '')}" style="margin:0;"></div>
+      <div class="fg" style="flex:0 0 120px;"><label>狀態</label><select class="inp" id="cd_enabled" style="margin:0;"><option value="true"${!d || d.enabled ? ' selected' : ''}>啟用</option><option value="false"${d && !d.enabled ? ' selected' : ''}>停用</option></select></div>
+    </div>
+    <div class="fg"><label>備註</label><input class="inp" id="cd_note" value="${_escf(d ? d.note : '')}" style="margin:0 0 6px;"></div>
+    <div style="font-size:11px;color:var(--ink3);line-height:1.6;">結帳日＝「次月第 N 日」對上個月的帳；到期未結清時，Kevin／Molly 登入會跳一次提醒（一天一次）。折扣改了只影響之後登記的售出（已登記的單價已凍結）。</div>
+    <div class="fe" style="margin-top:10px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="cd_sub">💾 儲存</button></div>`, { locked: true });
+  const b = m.querySelector('#cd_sub');
+  b.onclick = () => lockRun(b, async () => {
+    const key = d ? d.key : (m.querySelector('#cd_key').value || '').trim();
+    if (!key) { toast('請填經銷商鍵'); return; }
+    const disc = Number(m.querySelector('#cd_disc').value) / 100;
+    const res = await api({ action: 'consignSaveDealer', key, label: m.querySelector('#cd_label').value || key, discount: disc, closeDay: m.querySelector('#cd_close').value, contact: m.querySelector('#cd_contact').value, enabled: m.querySelector('#cd_enabled').value, note: m.querySelector('#cd_note').value });
+    if (res.ok) { toast('已儲存'); m.remove(); loadConsignOverview(); } else toast('儲存失敗：' + (res.error || ''));
+  });
+}
+// 🧾 產生／重算對帳單
+async function consignCreateStatement(i) {
+  const d = _consignOv.dealers[i];
+  if (!confirm(`${d.statement ? '重算' : '產生'} ${d.cfg.label} ${_periodLabel(consignPeriod)} 對帳單？\n售出 ${d.calc.totalSold} 瓶、應請款 ${_ntf(d.calc.totalAmount)}\n（結清前可重算；結清後鎖帳）`)) return;
+  const res = await api({ action: 'consignStatementCreate', dealer: d.cfg.key, period: consignPeriod });
+  if (res.ok) { toast(`對帳單已${res.recalculated ? '重算' : '產生'}：${_ntf(res.amount)}`); loadConsignOverview(); } else toast('失敗：' + (res.error || ''));
+}
+async function consignDeleteStatement(i) {
+  const d = _consignOv.dealers[i]; if (!d.statement) return;
+  if (!confirm(`撤銷 ${d.cfg.label} ${_periodLabel(consignPeriod)} 的對帳單？（只是撤回對帳單，流水帳不動，可再重新產生）`)) return;
+  const res = await api({ action: 'consignStatementDelete', id: d.statement.id });
+  if (res.ok) { toast('已撤銷'); loadConsignOverview(); } else toast('失敗：' + (res.error || ''));
+}
+// ✅ 結清：確認款項入南坡萬帳戶後登記 → 後端自動建認列單
+function showConsignSettleModal(i) {
+  const d = _consignOv.dealers[i], s = d.statement; if (!s) return;
+  const m = makeModal(`
+    <div class="modal-title">✅ 登記帳款已結清：${_escf(d.cfg.label)} ${_periodLabel(s.period)}</div>
+    <div class="recipe-meta" style="grid-template-columns:repeat(2,1fr);"><div class="rm"><div class="lb">售出</div><div class="vl">${d.calc.totalSold} 瓶</div></div><div class="rm"><div class="lb">請款金額（以帳本最新數字為準）</div><div class="vl acc">${_ntf(d.calc.totalAmount)}</div></div></div>
+    <div class="form-row"><div class="fg"><label>款項入帳日</label><input class="inp" id="cs_date" type="date" value="${_localDate()}" max="${_localDate()}" style="margin:0;"></div><div class="fg"><label>備註（選填）</label><input class="inp" id="cs_note" placeholder="例：匯款末五碼" style="margin:0;"></div></div>
+    <div style="font-size:12px;color:var(--ink2);line-height:1.7;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 10px;">結清後系統會：① 對帳單鎖定為「已結清」，該月流水帳不可再改；② 自動在訂單列表建立一張「<b>經銷商寄售月結認列單</b>」（客戶＝${_escf(d.cfg.label)}、明細＝當期實售酒款數量、金額＝${_ntf(d.calc.totalAmount)}、尾款實收日＝入帳日），當月金流總覽與收款率自動更新。</div>
+    <div class="fe" style="margin-top:10px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-sm" style="background:var(--green);color:#fff;font-weight:700;" id="cs_sub">✅ 確認已收到款，結清</button></div>`, { locked: true });
+  const b = m.querySelector('#cs_sub');
+  b.onclick = () => lockRun(b, async () => {
+    const res = await api({ action: 'consignStatementSettle', id: s.id, paidDate: m.querySelector('#cs_date').value, note: m.querySelector('#cs_note').value, pm: (curUser && curUser.username) || 'Molly' });
+    if (res.ok) { toast(`已結清 ${_ntf(res.amount)}${res.orderNo ? '，認列單 ' + res.orderNo : ''}`, 3500); m.remove(); loadConsignOverview(); if (typeof loadOrderMgmt === 'function' && document.getElementById('orderMgmtList')) loadOrderMgmt(); }
+    else toast('結清失敗：' + (res.error || ''), 4000);
+  });
+}
+// ✍ 代登異動：經銷商沒登、或電話告知時，南坡萬代為登記（售出／退貨／損耗／盤點修正）
+function showConsignEntryModal(i) {
+  const d = _consignOv.dealers[i];
+  const stock = (d.stockItems || []).slice().sort((a, b) => a.product.localeCompare(b.product));
+  if (!stock.length) { toast('該經銷商尚無門市在庫（先出貨）'); return; }
+  const m = makeModal(`
+    <div class="modal-title">✍ 代登異動：${_escf(d.cfg.label)}</div>
+    <div class="form-row">
+      <div class="fg"><label>異動類型</label><select class="inp" id="ce_type" style="margin:0;" onchange="consignEntryTypeChange()"><option value="售出">售出（代經銷商登記，單價依折扣凍結）</option><option value="盤點修正">盤點修正（填實際盤點數）</option><option value="退貨">退貨（退回南坡萬）</option><option value="損耗">損耗</option></select></div>
+      <div class="fg" style="flex:0 0 150px;"><label>日期</label><input class="inp" id="ce_date" type="date" value="${_localDate()}" max="${_localDate()}" style="margin:0;"></div>
+    </div>
+    <div class="tbl-wrap"><table><thead><tr><th>酒款</th><th class="tr">在庫</th><th class="tr">單價</th><th class="tr" id="ce_colhd">售出瓶數</th></tr></thead><tbody>
+      ${stock.map((s, j) => `<tr><td>${_escf(s.product)}<div style="font-size:11px;color:var(--ink3);">${_escf(s.volume)}</div></td><td class="tr">${s.qty}</td><td class="tr">${s.unitPrice !== '' ? s.unitPrice : '<span style="color:var(--red);">缺牌價</span>'}</td><td class="tr"><input type="number" inputmode="numeric" min="0" id="ce_q_${j}" value="0" style="width:64px;padding:5px;text-align:right;border:1px solid var(--border);border-radius:6px;font-size:13px;"></td></tr>`).join('')}
+    </tbody></table></div>
+    <input class="inp" id="ce_note" placeholder="備註（退貨／損耗／盤點修正必填原因）" style="margin:10px 0 4px;">
+    <div class="fe" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="ce_sub">送出</button></div>`, { locked: true });
+  m._stock = stock;
+  window._consignEntryModal = m;
+  const b = m.querySelector('#ce_sub');
+  b.onclick = () => lockRun(b, async () => {
+    const type = m.querySelector('#ce_type').value, date = m.querySelector('#ce_date').value, note = m.querySelector('#ce_note').value.trim();
+    const lines = [];
+    stock.forEach((s, j) => {
+      const v = parseInt(m.querySelector('#ce_q_' + j).value, 10);
+      if (type === '盤點修正') { if (!isNaN(v) && v !== s.qty) lines.push({ product: s.product, volume: s.volume, qty: v }); }
+      else if (v > 0) lines.push({ product: s.product, volume: s.volume, qty: v });
+    });
+    if (!lines.length) { toast('沒有要登記的數量'); return; }
+    let res;
+    if (type === '售出') res = await api({ action: 'consignSale', dealer: d.cfg.key, date, note, lines: JSON.stringify(lines) });
+    else { if (!note) { toast('請填原因'); return; } res = await api({ action: 'consignAdjust', dealer: d.cfg.key, type, date, note, lines: JSON.stringify(lines) }); }
+    if (res.ok) { toast('已登記 ' + type + (res.amount != null ? '・' + _ntf(res.amount) : '')); m.remove(); loadConsignOverview(); } else toast(res.error || '登記失敗', 4500);
+  });
+}
+function consignEntryTypeChange() {
+  const m = window._consignEntryModal; if (!m) return;
+  const t = m.querySelector('#ce_type').value;
+  m.querySelector('#ce_colhd').textContent = t === '盤點修正' ? '實際盤點數' : (t + '瓶數');
+  (m._stock || []).forEach((s, j) => { const el = m.querySelector('#ce_q_' + j); if (el) el.value = t === '盤點修正' ? s.qty : 0; });
+}
+// 🏷 牌價表（唯讀；改價請至主表「牌價表」分頁——每季報價單更新時 Molly 自己改，不用動程式）
+async function showConsignPrices() {
+  const res = await api({ action: 'consignPrices' });
+  if (!res.ok) { toast('讀取失敗：' + (res.error || '')); return; }
+  const byProd = {};
+  (res.prices || []).forEach(p => { (byProd[p.product] = byProd[p.product] || { pubName: p.pubName, v: {} }).v[p.volume] = p.price; });
+  const vols = ['100ml', '500ml', '700ml'];
+  const dealers = (window._consignDealers || []).filter(d => d.enabled);
+  makeModal(`
+    <div class="modal-title">🏷 牌價表（建議零售價，含稅）</div>
+    <div style="font-size:12px;color:var(--ink3);margin-bottom:8px;">來源：主表「牌價表」分頁（Molly 通路報價單 202609）。經銷商成交單價＝牌價 × 折扣，四捨五入到整數，於登記售出當下凍結。改價請直接編輯該分頁。</div>
+    <div class="tbl-wrap" style="overflow-x:auto;"><table style="min-width:520px;"><thead><tr><th>酒款（系統名）</th><th>對外名稱</th>${vols.map(v => `<th class="tr">${v}</th>`).join('')}${dealers.map(d => `<th class="tr" style="color:var(--gold-dk);">${_escf(d.label)} ${_pctf(d.discount)}<div style="font-size:10px;font-weight:400;">100/500/700</div></th>`).join('')}</tr></thead><tbody>
+      ${Object.keys(byProd).sort().map(pn => `<tr><td>${_escf(pn)}</td><td style="color:var(--ink3);">${_escf(byProd[pn].pubName)}</td>${vols.map(v => `<td class="tr">${byProd[pn].v[v] != null ? byProd[pn].v[v] : '—'}</td>`).join('')}${dealers.map(d => `<td class="tr" style="font-size:12px;">${vols.map(v => byProd[pn].v[v] != null ? Math.round(byProd[pn].v[v] * d.discount) : '—').join(' / ')}</td>`).join('')}</tr>`).join('')}
+    </tbody></table></div>
+    <div class="fe" style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="this.closest('.modal-bg').remove()">關閉</button></div>`);
+}
+
 </script>
 </body>
 </html>
