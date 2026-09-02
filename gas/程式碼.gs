@@ -198,6 +198,7 @@ function doGet(e) {
       case 'getEnvInfo':
         try { CacheService.getScriptCache().removeAll(V3144_CACHE_KEYS); } catch (e) {}
         result = getEnvInfo();
+        result.modules = { consign: (typeof consignMe === 'function') };   // v3.28 免登入探針：consign.gs 是否真的在部署版本裡（2026-09-03 Action 漏檔事故）
         // v3.14.5 診斷：CacheService 到底能不能用（put→get→remove 全程回報例外）
         result.cacheDiag = (function () {
           var d = {};

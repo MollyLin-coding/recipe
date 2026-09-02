@@ -51,7 +51,9 @@ jobs:
             exit 1
           fi
           mkdir -p build
-          cp "gas/程式碼.gs" "build/程式碼.js"
+          # v3.28 起後端多檔（程式碼.gs + consign.gs …）：一律全部複製；只複製一個檔會被 clasp push --force 把其他檔推掉（2026-09-03 事故）
+          for f in gas/*.gs; do cp "$f" "build/$(basename "${f%.gs}").js"; done
+          ls -la build
           cp gas/appsscript.json build/appsscript.json
           printf '%s\n' '{"scriptId":"1rZVFLOW4lYPQCRGZZYDqdMLAOEP5fzX_fpe--62lC3gFASBGEe7p1gH5","rootDir":"."}' > build/.clasp.json
 
