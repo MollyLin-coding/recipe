@@ -2984,7 +2984,7 @@ function renderMonthOrders(orders) {
         : `<div style="font-size:11px;margin-top:3px;color:var(--ink3);">🚚 尚未出貨　📦 寄倉 ${_ordTot} 瓶</div>`);
     const itemsTxt = (o.items || []).map(it => `${it.product}×${it.qty}` + (it.bottleType ? `(${it.bottleType})` : '') + (it.sample && it.sample.qty ? `〔🧪試飲${it.sample.bottleType || ''}×${it.sample.qty}〕` : '')).join('、');
     // v3.6 Run Card 鈕三態（主公指示）：無卡=虛線半透明「尚待PM建立」／進行中=黃底／已完成(狀態=完成或第11站done)=綠底
-    const rcBtns = window._rcIdx ? (o.items || []).map((it, i) => {
+    const rcBtns = (window._rcIdx && o.orderType !== TYPE_CONSIGN_SETTLE) ? (o.items || []).map((it, i) => {   // v3.28 認列單不是製作單，不掛 Run Card 鈕
       const nm = it.product || ('酒款' + (i + 1));
       const rcSt = window._rcIdx.get(o.orderNo + '||' + (it.product || ''));
       const common = 'padding:3px 8px;font-size:11px;border-radius:6px;cursor:pointer;';
