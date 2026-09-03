@@ -4398,7 +4398,8 @@ function consignRestockApprove(p) {
     var res = createOrder({
       client: rq.dealer, orderType: TYPE_CONSIGN_SHIP, deliveryDate: deliveryDate, actualDeliveryDate: deliveryDate,
       items: items, total: 0, balance: 0, depositStatus: '寄售', pm: String((p && p.pm) || 'Molly'),
-      orderCreator: op, user: op, _user: op, _role: 'admin'
+      orderCreator: '經銷商叫貨(' + (rq.applicant || rq.dealer) + ')',   // v3.30 主公指示：內部一眼看出這是經銷商主動叫貨（列表「建單:經銷商叫貨(TP01-A)」）
+      user: op, _user: op, _role: 'admin'
     });
     if (!res || !res.ok) return { ok: false, error: '建立出貨訂單失敗：' + ((res && res.error) || '') };
     var row = f.row.slice();
