@@ -3590,10 +3590,25 @@ async function consignShipItem(oi, ii) {
   const it = (o.items || [])[ii]; if (!it) return;
   const remain = (it.remainStock == null ? it.qty : it.remainStock) || 0;
   if (remain <= 0) { toast('此款已全部寄出'); return; }
-  const qtyStr = prompt(`寄出「${it.product}」給 ${clientLabel(o.client)}\n本次寄出瓶數（寄倉餘量 ${remain} 瓶）：`, String(remain));
+  // v3.33 先查南坡萬成品庫存（主公 9/3 反映：被擋下卻沒說明）：對話框直接顯示庫存、預設可寄數量；庫存 0 直接告知不能寄
+  toast('查詢南坡萬成品庫存…', 1500);
+  const pre = await api({ action: 'getShipments', orderNo: o.orderNo }, true);
+  const si = (pre && pre.ok && pre.stockInfo) ? pre.stockInfo[it.product] : null;
+  const tracked = !!(si && si.tracked), stock = tracked ? (Math.floor(Number(si.stock)) || 0) : null;
+  if (tracked && stock <= 0) {
+    makeModal('<div class="modal-title" style="color:var(--red);">✕ 無法寄出：南坡萬成品庫存 0 瓶</div>'
+      + '<div style="font-size:13px;line-height:1.7;">「' + _escf(it.product) + '」在南坡萬v.2 成品庫存帳上目前 <b>0 瓶</b>，寄出會扣這本帳，所以無法寄出。</div>'
+      + '<div style="font-size:12px;color:var(--ink3);margin-top:10px;">請先到「成品庫存」分頁入庫該款（正式投產完工會自動入庫），再回來按寄出。叫貨流程在此暫停，不會有任何資料寫入。</div>'
+      + '<div class="fe" style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="this.closest(\'.modal-bg\').remove()">知道了</button></div>');
+    return;
+  }
+  const maxQ = tracked ? Math.min(remain, stock) : remain;
+  const stockLine = tracked ? `南坡萬成品庫存 ${stock} 瓶${stock < remain ? '（不足全寄，最多可寄 ' + maxQ + ' 瓶）' : ''}` : '（此款不追蹤成品庫存）';
+  const qtyStr = prompt(`寄出「${it.product}」給 ${clientLabel(o.client)}\n寄倉餘量 ${remain} 瓶｜${stockLine}\n本次寄出瓶數：`, String(maxQ));
   if (qtyStr == null) return;
   const qty = Math.floor(Number(qtyStr)) || 0;
   if (qty <= 0 || qty > remain) { toast('瓶數需介於 1～' + remain); return; }
+  if (tracked && qty > stock) { toast('南坡萬成品庫存只有 ' + stock + ' 瓶，無法寄出 ' + qty + ' 瓶', 4500); return; }
   const date = _localDate();
   if (!confirm(`確認 ${date} 寄出 ${it.product} × ${qty} 瓶給 ${clientLabel(o.client)}？\n會扣南坡萬成品庫存、自動加入經銷商門市在庫，並把叫貨單標為已出貨。`)) return;
   const res = await api({ action: 'addShipment', orderNo: o.orderNo, date, lines: JSON.stringify([{ product: it.product, bottleType: it.bottleType || '', qty }]), note: '寄出給經銷商（單款一鍵）', operator: (curUser && curUser.username) || '' });
