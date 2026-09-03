@@ -276,6 +276,11 @@ tbody tr:hover td{background:#faf3e8;}
 .login-user-label{text-align:center;font-size:14px;font-weight:600;color:var(--ink2);margin:2px 0 10px;}
 /* ── 登入轉圈提示（v2.6.2）── */
 .btn-spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:btnspin .7s linear infinite;vertical-align:-2px;margin-right:7px;}
+/* v3.33 寫入處理中遮罩：寫入類 API 進行時全頁半透明＋轉圈，擋住重複點擊；300ms 內完成不閃現 */
+#busyOverlay{position:fixed;inset:0;background:rgba(30,23,16,.38);z-index:9500;display:none;align-items:center;justify-content:center;}
+#busyOverlay.on{display:flex;}
+.busy-box{background:#fff;border-radius:14px;padding:16px 24px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 30px rgba(0,0,0,.25);font-size:14px;color:#1e1710;max-width:80vw;}
+.busy-spin{width:26px;height:26px;flex-shrink:0;border:3px solid #e4ddd0;border-top-color:#7a5420;border-radius:50%;animation:btnspin .8s linear infinite;}
 @keyframes btnspin{to{transform:rotate(360deg)}}
 /* ── Run Card（v2.6）── */
 .rc-sec{margin-top:12px;font-size:13px;font-weight:700;color:var(--gold-dk);border-bottom:1px solid var(--border);padding-bottom:3px;}
@@ -404,7 +409,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.32';
+const APP_VERSION='v3.33';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -424,6 +429,23 @@ document.addEventListener('wheel', function (e) {
 }, { passive: true });
 
 let _sessExpiredShown = false;
+// v3.33 寫入處理中遮罩（計數器＋延遲顯示，多個寫入重疊也只有一層）
+let _busyN = 0, _busyTimer = null;
+const BUSY_READ_RE = /^(get|bootstrap|login|checkUser|consignMe|consignDealers|consignPrices|consignOverview|consignAlerts|consignLedger|consignStatements|consignDaily|consignRestockList)/;
+function _busyEl() {
+  let el = document.getElementById('busyOverlay');
+  if (!el) { el = document.createElement('div'); el.id = 'busyOverlay'; el.innerHTML = '<div class="busy-box"><div class="busy-spin"></div><div id="busyMsg">系統處理中，請稍候…</div></div>'; document.body.appendChild(el); }
+  return el;
+}
+function busyStart(msg) {
+  _busyN++;
+  if (msg) { const m = document.getElementById('busyMsg'); if (m) m.textContent = msg; }
+  if (!_busyTimer) _busyTimer = setTimeout(() => { _busyTimer = null; if (_busyN > 0) _busyEl().classList.add('on'); }, 300);
+}
+function busyEnd() {
+  _busyN = Math.max(0, _busyN - 1);
+  if (_busyN === 0) { if (_busyTimer) { clearTimeout(_busyTimer); _busyTimer = null; } const el = document.getElementById('busyOverlay'); if (el) el.classList.remove('on'); }
+}
 async function api(params, silent) {
   // v2.1：登入後所有呼叫自動附帶 session token；token 逾時 → 提示並回登入頁
   const send = { ...params };
@@ -435,6 +457,8 @@ async function api(params, silent) {
   // ⚠️ 只重試「讀取型」：寫入型重試有冪等風險（重複建單/重複入庫），維持單次不重試。
   const _act = String(send.action || '');
   const _isRead = /^get/i.test(_act) || _act === 'bootstrap';
+  const _busy = !silent && !BUSY_READ_RE.test(_act);   // v3.33 寫入類 → 轉圈遮罩
+  if (_busy) busyStart();
   // v3.14.4 使用者按 ↻ 後的 8 秒內，讀取一律帶 fresh=1 繞過後端快取（強制刷新逃生口）
   if (_isRead && window._apiFreshUntil && Date.now() < window._apiFreshUntil && send.fresh == null) send.fresh = '1';
   const _delays = _isRead ? [400, 1200, 2500] : [];
@@ -464,6 +488,7 @@ async function api(params, silent) {
     return { ok: false, error: _lastErr, _offline: true };
   } finally {
     if (!silent) apiLoadEnd();
+    if (_busy) busyEnd();
   }
 }
 // ── 讀取 loading 提示（頂部進度條，多筆併發以計數管理）──
@@ -3565,14 +3590,36 @@ async function consignShipItem(oi, ii) {
   const it = (o.items || [])[ii]; if (!it) return;
   const remain = (it.remainStock == null ? it.qty : it.remainStock) || 0;
   if (remain <= 0) { toast('此款已全部寄出'); return; }
-  const qtyStr = prompt(`寄出「${it.product}」給 ${clientLabel(o.client)}\n本次寄出瓶數（寄倉餘量 ${remain} 瓶）：`, String(remain));
+  // v3.33 先查南坡萬成品庫存（主公 9/3 反映：被擋下卻沒說明）：對話框直接顯示庫存、預設可寄數量；庫存 0 直接告知不能寄
+  toast('查詢南坡萬成品庫存…', 1500);
+  const pre = await api({ action: 'getShipments', orderNo: o.orderNo }, true);
+  const si = (pre && pre.ok && pre.stockInfo) ? pre.stockInfo[it.product] : null;
+  const tracked = !!(si && si.tracked), stock = tracked ? (Math.floor(Number(si.stock)) || 0) : null;
+  if (tracked && stock <= 0) {
+    makeModal('<div class="modal-title" style="color:var(--red);">✕ 無法寄出：南坡萬成品庫存 0 瓶</div>'
+      + '<div style="font-size:13px;line-height:1.7;">「' + _escf(it.product) + '」在南坡萬v.2 成品庫存帳上目前 <b>0 瓶</b>，寄出會扣這本帳，所以無法寄出。</div>'
+      + '<div style="font-size:12px;color:var(--ink3);margin-top:10px;">請先到「成品庫存」分頁入庫該款（正式投產完工會自動入庫），再回來按寄出。叫貨流程在此暫停，不會有任何資料寫入。</div>'
+      + '<div class="fe" style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="this.closest(\'.modal-bg\').remove()">知道了</button></div>');
+    return;
+  }
+  const maxQ = tracked ? Math.min(remain, stock) : remain;
+  const stockLine = tracked ? `南坡萬現有成品庫存 ${stock} 瓶` : '此款不追蹤成品庫存';
+  const suggest = tracked ? `建議出貨量 ${maxQ} 瓶${stock < remain ? '（＝南坡萬現有最大庫存，不足以全寄 ' + remain + ' 瓶）' : '（可全寄）'}` : `建議出貨量 ${maxQ} 瓶（寄倉餘量）`;
+  const qtyStr = prompt(`寄出「${it.product}」給 ${clientLabel(o.client)}\n寄倉餘量 ${remain} 瓶｜${stockLine}\n${suggest}\n本次寄出瓶數：`, String(maxQ));
   if (qtyStr == null) return;
   const qty = Math.floor(Number(qtyStr)) || 0;
   if (qty <= 0 || qty > remain) { toast('瓶數需介於 1～' + remain); return; }
+  if (tracked && qty > stock) { toast('南坡萬成品庫存只有 ' + stock + ' 瓶，無法寄出 ' + qty + ' 瓶', 4500); return; }
   const date = _localDate();
   if (!confirm(`確認 ${date} 寄出 ${it.product} × ${qty} 瓶給 ${clientLabel(o.client)}？\n會扣南坡萬成品庫存、自動加入經銷商門市在庫，並把叫貨單標為已出貨。`)) return;
   const res = await api({ action: 'addShipment', orderNo: o.orderNo, date, lines: JSON.stringify([{ product: it.product, bottleType: it.bottleType || '', qty }]), note: '寄出給經銷商（單款一鍵）', operator: (curUser && curUser.username) || '' });
-  if (!res.ok) { toast('寄出失敗：' + (res.error || ''), 5000); return; }
+  if (!res.ok) {   // v3.33 失敗改彈窗（toast 5 秒容易漏看：9/3 主公按寄出被成品庫存擋下卻沒看到）
+    makeModal('<div class="modal-title" style="color:var(--red);">✕ 寄出失敗，未寫入任何資料</div>'
+      + '<div style="font-size:13px;line-height:1.7;">' + _escf(res.error || '') + '</div>'
+      + '<div style="font-size:12px;color:var(--ink3);margin-top:10px;">若是「成品庫存不足」：寄出會扣南坡萬v.2 成品庫存，請先到「成品庫存」分頁入庫該款，或把本次寄出瓶數改小。</div>'
+      + '<div class="fe" style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="this.closest(\'.modal-bg\').remove()">知道了</button></div>');
+    return;
+  }
   const sd = res.stockDeducted || [];
   toast(`已寄出 ${it.product} × ${qty} 瓶${res.consignIn ? '・門市在庫已更新' : ''}${res.restockUpdated ? '・叫貨單→' + (res.allShipped ? '已出貨' : '部分出貨') : ''}${sd.length ? '｜扣成品庫存 ' + sd.map(d => d.product + '−' + d.qty).join('、') : ''}`, 5000);
   const m = document.querySelector('.modal-bg'); if (m) m.remove();
