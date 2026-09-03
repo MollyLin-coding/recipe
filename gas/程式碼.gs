@@ -945,6 +945,10 @@ function _ensureOrderFinanceHeaders_(ws) {
   if (String(ws.getRange(1, 33).getValue() || '') === '') {
     ws.getRange(1, 33).setValue('運費支付方');
   }
+  // v3.31 訂單備註（AH=34 欄）：經銷商叫貨備註帶入，列表/詳情顯示「📝 客戶備註」
+  if (String(ws.getRange(1, 34).getValue() || '') === '') {
+    ws.getRange(1, 34).setValue('訂單備註');
+  }
 }
 // 金額欄：空=未填(保留空字串)，有值才轉數字
 function _numOrBlank_(v) { return (v == null || v === '') ? '' : (Number(v) || 0); }
@@ -1147,6 +1151,10 @@ function createOrder(p) {
     if (p.shipFeePayer != null && String(p.shipFeePayer).trim() !== '') {
       ws.getRange(ws.getLastRow(), 33).setValue(String(p.shipFeePayer).trim());
     }
+    // AH 訂單備註（v3.31）
+    if (p.orderNote != null && String(p.orderNote).trim() !== '') {
+      ws.getRange(ws.getLastRow(), 34).setValue(String(p.orderNote).trim());
+    }
     _logOrderChange_(orderNo, p.pm || p.user || '', '建立訂單',
       p.client + '／' + items.length + ' 款／總 NT$' + (Number(p.total) || 0) + (p.orderType ? '／' + p.orderType : '')
       + (String(p.lot || '').trim() ? '／Lot ' + String(p.lot).trim() : ''));
@@ -1210,7 +1218,8 @@ function getOrders(p) {
       invoiceLast5: String(r[29] == null ? '' : r[29]),
       lot: String(r[30] == null ? '' : r[30]),
       orderCreator: String(r[31] == null ? '' : r[31]), // v3.2 建單人員（兩種 view 皆回，非金額）
-      shipFeePayer: String(r[32] == null ? '' : r[32]) // v3.4 運費支付方
+      shipFeePayer: String(r[32] == null ? '' : r[32]), // v3.4 運費支付方
+      orderNote: String(r[33] == null ? '' : r[33]) // v3.31 訂單備註（經銷商叫貨備註）
     };
     // v3.26 注入出貨進度：單層 shipBatches/lastShipDate，每款 shipped(已出)/remainStock(寄倉餘量)
     const _sa = _shipAgg[base.orderNo] || null;
@@ -1366,6 +1375,8 @@ function updateOrder(p) {
       if (p.orderCreator != null) ws.getRange(i + 1, 32).setValue(String(p.orderCreator).trim());
       // AG 運費支付方（v3.4；同上）
       if (p.shipFeePayer != null) ws.getRange(i + 1, 33).setValue(String(p.shipFeePayer).trim());
+      // AH 訂單備註（v3.31；同上）
+      if (p.orderNote != null) ws.getRange(i + 1, 34).setValue(String(p.orderNote).trim());
       _logOrderChange_(orderNo, p.user || p.pm || '', '編輯訂單',
         p.client + '／' + items.length + ' 款／總 NT$' + (Number(p.total) || 0) + '／表訂 ' + (p.deliveryDate || '—')
         + (String(p.lot || '').trim() ? '／Lot ' + String(p.lot).trim() : ''));
@@ -4400,6 +4411,7 @@ function consignRestockApprove(p) {
       client: rq.dealer, orderType: TYPE_CONSIGN_SHIP, deliveryDate: deliveryDate, actualDeliveryDate: deliveryDate,
       items: items, total: 0, balance: 0, depositStatus: '寄售', pm: String((p && p.pm) || 'Molly'),
       orderCreator: '經銷商叫貨(' + (rq.applicant || rq.dealer) + ')',   // v3.30 主公指示：內部一眼看出這是經銷商主動叫貨（列表「建單:經銷商叫貨(TP01-A)」）
+      orderNote: rq.note || '',   // v3.31 主公指示：店長的叫貨備註帶進訂單，PM 在列表一眼看到
       user: op, _user: op, _role: 'admin'
     });
     if (!res || !res.ok) return { ok: false, error: '建立出貨訂單失敗：' + ((res && res.error) || '') };
