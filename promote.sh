@@ -34,6 +34,8 @@ grep -q "const APP_VERSION='${TAG}';" index.html || { echo "❌ 版本號置換�
 
 echo "②c 版本號同步蓋進 preview（v3.5 P0-4：防 preview 版號過期造成審查誤判）"
 sed -i "s|const APP_VERSION='[^']*';|const APP_VERSION='${TAG}';|" preview/index.html
+# v3.30 起 dealer.html（經銷商頁）版號一併蓋（v3.29 漏蓋事故：正式 dealer.html 一直顯示 v3.28）
+for f in dealer.html preview/dealer.html; do [ -f "$f" ] && sed -i "s|const APP_VERSION='[^']*';|const APP_VERSION='${TAG}';|" "$f"; done
 
 echo "③ 驗證：正式前台確實指向正式後端"
 grep -q "const API='${PROD_API}';" index.html || { echo "❌ index.html API 置換失敗，已中止（未 commit）"; exit 1; }
