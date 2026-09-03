@@ -3603,8 +3603,9 @@ async function consignShipItem(oi, ii) {
     return;
   }
   const maxQ = tracked ? Math.min(remain, stock) : remain;
-  const stockLine = tracked ? `南坡萬成品庫存 ${stock} 瓶${stock < remain ? '（不足全寄，最多可寄 ' + maxQ + ' 瓶）' : ''}` : '（此款不追蹤成品庫存）';
-  const qtyStr = prompt(`寄出「${it.product}」給 ${clientLabel(o.client)}\n寄倉餘量 ${remain} 瓶｜${stockLine}\n本次寄出瓶數：`, String(maxQ));
+  const stockLine = tracked ? `南坡萬現有成品庫存 ${stock} 瓶` : '此款不追蹤成品庫存';
+  const suggest = tracked ? `建議出貨量 ${maxQ} 瓶${stock < remain ? '（＝南坡萬現有最大庫存，不足以全寄 ' + remain + ' 瓶）' : '（可全寄）'}` : `建議出貨量 ${maxQ} 瓶（寄倉餘量）`;
+  const qtyStr = prompt(`寄出「${it.product}」給 ${clientLabel(o.client)}\n寄倉餘量 ${remain} 瓶｜${stockLine}\n${suggest}\n本次寄出瓶數：`, String(maxQ));
   if (qtyStr == null) return;
   const qty = Math.floor(Number(qtyStr)) || 0;
   if (qty <= 0 || qty > remain) { toast('瓶數需介於 1～' + remain); return; }
