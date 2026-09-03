@@ -135,7 +135,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
     document.body.appendChild(b);
   });
 }
-const APP_VERSION='v3.31';
+const APP_VERSION='v3.32';
 window.addEventListener('DOMContentLoaded', function () { const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION; });
 // 開頁暖機：趁使用者打密碼時吃掉 GAS 冷啟動
 window.addEventListener('DOMContentLoaded', function () { api({ action: 'getEnvInfo' }, true); });
@@ -530,7 +530,7 @@ function restockCardHtml(me) {
     return `<td class="tr"><input type="number" inputmode="numeric" min="0" step="1" placeholder="0" id="rq_${i}_${v}" data-product="${esc(p)}" data-volume="${v}" data-foq="${c.foq}" oninput="updateRestockSum()" style="width:58px;padding:6px 4px;text-align:right;border:1.5px solid var(--border);border-radius:6px;font-size:14px;"><div class="muted" style="font-size:10px;white-space:nowrap;">NT$${c.unitPrice}・≥${c.foq}</div></td>`;
   }).join('')}</tr>`).join('');
   const hist = (me.restocks || []);
-  const badge = s => ({ '待放行': 'bg-yellow', '已放行': 'bg-green', '已駁回': 'bg-red' }[s] || 'bg-brown');
+  const badge = s => ({ '待放行': 'bg-yellow', '已放行': 'bg-green', '部分出貨': 'bg-blue', '已出貨': 'bg-blue', '已駁回': 'bg-red' }[s] || 'bg-brown');
   return `<div class="card">
     <div class="sec-hd"><div class="card-title" style="margin:0;">📦 叫貨補貨</div><span class="muted">最低叫貨量：100ml 每款 25 瓶・500/700ml 每款 12 瓶</span></div>
     ${prods.length ? `<div class="tbl-wrap"><table><thead><tr><th>酒款</th>${VOLS.map(v => `<th class="tr">${v}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="muted" style="padding:10px;">目錄尚未建立，請聯絡南坡萬</div>'}
@@ -544,7 +544,7 @@ function restockCardHtml(me) {
     </div>
     <div class="hint">送出後南坡萬會收到通知，確認後安排出貨；出貨到店時品項會自動進入上方「門市在庫」。</div>
     ${hist.length ? `<div style="margin-top:12px;font-weight:600;font-size:13px;">我的叫貨紀錄</div>${hist.map(q => `<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
-        <div><span class="badge ${badge(q.status)}">${q.status}</span> <span class="muted">${q.date}</span> 共 ${q.totalQty} 瓶<div class="muted">${q.lines.map(l => `${esc(l.pubName || l.product)} ${esc(l.volume)}×${l.qty}`).join('、')}${q.wishDate ? '・希望 ' + q.wishDate : ''}</div>${q.status === '已放行' && q.orderNo ? `<div class="muted" style="color:var(--green);">已排出貨，訂單 ${q.orderNo}</div>` : ''}${q.status === '已駁回' ? `<div style="color:var(--red);font-size:12px;">原因：${esc(q.reviewNote)}</div>` : ''}${q.status === '待放行' && !q.emailed ? '<div class="muted" style="font-size:11px;">（系統通知信未送出，南坡萬登入後仍會看到此申請）</div>' : ''}</div>
+        <div><span class="badge ${badge(q.status)}">${q.status}</span> <span class="muted">${q.date}</span> 共 ${q.totalQty} 瓶<div class="muted">${q.lines.map(l => `${esc(l.pubName || l.product)} ${esc(l.volume)}×${l.qty}`).join('、')}${q.wishDate ? '・希望 ' + q.wishDate : ''}</div>${q.status === '已放行' && q.orderNo ? `<div class="muted" style="color:var(--green);">已排出貨，訂單 ${q.orderNo}</div>` : ''}${(q.status === '已出貨' || q.status === '部分出貨') ? `<div class="muted" style="color:var(--blue);">${q.status === '已出貨' ? '南坡萬已寄出' : '南坡萬已寄出一部分'}${q.shipDate ? '（' + q.shipDate + '）' : ''}，到店後請核對「門市在庫」</div>` : ''}${q.status === '已駁回' ? `<div style="color:var(--red);font-size:12px;">原因：${esc(q.reviewNote)}</div>` : ''}${q.status === '待放行' && !q.emailed ? '<div class="muted" style="font-size:11px;">（系統通知信未送出，南坡萬登入後仍會看到此申請）</div>' : ''}</div>
       </div>`).join('')}` : ''}
   </div>`;
 }
