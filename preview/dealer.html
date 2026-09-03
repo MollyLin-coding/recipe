@@ -71,6 +71,11 @@ tr:last-child td{border-bottom:none;}
 .toast{position:fixed;bottom:calc(20px + var(--safe-b));left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 18px;border-radius:99px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:10000;max-width:92vw;text-align:center;}
 .toast.show{opacity:1;}
 .btn-spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:btnspin .7s linear infinite;vertical-align:-2px;margin-right:7px;}
+/* v3.33 寫入處理中遮罩：寫入類 API 進行時全頁半透明＋轉圈，擋住重複點擊；300ms 內完成不閃現 */
+#busyOverlay{position:fixed;inset:0;background:rgba(30,23,16,.38);z-index:9500;display:none;align-items:center;justify-content:center;}
+#busyOverlay.on{display:flex;}
+.busy-box{background:#fff;border-radius:14px;padding:16px 24px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 30px rgba(0,0,0,.25);font-size:14px;color:#1e1710;max-width:80vw;}
+.busy-spin{width:26px;height:26px;flex-shrink:0;border:3px solid #e4ddd0;border-top-color:#7a5420;border-radius:50%;animation:btnspin .8s linear infinite;}
 @keyframes btnspin{to{transform:rotate(360deg);}}
 /* 售出登記列：手機優先，每款一列 */
 .sale-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border);}
@@ -146,10 +151,29 @@ let curToken = null, curUser = null, ME = null;
 let _apiN = 0;
 function _bar() { let b = document.getElementById('apiLoadBar'); if (!b) { b = document.createElement('div'); b.id = 'apiLoadBar'; document.body.appendChild(b); } return b; }
 let _sessExpiredShown = false;
+// v3.33 寫入處理中遮罩（計數器＋延遲顯示，多個寫入重疊也只有一層）
+let _busyN = 0, _busyTimer = null;
+const BUSY_READ_RE = /^(get|bootstrap|login|checkUser|consignMe|consignDealers|consignPrices|consignOverview|consignAlerts|consignLedger|consignStatements|consignDaily|consignRestockList)/;
+function _busyEl() {
+  let el = document.getElementById('busyOverlay');
+  if (!el) { el = document.createElement('div'); el.id = 'busyOverlay'; el.innerHTML = '<div class="busy-box"><div class="busy-spin"></div><div id="busyMsg">系統處理中，請稍候…</div></div>'; document.body.appendChild(el); }
+  return el;
+}
+function busyStart(msg) {
+  _busyN++;
+  if (msg) { const m = document.getElementById('busyMsg'); if (m) m.textContent = msg; }
+  if (!_busyTimer) _busyTimer = setTimeout(() => { _busyTimer = null; if (_busyN > 0) _busyEl().classList.add('on'); }, 300);
+}
+function busyEnd() {
+  _busyN = Math.max(0, _busyN - 1);
+  if (_busyN === 0) { if (_busyTimer) { clearTimeout(_busyTimer); _busyTimer = null; } const el = document.getElementById('busyOverlay'); if (el) el.classList.remove('on'); }
+}
 async function api(params, silent) {
   const send = { ...params };
   if (curToken && send.token == null) send.token = curToken;
   if (!silent) { _apiN++; _bar().classList.add('on'); }
+  const _busy = !silent && !BUSY_READ_RE.test(String(send.action || ''));   // v3.33 寫入類 → 轉圈遮罩
+  if (_busy) busyStart();
   const _isRead = /^(get|consignMe|consignLedger|consignStatements)/.test(String(send.action || ''));
   const _delays = _isRead ? [400, 1200, 2500] : [];
   const url = API + '?' + Object.entries(send).map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&');
@@ -176,6 +200,7 @@ async function api(params, silent) {
     return { ok: false, error: _lastErr, _offline: true };
   } finally {
     if (!silent) { _apiN--; if (_apiN <= 0) { _apiN = 0; _bar().classList.remove('on'); } }
+    if (_busy) busyEnd();
   }
 }
 function toast(msg, dur = 2400) {
