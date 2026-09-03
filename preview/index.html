@@ -3073,6 +3073,7 @@ function showOrderDetail(orderNo) {
       <span class="badge ${it.status === '完成' ? 'bg-green' : 'bg-yellow'}" style="font-size:9px;">${it.status || '待製作'}</span>
       <button class="btn btn-ghost btn-sm" style="padding:3px 7px;font-size:11px;" onclick="rcShowHistory(${idx},${i})">📋 Run Card</button>
       ${canAct && it.status !== '完成' && it.sheet ? `<button class="btn btn-success btn-sm" style="padding:3px 7px;font-size:11px;" onclick="this.closest('.modal-bg').remove();showCompleteModal(${idx},${i})">完成回報</button>` : ''}
+      ${canAct && isConsignOrder(o) && ((it.remainStock == null ? it.qty : it.remainStock) > 0) ? `<button class="btn btn-sm" style="padding:3px 7px;font-size:11px;background:var(--gold-dk);color:#fff;font-weight:700;" onclick="consignShipItem(${idx},${i})">📦 寄出給經銷商</button>` : ''}
     </div>`).join('');
   const row = (k, val) => `<div style="display:flex;gap:8px;font-size:12px;margin-top:3px;"><span style="flex:0 0 92px;color:var(--ink3);">${k}</span><span style="flex:1;">${val}</span></div>`;
   const finShown = o.finalAdjusted && o.finalAdjustedAmount !== '' && o.finalAdjustedAmount != null
@@ -3558,6 +3559,27 @@ function showOrderModal(edit) {
 }
 
 // 完成回報（admin+倉管）：接 completeOrderItem，沿用隱藏頁 doCompleteTask 的代工費/寫製作記錄邏輯
+// v3.32 主公指示：寄售訂單每款一鍵「寄出給經銷商」＝該款寄倉餘量全出（走 addShipment：扣南坡萬成品庫存＋自動進經銷商門市在庫＋叫貨單狀態→已出貨）
+async function consignShipItem(oi, ii) {
+  const o = (window._mgmtOrders || [])[oi]; if (!o) return;
+  const it = (o.items || [])[ii]; if (!it) return;
+  const remain = (it.remainStock == null ? it.qty : it.remainStock) || 0;
+  if (remain <= 0) { toast('此款已全部寄出'); return; }
+  const qtyStr = prompt(`寄出「${it.product}」給 ${clientLabel(o.client)}\n本次寄出瓶數（寄倉餘量 ${remain} 瓶）：`, String(remain));
+  if (qtyStr == null) return;
+  const qty = Math.floor(Number(qtyStr)) || 0;
+  if (qty <= 0 || qty > remain) { toast('瓶數需介於 1～' + remain); return; }
+  const date = _localDate();
+  if (!confirm(`確認 ${date} 寄出 ${it.product} × ${qty} 瓶給 ${clientLabel(o.client)}？\n會扣南坡萬成品庫存、自動加入經銷商門市在庫，並把叫貨單標為已出貨。`)) return;
+  const res = await api({ action: 'addShipment', orderNo: o.orderNo, date, lines: JSON.stringify([{ product: it.product, bottleType: it.bottleType || '', qty }]), note: '寄出給經銷商（單款一鍵）', operator: (curUser && curUser.username) || '' });
+  if (!res.ok) { toast('寄出失敗：' + (res.error || ''), 5000); return; }
+  const sd = res.stockDeducted || [];
+  toast(`已寄出 ${it.product} × ${qty} 瓶${res.consignIn ? '・門市在庫已更新' : ''}${res.restockUpdated ? '・叫貨單→' + (res.allShipped ? '已出貨' : '部分出貨') : ''}${sd.length ? '｜扣成品庫存 ' + sd.map(d => d.product + '−' + d.qty).join('、') : ''}`, 5000);
+  const m = document.querySelector('.modal-bg'); if (m) m.remove();
+  await loadOrderMgmt(); if (typeof showShipDateAlerts === 'function') showShipDateAlerts();
+  if (typeof renderStockPage === 'function' && curTab === 'stock') renderStockPage();
+  showOrderDetail(o.orderNo);
+}
 function showCompleteModal(oi, ii) {
   const o = window._mgmtOrders[oi]; if (!o) return;
   const it = o.items[ii]; if (!it) return;
