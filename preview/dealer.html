@@ -317,6 +317,7 @@ function render() {
       <span class="muted">（忘了填的日子可以補登，選那一天即可）</span>
     </div>
     <div id="saleRows">${(me.stock || []).length ? me.stock.map(saleRowHtml).join('') : '<div class="muted" style="padding:14px;text-align:center;">尚無在庫。南坡萬出貨後，品項會自動出現在這裡。</div>'}</div>
+    ${(me.stock || []).length && !(me.stock || []).some(s => s.qty > 0) ? '<div class="hint" style="margin-top:6px;">📦 目前門市尚無在庫，各款暫時不能登記售出。南坡萬出貨到店後，「在庫」數字會自動更新、按鈕即開啟；要補貨請用下方「叫貨補貨」。</div>' : ''}
     ${(me.stock || []).some(s => s.unitPrice === '' && s.qty > 0) ? '<div class="warn">⚠ 有品項尚未設定牌價，該品項暫時無法登記售出，已通知南坡萬補上。</div>' : ''}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:8px;flex-wrap:wrap;">
       <div id="saleSum" class="muted">本次登記 0 瓶</div>
