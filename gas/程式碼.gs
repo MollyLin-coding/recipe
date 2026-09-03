@@ -2771,15 +2771,19 @@ function addShipment(p) {
     // v3.28 出貨給啟用中的經銷商 → 自動寫「經銷商庫存異動」進貨列（第三本帳的進貨不手打）；失敗不阻斷出貨
     var _consignIn = null, _consignErr = '';
     try { _consignIn = _consignOnShipment_(client, orderNo, seq, date, use, items, op); } catch (e) { _consignErr = String((e && e.message) || e); }
+    // v3.32 叫貨行政鏈條收尾：此單若來自經銷商叫貨 → 叫貨單狀態 已出貨／部分出貨＋出貨日（店長頁看得到）
+    var _rqUpd = 0;
+    try { _rqUpd = _consignRestockOnShip_(String(orderNo), date, allShipped); } catch (e) {}
     _logOrderChange_(orderNo, op, '第 ' + seq + ' 次出貨',
       date + '：' + use.map(function (u) { return u.product + '×' + u.qty; }).join('、') +
       (_consignIn ? ('｜經銷商門市在庫 +' + use.reduce(function (a, u) { return a + u.qty; }, 0) + ' 瓶') : '') +
       (_consignErr ? ('｜⚠ 門市在庫寫入失敗：' + _consignErr) : '') +
+      (_rqUpd ? ('｜叫貨單→' + (allShipped ? '已出貨' : '部分出貨')) : '') +
       (allShipped ? '（本單已全部出清）' : '（尚有寄倉未出）') +
       (_deduct.length ? ('｜扣成品庫存 ' + _deduct.map(function (d) { return d.product + '−' + d.qty; }).join('、')) : '') +
       (note ? ('｜' + note) : ''));
     return { ok: true, orderNo: orderNo, seq: seq, date: date, lines: use, allShipped: allShipped,
-      stockDeducted: _deduct, consignIn: _consignIn, consignError: _consignErr };
+      stockDeducted: _deduct, consignIn: _consignIn, consignError: _consignErr, restockUpdated: _rqUpd };
   } finally { lock.releaseLock(); }
 }
 
@@ -2896,6 +2900,12 @@ function deleteShipment(p) {
     // v3.28 經銷商門市在庫沖回：當初自動寫的「進貨」列以「進貨取消」負數沖回（流水帳不刪列）
     let _consignBack = null;
     try { _consignBack = _consignOnShipmentDelete_(_delClient, orderNo, seq, delLines, String((p && p.operator) || (p && p._user) || '')); } catch (e) {}
+    // v3.32 回推叫貨單狀態（依刪除後剩餘批次）
+    try {
+      var _left = _shipRows_().filter(function (r) { return String(r[SHP.orderNo]) === String(orderNo); });
+      var _lastD = ''; _left.forEach(function (r) { var d = _fmtDate_(r[SHP.date]); if (d > _lastD) _lastD = d; });
+      _consignRestockOnShipDelete_(String(orderNo), _left.length, _lastD);
+    } catch (e) {}
 
     // 回推訂單主表：L/M 依剩下的紀錄重算；I 若已無「全部出清」則退回製作狀態
     try {
@@ -4294,8 +4304,43 @@ function consignAlerts(p) {
 var CONSIGN_NOTIFY_EMAILS = ['molly_lin@kevinnumber1-cocktail.com', 'kevin_huang@kevinnumber1-cocktail.com'];
 var TYPE_CONSIGN_SHIP = '自有酒款出貨訂單(有金流)';   // 與前端 TYPE_SHIP 同字串（後端原本沒有這個常數）
 var CONSIGN_RESTOCK_SHEET = '經銷商叫貨單';
-var CONSIGN_RESTOCK_HEADERS = ['叫貨ID', '經銷商', '申請日期', '狀態', '明細JSON', '希望到貨日', '備註', '申請人', '建立時間', '審核人', '審核時間', '審核備註', '建立訂單編號', 'email通知', 'email錯誤'];
-var CRS = { id: 0, dealer: 1, date: 2, status: 3, detail: 4, wishDate: 5, note: 6, applicant: 7, createdAt: 8, reviewer: 9, reviewedAt: 10, reviewNote: 11, orderNo: 12, emailed: 13, emailErr: 14 };
+var CONSIGN_RESTOCK_HEADERS = ['叫貨ID', '經銷商', '申請日期', '狀態', '明細JSON', '希望到貨日', '備註', '申請人', '建立時間', '審核人', '審核時間', '審核備註', '建立訂單編號', 'email通知', 'email錯誤', '出貨日'];
+var CRS = { id: 0, dealer: 1, date: 2, status: 3, detail: 4, wishDate: 5, note: 6, applicant: 7, createdAt: 8, reviewer: 9, reviewedAt: 10, reviewNote: 11, orderNo: 12, emailed: 13, emailErr: 14, shipDate: 15 };
+// 舊分頁補齊新表頭（O email錯誤／P 出貨日）
+function _consignRestockEnsureHeaders_(ws) {
+  for (var i = 0; i < CONSIGN_RESTOCK_HEADERS.length; i++) {
+    if (String(ws.getRange(1, i + 1).getValue() || '') === '') ws.getRange(1, i + 1).setValue(CONSIGN_RESTOCK_HEADERS[i]);
+  }
+}
+// v3.32 出貨連動叫貨單：該訂單來自叫貨（M 欄=訂單編號）→ 全出清「已出貨」／未出清「部分出貨」，P 欄記最近出貨日；回傳更新筆數
+function _consignRestockOnShip_(orderNo, date, allShipped) {
+  var ws = _consignSheet_(CONSIGN_RESTOCK_SHEET, CONSIGN_RESTOCK_HEADERS);
+  _consignRestockEnsureHeaders_(ws);
+  var rows = _consignRowsOf_(CONSIGN_RESTOCK_SHEET, CONSIGN_RESTOCK_HEADERS), n = 0;
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][CRS.orderNo]) !== String(orderNo)) continue;
+    var st = String(rows[i][CRS.status] || '');
+    if (st !== '已放行' && st !== '部分出貨' && st !== '已出貨') continue;
+    ws.getRange(i + 2, CRS.status + 1).setValue(allShipped ? '已出貨' : '部分出貨');
+    ws.getRange(i + 2, CRS.shipDate + 1).setNumberFormat('@').setValue(String(date || ''));
+    n++;
+  }
+  return n;
+}
+// v3.32 刪除出貨批次後回推叫貨單狀態：仍有批次→部分出貨；全無→已放行（清出貨日）
+function _consignRestockOnShipDelete_(orderNo, remainingBatches, lastDate) {
+  var ws = _consignSheet_(CONSIGN_RESTOCK_SHEET, CONSIGN_RESTOCK_HEADERS);
+  var rows = _consignRowsOf_(CONSIGN_RESTOCK_SHEET, CONSIGN_RESTOCK_HEADERS), n = 0;
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i][CRS.orderNo]) !== String(orderNo)) continue;
+    var st = String(rows[i][CRS.status] || '');
+    if (st !== '部分出貨' && st !== '已出貨') continue;
+    ws.getRange(i + 2, CRS.status + 1).setValue(remainingBatches > 0 ? '部分出貨' : '已放行');
+    ws.getRange(i + 2, CRS.shipDate + 1).setValue(remainingBatches > 0 ? String(lastDate || '') : '');
+    n++;
+  }
+  return n;
+}
 // 合作寄售 FOQ（Molly 202609 報價單）：100ml 每款 25 瓶／500ml、700ml 每款 12 瓶
 function _consignFoqOf_(volume) { return (String(volume) === '100ml') ? 25 : 12; }
 // 依規格預設瓶型（建單頁同一套慣例；700ml 尚無庫存瓶型，留空讓 admin 在訂單補）
@@ -4308,7 +4353,7 @@ function _consignRestockObj_(r) {
     id: String(r[CRS.id] || ''), dealer: String(r[CRS.dealer] || ''), date: _fmtDate_(r[CRS.date]), status: String(r[CRS.status] || ''),
     lines: detail, wishDate: _fmtDate_(r[CRS.wishDate]), note: String(r[CRS.note] || ''), applicant: String(r[CRS.applicant] || ''),
     createdAt: _fmtDateTime_(r[CRS.createdAt]), reviewer: String(r[CRS.reviewer] || ''), reviewedAt: _fmtDateTime_(r[CRS.reviewedAt]),
-    reviewNote: String(r[CRS.reviewNote] || ''), orderNo: String(r[CRS.orderNo] || ''), emailed: _consignBool_(r[CRS.emailed]), emailErr: String(r[CRS.emailErr] || ''),
+    reviewNote: String(r[CRS.reviewNote] || ''), orderNo: String(r[CRS.orderNo] || ''), emailed: _consignBool_(r[CRS.emailed]), emailErr: String(r[CRS.emailErr] || ''), shipDate: _fmtDate_(r[CRS.shipDate]),
     totalQty: detail.reduce(function (a, l) { return a + (Number(l.qty) || 0); }, 0)
   };
 }
@@ -4364,8 +4409,8 @@ function consignRestockCreate(p) {
       MailApp.sendEmail({ to: CONSIGN_NOTIFY_EMAILS.join(','), subject: subj, body: body, name: '南坡萬廠務系統' });
       emailed = true;
     } catch (e) { emailErr = String((e && e.message) || e); }
-    var row = [id, dealer, today, '待放行', JSON.stringify(use), wish, note, op, now, '', '', '', '', emailed ? 'TRUE' : 'FALSE', emailErr];   // v3.30 O 欄=寄信例外文字（診斷）
-    if (String(ws.getRange(1, CRS.emailErr + 1).getValue() || '') === '') ws.getRange(1, CRS.emailErr + 1).setValue('email錯誤');   // 舊分頁補表頭
+    var row = [id, dealer, today, '待放行', JSON.stringify(use), wish, note, op, now, '', '', '', '', emailed ? 'TRUE' : 'FALSE', emailErr, ''];   // v3.30 O 欄=寄信例外文字（診斷）；v3.32 P 欄=出貨日
+    _consignRestockEnsureHeaders_(ws);   // 舊分頁補表頭
     var r = ws.getLastRow() + 1;
     ws.getRange(r, CRS.date + 1).setNumberFormat('@'); ws.getRange(r, CRS.wishDate + 1).setNumberFormat('@');
     ws.getRange(r, 1, 1, CONSIGN_RESTOCK_HEADERS.length).setValues([row]);
