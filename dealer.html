@@ -144,7 +144,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
     document.body.appendChild(b);
   });
 }
-const APP_VERSION='v3.35';
+const APP_VERSION='v3.36';
 window.addEventListener('DOMContentLoaded', function () { const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION; });
 // 開頁暖機：趁使用者打密碼時吃掉 GAS 冷啟動
 window.addEventListener('DOMContentLoaded', function () { api({ action: 'getEnvInfo' }, true); });
@@ -274,11 +274,11 @@ async function _sessRestore() {
   let s = null; try { s = JSON.parse(sessionStorage.getItem('np_dealer_sess') || 'null'); } catch (e) {}
   if (!s || !s.t || !s.u) return;
   curToken = s.t; curUser = s.u;
-  const err = document.getElementById('loginErr'); if (err) err.textContent = '🔄 恢復登入中…';
+  const err = document.getElementById('loginErr'); if (err) { err.style.color = 'var(--ink2)'; err.innerHTML = '<span class="ld-spin"></span>恢復登入中…'; }   // v3.36 轉圈取代紅字
   const ok = await reload(false);
   if (ok) { document.getElementById('loginWrap').style.display = 'none'; document.getElementById('app').style.display = 'flex'; }
   else { curToken = null; curUser = null; _sessClear(); }
-  if (err) err.textContent = '';
+  if (err) { err.style.color = ''; err.textContent = ''; }
 }
 _sessRestore();
 function doLogout() {
