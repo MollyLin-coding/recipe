@@ -153,7 +153,7 @@ var ROLE_MATRIX = {
   consignDealers: ['admin', '財務', 'PM'], consignPrices: ['admin', '財務'], consignOverview: ['admin', '財務'], consignAlerts: ['admin', '財務'],
   consignSaveDealer: ['admin'], consignStatementCreate: ['admin'], consignStatementSettle: ['admin'], consignSeed: ['admin'], consignStatementDelete: ['admin'],
   // v3.29 叫貨：送出＝經銷商本人或 admin 代填；放行/駁回/測試信 僅 admin
-  consignRestockCreate: ['admin', '經銷商'], consignRestockList: ['admin', '財務', '經銷商'], consignRestockApprove: ['admin'], consignRestockReject: ['admin'], consignMailTest: ['admin']
+  consignRestockCreate: ['admin', '經銷商'], consignRestockList: ['admin', '財務', '經銷商'], consignRestockApprove: ['admin'], consignRestockReject: ['admin'], consignMailTest: ['admin'], consignResetDealer: ['admin']
 };
 function doGet(e) {
   const p = e.parameter || {};
@@ -304,6 +304,7 @@ function doGet(e) {
       case 'consignRestockApprove':  result = consignRestockApprove(p); break;  // v3.29 叫貨：放行→自動建出貨訂單(admin)
       case 'consignRestockReject':   result = consignRestockReject(p); break;   // v3.29 叫貨：駁回(admin)
       case 'consignMailTest':        result = consignMailTest(p); break;        // v3.29 叫貨：寄信授權驗證(admin)
+      case 'consignResetDealer':     result = consignResetDealer(p); break;     // v3.35 重置經銷商測試資料(admin，不可逆)
       case 'deleteShipment':         result = deleteShipment(p); break;          // 實際出貨紀錄：刪除某一次出貨(v3.26, admin 限定)
       case 'getBottleOverview':      result = getBottleOverview(); break;        // 玻璃瓶庫存
       case 'bottleIn':               result = bottleIn(p); break;                // 玻璃瓶庫存
@@ -360,7 +361,7 @@ var AUDIT_ACTIONS = {
   stockIn:1, stockOut:1, bottleIn:1, bottleOut:1, addBottleItem:1, setSafetyLevel:1,
   addShipment:1, deleteShipment:1,
   consignSale:1, consignAdjust:1, consignSaveDealer:1, consignStatementCreate:1, consignStatementSettle:1, consignSeed:1, consignStatementDelete:1,
-  consignRestockCreate:1, consignRestockApprove:1, consignRestockReject:1, consignMailTest:1,
+  consignRestockCreate:1, consignRestockApprove:1, consignRestockReject:1, consignMailTest:1, consignResetDealer:1,
   saveRunCard:1, deleteRunCard:1, saveProcessNote:1,
   addBatchRecord:1, updateBatchRecord:1, deleteBatchRecord:1,
   submitApply:1, reviewApply:1, saveRdRecord:1, deleteRdRecord:1, submitRdApply:1, reviewRdApply:1,
@@ -3496,7 +3497,8 @@ var ORDER_MUTATING_ACTIONS = {
   migrateOrderNos:1, migrateOrderTypes:1, backfillOrderCreators:1,
   addShipment:1, deleteShipment:1,
   consignStatementSettle:1,  // v3.28 結清自動建認列單
-  consignRestockApprove:1    // v3.29 叫貨放行自動建出貨單
+  consignRestockApprove:1,   // v3.29 叫貨放行自動建出貨單
+  consignResetDealer:1       // v3.35 重置經銷商測試資料（刪訂單）
 };
 // 其餘讀取快取的失效對應（action → 要清掉的 key）。
 // 新增寫入函式時只要在這裡登記一行，就不會出現「改了資料卻還看到舊值」。
@@ -4484,6 +4486,54 @@ function consignRestockReject(p) {
     f.ws.getRange(f.idx + 2, 1, 1, CONSIGN_RESTOCK_HEADERS.length).setValues([row]);
     return { ok: true, id: id };
   } finally { lock.releaseLock(); }
+}
+// ── v3.35 重置經銷商測試資料（admin、不可逆）──
+//   範圍：①該經銷商、且「建單人員」以「經銷商叫貨」開頭的訂單：逐批 deleteShipment（成品庫存回沖＋門市在庫進貨取消）→ deleteOrder
+//         ②該經銷商在「經銷商庫存異動」「經銷商叫貨單」「經銷商對帳單」的所有列
+//   不碰：非叫貨來源的訂單（例如 260902-002 真單）、成品庫存流水帳（回沖是加列不刪列）
+function _consignDeleteRowsWhere_(name, headers, colIdx, value) {
+  var ws = _consignSheet_(name, headers);
+  var rows = _consignRowsOf_(name, headers), n = 0;
+  for (var i = rows.length - 1; i >= 0; i--) if (String(rows[i][colIdx]) === value) { ws.deleteRow(i + 2); n++; }
+  return n;
+}
+function consignResetDealer(p) {
+  if (!p || p._role !== 'admin') return { ok: false, error: '僅管理員可重置' };
+  var dealer = String((p && p.dealer) || '').trim();
+  if (!dealer) return { ok: false, error: '缺少經銷商' };
+  if (String((p && p.confirm) || '') !== dealer) return { ok: false, error: '確認字串不符，未執行' };
+  var op = String((p && p._user) || '');
+  var out = { ok: true, dealer: dealer, orders: [], shipmentsDeleted: 0, stockRestored: [], ledgerRows: 0, restockRows: 0, stmtRows: 0, errors: [] };
+  // ① 叫貨來源訂單：先刪出貨批次（庫存回沖），再刪訂單
+  var ows = SpreadsheetApp.openById(MAIN_SHEET_ID).getSheetByName('訂單主表');
+  var data = ows ? ows.getDataRange().getValues() : [];
+  var targets = [];
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][1]) === dealer && /^經銷商叫貨/.test(String(data[i][31] || ''))) targets.push(String(data[i][0]));
+  }
+  targets.forEach(function (no) {
+    var seqs = {};
+    _shipRows_().forEach(function (r) { if (String(r[SHP.orderNo]) === no) seqs[Number(r[SHP.seq]) || 0] = true; });
+    Object.keys(seqs).sort(function (a, b) { return b - a; }).forEach(function (sq) {
+      try {
+        var r = deleteShipment({ orderNo: no, seq: sq, operator: op, _user: op, _role: 'admin' });
+        if (r && r.ok) { out.shipmentsDeleted++; (r.stockRestored || []).forEach(function (x) { out.stockRestored.push(x); }); }
+        else out.errors.push(no + ' 第' + sq + '次：' + ((r && r.error) || ''));
+      } catch (e) { out.errors.push(no + ' 第' + sq + '次：' + String((e && e.message) || e)); }
+    });
+    try {
+      var d = deleteOrder({ orderNo: no, user: op, _user: op, _role: 'admin' });
+      if (d && d.ok) out.orders.push(no); else out.errors.push(no + '：' + ((d && d.error) || ''));
+    } catch (e) { out.errors.push(no + '：' + String((e && e.message) || e)); }
+  });
+  // ② 清三張表該經銷商的列
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    out.ledgerRows = _consignDeleteRowsWhere_(CONSIGN_LEDGER_SHEET, CONSIGN_LEDGER_HEADERS, CLG.dealer, dealer);
+    out.restockRows = _consignDeleteRowsWhere_(CONSIGN_RESTOCK_SHEET, CONSIGN_RESTOCK_HEADERS, CRS.dealer, dealer);
+    out.stmtRows = _consignDeleteRowsWhere_(CONSIGN_STMT_SHEET, CONSIGN_STMT_HEADERS, CST.dealer, dealer);
+  } finally { lock.releaseLock(); }
+  return out;
 }
 // ── 授權用：joyhouse.rental 在 Apps Script 編輯器直接「執行」這個函式一次 → 跳出 Google 授權畫面 → 允許 → 收到測試信即完成 ──
 function __authMail() {
