@@ -404,7 +404,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.28';
+const APP_VERSION='v3.29';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -4604,18 +4604,20 @@ function _consignApplyBoot(b) {
 }
 // 結帳日到期提醒：admin／財務 登入時彈一次，同一人同一天不重複（主公指示：一天一次即可）
 function showConsignReminder(res) {
-  if (!curUser || !res || !res.ok || !(res.alerts || []).length) return;
+  const _pend = (res && res.pendingRestocks) || [];
+  if (!curUser || !res || !res.ok || (!(res.alerts || []).length && !_pend.length)) return;
   const key = 'np_consignRemind_' + curUser.username;
   const today = _localDate();
   if (lsGet(key) === today) return;
   lsSet(key, today);
-  const rows = res.alerts.map(a => `<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;font-size:13px;">
+  const rows = (res.alerts || []).map(a => `<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;font-size:13px;">
       <div><b>${a.label}</b> <span style="color:var(--ink3);">${_periodLabel(a.period)}</span><div style="font-size:11px;color:var(--ink3);">對帳日 ${a.dueDate}・${a.status}</div></div>
       <div style="text-align:right;white-space:nowrap;"><b style="color:var(--gold-dk);">NT$${(a.amount || 0).toLocaleString()}</b><div style="font-size:11px;color:var(--ink3);">售出 ${a.soldQty} 瓶</div></div></div>`).join('');
+  const pendRows = _pend.map(q => `<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 10px;border:1px solid var(--yellow);border-radius:8px;margin-top:6px;font-size:13px;background:#fef9ec;"><div><b>📥 ${_escf(q.label)}</b> 叫貨申請<div style="font-size:11px;color:var(--ink3);">${q.date}${q.emailed ? '' : '・通知信未送出'}</div></div><div style="text-align:right;white-space:nowrap;"><b>${q.totalQty} 瓶</b><div style="font-size:11px;color:var(--ink3);">待放行</div></div></div>`).join('');
   const m = makeModal(`
-    <div class="modal-title">💰 經銷商寄售對帳日到了</div>
-    <div style="font-size:13px;color:var(--ink2);">以下期別已到約定對帳日、尚未結清，請產生對帳單向經銷商請款，收到款後登記「已結清」。</div>
-    ${rows}
+    <div class="modal-title">${(res.alerts || []).length ? '💰 經銷商寄售：對帳／叫貨待處理' : '📥 經銷商叫貨待放行'}</div>
+    ${(res.alerts || []).length ? '<div style="font-size:13px;color:var(--ink2);">以下期別已到約定對帳日、尚未結清，請產生對帳單向經銷商請款，收到款後登記「已結清」。</div>' : ''}
+    ${rows}${pendRows}
     <div class="fe" style="margin-top:12px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">稍後</button><button class="btn btn-primary btn-sm" id="cr_go">前往經銷商寄售統計 ›</button></div>`);
   m.querySelector('#cr_go').onclick = () => { m.remove(); switchTab('consign'); };
 }
@@ -4638,6 +4640,7 @@ function renderConsignPage(mc) {
         <button class="btn btn-ghost btn-sm" onclick="consignShiftMonth(1)">▶</button>
         <button class="btn btn-ghost btn-sm" onclick="loadConsignOverview()">↻</button>
         <button class="btn btn-ghost btn-sm" onclick="showConsignPrices()">🏷 牌價表</button>
+        <button class="btn btn-ghost btn-sm" onclick="showConsignRestockHistory()">📜 叫貨紀錄</button>
         <button class="btn btn-ghost btn-sm" onclick="showConsignDealerModal(null)">＋ 新增經銷商</button>
       </div>
     </div>
@@ -4660,7 +4663,48 @@ async function loadConsignOverview() {
   _consignOv = res;
   if (res.dealers) window._consignDealers = res.dealers.map(d => d.cfg);   // 順手更新快取（建單判斷用）
   if (!res.dealers.length) { area.innerHTML = '<div class="card"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">尚無經銷商設定，請按「＋ 新增經銷商」</div></div>'; return; }
-  area.innerHTML = res.dealers.map((d, i) => consignDealerCard(d, i)).join('');
+  area.innerHTML = consignRestockSection(res.pendingRestocks || []) + res.dealers.map((d, i) => consignDealerCard(d, i)).join('');
+}
+// ── v3.29 叫貨（P2）：店長送出 → 待放行 → admin 放行(自動建出貨單)／駁回 ──
+function consignRestockSection(list) {
+  if (!list.length) return '';
+  return `<div class="card" style="margin-bottom:10px;border:1.5px solid var(--yellow);">
+    <div class="sec-hd"><div class="card-title" style="margin:0;">📥 待放行叫貨單（${list.length}）</div><button class="btn btn-ghost btn-sm" onclick="showConsignRestockHistory()">📜 全部叫貨紀錄</button></div>
+    ${list.map(q => `<div style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;">
+      <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center;">
+        <div><b>${_escf(consignDealerLabel(q.dealer))}</b> <span style="font-size:11px;color:var(--ink3);">${q.date}・共 ${q.totalQty} 瓶・申請人 ${_escf(q.applicant)}${q.wishDate ? '・希望到貨 ' + q.wishDate : ''}${q.emailed ? '' : '・<span style="color:var(--red);">通知信未送出</span>'}</span></div>
+        <div style="display:flex;gap:6px;"><button class="btn btn-ghost btn-sm" style="color:var(--red);" onclick="consignRejectRestock('${q.id}')">✕ 駁回</button><button class="btn btn-sm" style="background:var(--green);color:#fff;font-weight:700;" onclick="consignApproveRestock('${q.id}')">✅ 放行→建出貨單</button></div>
+      </div>
+      <div style="font-size:12px;margin-top:4px;">${q.lines.map(l => `${_escf(l.product)} ${_escf(l.volume)} × <b>${l.qty}</b>${l.bottleType ? '（' + _escf(l.bottleType) + '）' : '（瓶型待補）'}`).join('、')}</div>
+      ${q.note ? `<div style="font-size:11px;color:var(--ink3);">備註：${_escf(q.note)}</div>` : ''}
+    </div>`).join('')}
+    <div style="font-size:11px;color:var(--ink3);margin-top:8px;">放行＝自動建立該經銷商的「自有酒款出貨訂單(有金流)」（金額 0、寄售），出貨日＝希望到貨日；之後照一般流程在訂單頁登記實際出貨，門市在庫自動增加。</div>
+  </div>`;
+}
+function consignDealerLabel(key) { const d = (window._consignDealers || []).find(x => x.key === key); return d ? d.label : key; }
+async function consignApproveRestock(id) {
+  const q = ((_consignOv && _consignOv.pendingRestocks) || []).find(x => x.id === id); if (!q) return;
+  if (!confirm(`放行 ${consignDealerLabel(q.dealer)} 的叫貨（共 ${q.totalQty} 瓶）？\n將自動建立出貨訂單，出貨日 ${q.wishDate || _localDate()}。`)) return;
+  const res = await api({ action: 'consignRestockApprove', id, pm: (curUser && curUser.username) || 'Molly' });
+  if (res.ok) { toast('已放行，建立訂單 ' + res.orderNo, 3500); loadConsignOverview(); if (typeof loadOrderMgmt === 'function' && document.getElementById('orderMgmtList')) loadOrderMgmt(); }
+  else toast('放行失敗：' + (res.error || ''), 4000);
+}
+async function consignRejectRestock(id) {
+  const note = (prompt('駁回原因（店長會看到）：') || '').trim();
+  if (!note) return;
+  const res = await api({ action: 'consignRestockReject', id, note });
+  if (res.ok) { toast('已駁回'); loadConsignOverview(); } else toast('駁回失敗：' + (res.error || ''), 4000);
+}
+async function showConsignRestockHistory() {
+  const res = await api({ action: 'consignRestockList' });
+  if (!res.ok) { toast('讀取失敗：' + (res.error || '')); return; }
+  const badge = st => ({ '待放行': 'bg-yellow', '已放行': 'bg-green', '已駁回': 'bg-red' }[st] || 'bg-brown');
+  makeModal(`
+    <div class="modal-title">📜 叫貨紀錄（全部經銷商）</div>
+    ${(res.list || []).length ? `<div class="tbl-wrap"><table><thead><tr><th>日期</th><th>經銷商</th><th>狀態</th><th>內容</th><th>處理</th></tr></thead><tbody>
+      ${res.list.map(q => `<tr><td style="white-space:nowrap;font-size:12px;">${q.date}</td><td style="font-size:12px;">${_escf(consignDealerLabel(q.dealer))}</td><td><span class="badge ${badge(q.status)}">${q.status}</span></td><td style="font-size:12px;">${q.lines.map(l => `${_escf(l.product)} ${_escf(l.volume)}×${l.qty}`).join('、')}（${q.totalQty} 瓶）${q.note ? '<div style="color:var(--ink3);">' + _escf(q.note) + '</div>' : ''}</td><td style="font-size:11px;color:var(--ink3);">${q.reviewer ? _escf(q.reviewer) + ' ' + q.reviewedAt : ''}${q.orderNo ? '<div style="color:var(--green);">訂單 ' + q.orderNo + '</div>' : ''}${q.reviewNote ? '<div>' + _escf(q.reviewNote) + '</div>' : ''}</td></tr>`).join('')}
+    </tbody></table></div>` : '<div style="color:var(--ink3);padding:10px;">尚無叫貨紀錄</div>'}
+    <div class="fe" style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="this.closest('.modal-bg').remove()">關閉</button></div>`);
 }
 function consignDealerCard(d, i) {
   const c = d.cfg, k = d.calc, s = d.statement;

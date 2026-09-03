@@ -341,10 +341,7 @@ function render() {
     ${ps ? `<button class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="showStatement('${esc(ps.id)}')">📄 查看上期對帳單</button>` : ''}
   </div>
 
-  <div class="card">
-    <div class="sec-hd"><div class="card-title" style="margin:0;">📦 叫貨補貨</div><span class="badge bg-brown">即將開放</span></div>
-    <div class="muted">下一階段開放：勾選要補的酒款與瓶數送出，南坡萬確認後自動排出貨。目前請先用 LINE 告知 Molly。</div>
-  </div>
+  ${restockCardHtml(me)}
 
   <div class="card">
     <div class="sec-hd"><div class="card-title" style="margin:0;">📄 歷史對帳單</div></div>
@@ -473,6 +470,67 @@ function recentHtml(list) {
   </tbody></table></div>`;
 }
 function toggleDetail(id) { const el = document.getElementById(id); if (el) el.style.display = el.style.display === 'none' ? '' : 'none'; }
+
+// ── v3.29 叫貨補貨：目錄＝牌價表全款（依經銷商折扣算單價）；每款每規格有最低叫貨量 FOQ（100ml 25 瓶／500・700ml 12 瓶）──
+//   送出 → 南坡萬收到 email → 放行後自動變成出貨訂單；店長在下方看得到每張叫貨單的狀態
+const VOLS = ['100ml', '500ml', '700ml'];
+function restockCardHtml(me) {
+  const cat = me.catalog || [];
+  const byProd = {};
+  cat.forEach(c => { (byProd[c.product] = byProd[c.product] || { pubName: c.pubName, v: {} }).v[c.volume] = c; });
+  const prods = Object.keys(byProd).sort();
+  const rows = prods.map((p, i) => `<tr><td style="min-width:120px;"><div style="font-weight:600;">${esc(byProd[p].pubName)}</div></td>${VOLS.map(v => {
+    const c = byProd[p].v[v];
+    if (!c) return '<td class="tr muted">—</td>';
+    return `<td class="tr"><input type="number" inputmode="numeric" min="0" step="1" placeholder="0" id="rq_${i}_${v}" data-product="${esc(p)}" data-volume="${v}" data-foq="${c.foq}" oninput="updateRestockSum()" style="width:58px;padding:6px 4px;text-align:right;border:1.5px solid var(--border);border-radius:6px;font-size:14px;"><div class="muted" style="font-size:10px;white-space:nowrap;">NT$${c.unitPrice}・≥${c.foq}</div></td>`;
+  }).join('')}</tr>`).join('');
+  const hist = (me.restocks || []);
+  const badge = s => ({ '待放行': 'bg-yellow', '已放行': 'bg-green', '已駁回': 'bg-red' }[s] || 'bg-brown');
+  return `<div class="card">
+    <div class="sec-hd"><div class="card-title" style="margin:0;">📦 叫貨補貨</div><span class="muted">最低叫貨量：100ml 每款 25 瓶・500/700ml 每款 12 瓶</span></div>
+    ${prods.length ? `<div class="tbl-wrap"><table><thead><tr><th>酒款</th>${VOLS.map(v => `<th class="tr">${v}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="muted" style="padding:10px;">目錄尚未建立，請聯絡南坡萬</div>'}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
+      <label class="muted" style="white-space:nowrap;">希望到貨日</label><input class="inp" id="rqDate" type="date" min="${me.today}" style="margin:0;width:auto;padding:6px 10px;font-size:13px;">
+      <input class="inp" id="rqNote" placeholder="備註（選填，例：週末活動）" style="margin:0;flex:1;min-width:160px;padding:6px 10px;font-size:13px;">
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:8px;flex-wrap:wrap;">
+      <div id="rqSum" class="muted">尚未選擇</div>
+      <button class="btn btn-primary" id="rqBtn" disabled onclick="lockRun(this, submitRestock)">📦 送出叫貨申請</button>
+    </div>
+    <div class="hint">送出後南坡萬會收到通知，確認後安排出貨；出貨到店時品項會自動進入上方「門市在庫」。</div>
+    ${hist.length ? `<div style="margin-top:12px;font-weight:600;font-size:13px;">我的叫貨紀錄</div>${hist.map(q => `<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;">
+        <div><span class="badge ${badge(q.status)}">${q.status}</span> <span class="muted">${q.date}</span> 共 ${q.totalQty} 瓶<div class="muted">${q.lines.map(l => `${esc(l.pubName || l.product)} ${esc(l.volume)}×${l.qty}`).join('、')}${q.wishDate ? '・希望 ' + q.wishDate : ''}</div>${q.status === '已放行' && q.orderNo ? `<div class="muted" style="color:var(--green);">已排出貨，訂單 ${q.orderNo}</div>` : ''}${q.status === '已駁回' ? `<div style="color:var(--red);font-size:12px;">原因：${esc(q.reviewNote)}</div>` : ''}${q.status === '待放行' && !q.emailed ? '<div class="muted" style="font-size:11px;">（系統通知信未送出，南坡萬登入後仍會看到此申請）</div>' : ''}</div>
+      </div>`).join('')}` : ''}
+  </div>`;
+}
+function _restockLines() {
+  const lines = [], bad = [];
+  document.querySelectorAll('input[id^="rq_"]').forEach(el => {
+    const q = parseInt(el.value, 10) || 0; if (q <= 0) return;
+    const foq = Number(el.dataset.foq) || 0;
+    if (q < foq) bad.push(`${el.dataset.product} ${el.dataset.volume} 至少 ${foq} 瓶`);
+    lines.push({ product: el.dataset.product, volume: el.dataset.volume, qty: q });
+  });
+  return { lines, bad };
+}
+function updateRestockSum() {
+  const { lines, bad } = _restockLines();
+  const n = lines.reduce((a, l) => a + l.qty, 0);
+  const el = document.getElementById('rqSum'), b = document.getElementById('rqBtn');
+  if (el) el.innerHTML = bad.length ? `<span style="color:var(--red);font-weight:700;">${esc(bad[0])}</span>` : (n ? `共 <b>${n}</b> 瓶・${lines.length} 款` : '尚未選擇');
+  if (b) b.disabled = !n || bad.length > 0;
+}
+async function submitRestock() {
+  const { lines, bad } = _restockLines();
+  if (!lines.length || bad.length) { toast(bad[0] || '請先填叫貨數量'); return; }
+  const n = lines.reduce((a, l) => a + l.qty, 0);
+  if (!confirm(`確認送出叫貨申請？共 ${n} 瓶、${lines.length} 款。`)) return;
+  const p = { action: 'consignRestockCreate', lines: JSON.stringify(lines), wishDate: document.getElementById('rqDate').value || '', note: document.getElementById('rqNote').value || '' };
+  if (curUser.role !== '經銷商') p.dealer = curUser.dealer;
+  const res = await api(p);
+  if (res.ok) { toast(res.emailSent ? '叫貨申請已送出，南坡萬已收到通知' : '叫貨申請已送出（通知信未送出，南坡萬登入後會看到）', 4000); await reload(false); }
+  else toast(res.error || '送出失敗', 4500);
+}
 </script>
 </body>
 </html>
