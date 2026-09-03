@@ -76,6 +76,10 @@ tr:last-child td{border-bottom:none;}
 #busyOverlay.on{display:flex;}
 .busy-box{background:#fff;border-radius:14px;padding:16px 24px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 30px rgba(0,0,0,.25);font-size:14px;color:#1e1710;max-width:80vw;}
 .busy-spin{width:26px;height:26px;flex-shrink:0;border:3px solid #e4ddd0;border-top-color:#7a5420;border-radius:50%;animation:btnspin .8s linear infinite;}
+/* v3.34 讀取中浮標＋小圈圈 */
+.ld-spin{display:inline-block;width:14px;height:14px;border:2px solid #e4ddd0;border-top-color:var(--gold-dk);border-radius:50%;animation:btnspin .8s linear infinite;vertical-align:-3px;margin-right:6px;}
+#ldPill{position:fixed;top:calc(var(--top-h) + 8px);left:50%;transform:translateX(-50%);background:#fff;border:1px solid var(--border);border-radius:99px;padding:5px 14px;font-size:12px;color:var(--ink2);box-shadow:var(--sh);z-index:30;display:none;pointer-events:none;}
+#ldPill.on{display:inline-flex;align-items:center;}
 @keyframes btnspin{to{transform:rotate(360deg);}}
 /* 售出登記列：手機優先，每款一列 */
 .sale-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid var(--border);}
@@ -303,10 +307,18 @@ function showChangePw() {
 }
 
 // ── 主畫面 ──
+// v3.34 讀取中小圈圈：頁面已有內容時在頂端顯示「更新中…」浮標（不擋操作）；首次載入由登入鈕的轉圈負責
+function _ldPill(on) {
+  let el = document.getElementById('ldPill');
+  if (!el) { el = document.createElement('div'); el.id = 'ldPill'; el.innerHTML = '<span class="ld-spin"></span>資料更新中…'; document.body.appendChild(el); }
+  el.classList.toggle('on', !!on);
+}
 async function reload(showToast) {
   const p = { action: 'consignMe' };
   if (curUser && curUser.role !== '經銷商') p.dealer = curUser.dealer;   // 經銷商角色的 dealer 由後端 session 強制，帶了也無效
-  const res = await api(p);
+  if (ME) _ldPill(true);
+  let res;
+  try { res = await api(p); } finally { _ldPill(false); }
   if (!res.ok) { if (!res._offline) toast(res.error || '讀取失敗'); const e = document.getElementById('loginErr'); if (e && !ME) e.textContent = res.error || '讀取失敗'; return false; }
   ME = res; render(); if (showToast) toast('已更新'); return true;
 }

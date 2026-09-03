@@ -280,6 +280,7 @@ tbody tr:hover td{background:#faf3e8;}
 #busyOverlay{position:fixed;inset:0;background:rgba(30,23,16,.38);z-index:9500;display:none;align-items:center;justify-content:center;}
 #busyOverlay.on{display:flex;}
 .busy-box{background:#fff;border-radius:14px;padding:16px 24px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 30px rgba(0,0,0,.25);font-size:14px;color:#1e1710;max-width:80vw;}
+.ld-spin{display:inline-block;width:14px;height:14px;border:2px solid #e4ddd0;border-top-color:var(--gold-dk);border-radius:50%;animation:btnspin .8s linear infinite;vertical-align:-3px;margin-right:6px;}
 .busy-spin{width:26px;height:26px;flex-shrink:0;border:3px solid #e4ddd0;border-top-color:#7a5420;border-radius:50%;animation:btnspin .8s linear infinite;}
 @keyframes btnspin{to{transform:rotate(360deg)}}
 /* ── Run Card（v2.6）── */
@@ -832,7 +833,7 @@ function renderRecipePage(mc) {
   // v2.7.8 與「新增出貨訂單」客戶清單同步：隱藏建單不出現的客戶（HIDDEN_CLIENTS），
   // 顯示名走 clientLabel（南坡萬v.2→南坡萬自有品牌酒），value 仍用資料真鍵
   const clients = [...new Set(recipeList.map(i => i.client))].filter(c => !HIDDEN_CLIENTS.includes(c));
-  if (!clients.length) { mc.innerHTML = '<div class="card"><div style="text-align:center;color:var(--ink3);padding:20px;">載入中…請稍候</div></div>'; return; }
+  if (!clients.length) { mc.innerHTML = '<div class="card"><div style="text-align:center;color:var(--ink3);padding:20px;"><span class="ld-spin"></span>載入中…請稍候</div></div>'; return; }
   if (!clients.includes(curClient)) curClient = clients[0];
   const cOpts = clients.map(c => `<option value="${c}"${c===curClient?' selected':''}>${clientLabel(c)}</option>`).join('');
   mc.innerHTML = `
@@ -862,7 +863,7 @@ async function loadRecipe() {
   const key = curClient + '::' + curSheet;
   const myReq = ++_recipeReq;
   const area = document.getElementById('recipeArea'); if (!area) return;
-  area.innerHTML = '<div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">載入中…</div>';
+  area.innerHTML = '<div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;"><span class="ld-spin"></span>載入中…</div>';
   if (!C.recipes[key]) {
     const res = await api({ action:'getRecipe', client:curClient, sheet:curSheet });
     if (myReq !== _recipeReq) return; // v3.12.1 使用者已換選別款，本回應作廢（不覆蓋 rdata/畫面）
@@ -1178,7 +1179,7 @@ async function renderProfitPage(mc) {
     <div class="form-row" style="margin-bottom:12px;">
       <div class="fg" style="flex:0 0 155px"><label>客戶</label><select id="profitClient" onchange="loadProfit()">${cOpts}</select></div>
     </div>
-    <div id="profitArea"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">載入中…</div></div>
+    <div id="profitArea"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>
   </div>`;
   await loadProfit();
 }
@@ -1253,7 +1254,7 @@ async function renderInventoryPage(mc) {
   mc.innerHTML = `<div class="card">
     <div class="sec-hd"><div class="card-title" style="margin:0">🍾 玻璃瓶庫存</div>
       <div style="display:flex;gap:6px;">${_canSetSafety() ? '<button class="btn btn-primary btn-sm" onclick="showAddBottleItem()">➕ 新增品項</button>' : ''}<button class="btn btn-ghost btn-sm" onclick="loadBottleOverview();loadBottleLedger();">↻</button></div></div>
-    <div id="bottleWaterArea"><div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">載入中…</div></div>
+    <div id="bottleWaterArea"><div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>
     <div style="border-top:0.5px solid var(--border);margin-top:12px;padding-top:12px;">
       <div class="card-title" style="font-size:13px;">➕ 入庫</div>
       <div class="form-row">
@@ -1279,7 +1280,7 @@ async function renderInventoryPage(mc) {
     <div style="border-top:0.5px solid var(--border);margin-top:12px;padding-top:12px;">
       <div class="sec-hd"><div class="card-title" style="margin:0;font-size:13px;">📜 異動歷史</div>
         <select class="inp" id="blFilter" style="margin:0;width:auto;max-width:150px;padding:6px 26px 6px 10px;font-size:13px;" onchange="bottleFilter=this.value;loadBottleLedger();"></select></div>
-      <div id="bottleLedgerArea"><div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">載入中…</div></div>
+      <div id="bottleLedgerArea"><div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>
     </div>
   </div>
 
@@ -1289,7 +1290,7 @@ async function renderInventoryPage(mc) {
       <div class="fg" style="flex:0 0 145px"><label>大分類</label><select id="invCat" onchange="filterInv()"><option value="">全部</option></select></div>
       <div class="fg"><label>搜尋品名</label><input class="inp" id="invKw" placeholder="關鍵字…" oninput="filterInv()" style="margin:0;padding:9px 12px;font-size:13px;"></div>
     </div>
-    <div id="invArea"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">載入中…</div></div>
+    <div id="invArea"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>
   </div>
 
   <div class="card" style="margin-top:10px;">
@@ -2205,7 +2206,7 @@ let _bf = { client:'', from:'', to:'' };
 async function renderBatchPage(mc) {
   mc = mc || document.getElementById('runcardArea') || document.getElementById('mainContent');
   if (C.batch) { batchRecs = C.batch; renderBatchList(mc); return; }
-  mc.innerHTML = '<div class="card"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;">載入中…</div></div>';
+  mc.innerHTML = '<div class="card"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>';
   const res = await api({ action:'getBatchRecords' });
   if (!res.ok) { mc.innerHTML=`<div class="card"><div class="warn" style="padding:12px;">${res.error}</div></div>`; return; }
   batchRecs = C.batch = res.records || [];
@@ -2354,7 +2355,7 @@ async function renderOrderPage(mc){
   mc.innerHTML = `<div class="card" style="margin-bottom:10px;">
     <div class="sec-hd"><div class="card-title" style="margin:0">🍸 我的製作任務</div>
       <button class="btn btn-ghost btn-sm" onclick="renderOrderPage(document.getElementById('mainContent'))">↻</button></div>
-    <div id="orderTaskArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div>
+    <div id="orderTaskArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>
   </div>`;
   loadOrderTasks();
 }
@@ -2470,7 +2471,7 @@ async function renderRuncardPage(mc) {
         </div>
       </div>
       <div style="font-size:11px;color:var(--ink3);margin-bottom:2px;">依出貨日排序・點卡片看詳情與操作（完成回報／確認出貨／編輯）</div>
-      <div id="monthOrderArea"><div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">載入中…</div></div>
+      <div id="monthOrderArea"><div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>
     </div>
     <div id="unboundRcArea"></div>
     <div id="runcardArea" style="display:none"></div>`; // v3.1.5 製作記錄區隱藏(主公指示，程式保留可復原)
@@ -2482,7 +2483,7 @@ async function renderRuncardPage(mc) {
 // v1.6 當月金流總覽（僅 FINANCE_USERS：Kevin/Molly/Lulu）
 async function loadFinanceSummary() {
   const el = document.getElementById('financeSummaryCard'); if (!el) return;
-  el.innerHTML = '<div class="card" style="margin-bottom:10px;padding:12px;"><div style="font-size:12px;color:var(--ink3);">💰 金流總覽載入中…</div></div>';
+  el.innerHTML = '<div class="card" style="margin-bottom:10px;padding:12px;"><div style="font-size:12px;color:var(--ink3);"><span class="ld-spin"></span>💰 金流總覽載入中…</div></div>';
   const res = await api({ action: 'getFinanceSummary', user: (curUser && curUser.username) || '', month: _orderMonth }, true); // v3.11.2 跟隨訂單列表月份選單（原固定當月）
   if (!res.ok) { el.innerHTML = ''; return; }
   el.innerHTML = `<div class="card" style="margin-bottom:10px;padding:12px;">
@@ -3130,7 +3131,7 @@ function showOrderDetail(orderNo) {
     ${moneyHtml}
     ${dlvHtml}
     ${o.orderType === TYPE_CONSIGN_SETTLE ? '' : `<div style="margin:10px 0 2px;font-size:13px;font-weight:600;color:var(--gold-dk);">🚚 實際出貨紀錄（寄倉分批出貨）</div>
-    <div id="shipRecArea" style="font-size:11px;color:var(--ink3);">載入中…</div>`}
+    <div id="shipRecArea" style="font-size:11px;color:var(--ink3);"><span class="ld-spin"></span>載入中…</div>`}
     <div style="margin:10px 0 2px;">
       <button class="btn btn-ghost btn-sm" id="ordHistBtn" style="font-size:12px;" onclick="toggleOrderHistory('${o.orderNo}')">📜 查看訂單歷史修改紀錄</button>
     </div>
@@ -3174,7 +3175,7 @@ async function toggleOrderHistory(orderNo) {
   area.style.display = "block";
   if (btn) btn.textContent = "📜 收合歷史修改紀錄";
   if (!area.dataset.loaded) {
-    area.textContent = "載入中…";
+    area.innerHTML = "<span class=\"ld-spin\"></span>載入中…";
     await loadOrderHistory(orderNo);
     area.dataset.loaded = "1";
   }
@@ -3767,7 +3768,7 @@ function renderStockPage(mc) {
   <div class="card" style="margin-bottom:10px;">
     <div class="sec-hd"><div class="card-title" style="margin:0">🗄️ ${clientLabel(STOCK_CLIENT)} 成品庫存</div>
       <button class="btn btn-ghost btn-sm" onclick="renderStockPage(document.getElementById('mainContent'))">↻</button></div>
-    <div id="stockWaterArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div>
+    <div id="stockWaterArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>
   </div>
 
   <div class="card" style="margin-bottom:10px;">
@@ -3796,7 +3797,7 @@ function renderStockPage(mc) {
   <div class="card">
     <div class="sec-hd"><div class="card-title" style="margin:0">📜 異動歷史</div>
       <select class="inp" id="slFilter" style="margin:0;width:auto;max-width:160px;padding:6px 28px 6px 10px;font-size:13px;" onchange="stockFilter=this.value;loadStockLedger();"></select></div>
-    <div id="stockLedgerArea"><div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">載入中…</div></div>
+    <div id="stockLedgerArea"><div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>
   </div>`;
 
   const d = _localDate();
@@ -3891,14 +3892,14 @@ async function renderApplyPage(mc) {
   mc.innerHTML = `
   <div class="card" style="margin-bottom:10px;">
     <div class="sec-hd"><div class="card-title" style="margin:0">待審核申請</div><button class="btn btn-ghost btn-sm" onclick="renderApplyPage(document.getElementById('mainContent'))">↻</button></div>
-    <div id="applyArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div>
+    <div id="applyArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>
   </div>
-  <div class="card" style="margin-bottom:10px;"><div class="card-title">審核歷史</div><div id="histArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div></div>
+  <div class="card" style="margin-bottom:10px;"><div class="card-title">審核歷史</div><div id="histArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div></div>
   <div class="card" style="margin-bottom:10px;">
     <div class="sec-hd"><div class="card-title" style="margin:0">🔬 研發申請 — 待審核</div></div>
-    <div id="rdApplyArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div>
+    <div id="rdApplyArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>
   </div>
-  <div class="card"><div class="card-title">🔬 研發申請 — 歷史</div><div id="rdHistArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div></div>`;
+  <div class="card"><div class="card-title">🔬 研發申請 — 歷史</div><div id="rdHistArea"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div></div>`;
   loadApplies(); loadHistory(); loadRdApplies(); loadRdHistory();
 }
 async function loadApplies() {
@@ -4092,7 +4093,7 @@ async function rcShowHistory(oi, ii){
   const modal=makeModal(`
     <div class="modal-title">📋 Run Card 歷史</div>
     <div style="font-size:12px;color:var(--ink3);margin-bottom:6px;">${o.orderNo} · ${clientLabel(o.client)} · ${it.product||'（未綁酒譜）'} × ${it.qty} 瓶</div>
-    <div id="rcHistList" style="font-size:12px;">載入中…</div>
+    <div id="rcHistList" style="font-size:12px;"><span class="ld-spin"></span>載入中…</div>
     <div class="fe" style="margin-top:10px;gap:6px;">
       <button class="btn btn-primary btn-sm" onclick="rcNewFromOrder(${oi},${ii})">＋ 建新 Run Card</button>
       <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">關閉</button>
@@ -4717,7 +4718,7 @@ function renderConsignPage(mc) {
     </div>
     <div style="font-size:12px;color:var(--ink3);line-height:1.6;">三本帳：南坡萬成品庫存 →（實際出貨紀錄）→ 經銷商<b>門市在庫</b> →（經銷商登記售出）→ <b>當期應請款</b>。請款只算經銷商已登記「售出」的瓶數，門市架上未售出的一瓶都不算。期別＝自然月；對帳日＝次月各家約定的結帳日。經銷商入口：<a href="dealer.html" target="_blank" style="color:var(--gold-dk);">dealer.html</a></div>
   </div>
-  <div id="consignArea"><div class="card"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入中…</div></div></div>`;
+  <div id="consignArea"><div class="card"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div></div>`;
   loadConsignOverview();
 }
 function consignShiftMonth(d) {
