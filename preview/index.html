@@ -709,7 +709,7 @@ async function _sessRestore() {
   let s = null; try { s = JSON.parse(sessionStorage.getItem('np_sess') || 'null'); } catch (e) {}
   if (!s || !s.t || !s.u) return false;
   const err = document.getElementById('loginErr');
-  if (err) err.textContent = '🔄 恢復登入中…';
+  if (err) { err.style.color = 'var(--ink2)'; err.innerHTML = '<span class="ld-spin"></span>恢復登入中…'; }   // v3.36 轉圈取代紅字
   curToken = s.t;
   // 輕量驗 token：getRecipeList 全角色可打(含FB觀看白名單)且後端有 300s 快取；SESSION_EXPIRED/失敗=token失效
   const probe = await api({ action: 'getRecipeList' }, true);
@@ -718,16 +718,16 @@ async function _sessRestore() {
     // v3.19：只有 token 真的失效才清 session；網路瞬斷/限流(_offline)保留登入狀態，
     //   請使用者再重新整理一次即自動還原（原本一律清掉＝暫時斷網也被逼重新登入）
     if (probe && probe._offline) {
-      if (err) err.textContent = '⚠ 網路連線失敗，請再重新整理一次（登入狀態已保留）';
+      if (err) { err.style.color = ''; err.textContent = '⚠ 網路連線失敗，請再重新整理一次（登入狀態已保留）'; }
     } else {
       _sessClear();
-      if (err) err.textContent = '';
+      if (err) { err.style.color = ''; err.textContent = ''; }
     }
     return false;
   }
   window._restoreTab = s.tab || null; // v3.19 回到重新整理前的分頁
   await _bootApp(s.u, s.r);
-  if (err) err.textContent = '';
+  if (err) { err.style.color = ''; err.textContent = ''; }
   return true;
 }
 // 開頁即嘗試還原（script 位於 body 末端，DOM 已就緒）
