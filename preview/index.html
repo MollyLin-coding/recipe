@@ -3597,7 +3597,13 @@ async function consignShipItem(oi, ii) {
   const date = _localDate();
   if (!confirm(`確認 ${date} 寄出 ${it.product} × ${qty} 瓶給 ${clientLabel(o.client)}？\n會扣南坡萬成品庫存、自動加入經銷商門市在庫，並把叫貨單標為已出貨。`)) return;
   const res = await api({ action: 'addShipment', orderNo: o.orderNo, date, lines: JSON.stringify([{ product: it.product, bottleType: it.bottleType || '', qty }]), note: '寄出給經銷商（單款一鍵）', operator: (curUser && curUser.username) || '' });
-  if (!res.ok) { toast('寄出失敗：' + (res.error || ''), 5000); return; }
+  if (!res.ok) {   // v3.33 失敗改彈窗（toast 5 秒容易漏看：9/3 主公按寄出被成品庫存擋下卻沒看到）
+    makeModal('<div class="modal-title" style="color:var(--red);">✕ 寄出失敗，未寫入任何資料</div>'
+      + '<div style="font-size:13px;line-height:1.7;">' + _escf(res.error || '') + '</div>'
+      + '<div style="font-size:12px;color:var(--ink3);margin-top:10px;">若是「成品庫存不足」：寄出會扣南坡萬v.2 成品庫存，請先到「成品庫存」分頁入庫該款，或把本次寄出瓶數改小。</div>'
+      + '<div class="fe" style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="this.closest(\'.modal-bg\').remove()">知道了</button></div>');
+    return;
+  }
   const sd = res.stockDeducted || [];
   toast(`已寄出 ${it.product} × ${qty} 瓶${res.consignIn ? '・門市在庫已更新' : ''}${res.restockUpdated ? '・叫貨單→' + (res.allShipped ? '已出貨' : '部分出貨') : ''}${sd.length ? '｜扣成品庫存 ' + sd.map(d => d.product + '−' + d.qty).join('、') : ''}`, 5000);
   const m = document.querySelector('.modal-bg'); if (m) m.remove();
