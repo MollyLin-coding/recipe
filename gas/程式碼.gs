@@ -4283,8 +4283,8 @@ function consignAlerts(p) {
 var CONSIGN_NOTIFY_EMAILS = ['molly_lin@kevinnumber1-cocktail.com', 'kevin_huang@kevinnumber1-cocktail.com'];
 var TYPE_CONSIGN_SHIP = '自有酒款出貨訂單(有金流)';   // 與前端 TYPE_SHIP 同字串（後端原本沒有這個常數）
 var CONSIGN_RESTOCK_SHEET = '經銷商叫貨單';
-var CONSIGN_RESTOCK_HEADERS = ['叫貨ID', '經銷商', '申請日期', '狀態', '明細JSON', '希望到貨日', '備註', '申請人', '建立時間', '審核人', '審核時間', '審核備註', '建立訂單編號', 'email通知'];
-var CRS = { id: 0, dealer: 1, date: 2, status: 3, detail: 4, wishDate: 5, note: 6, applicant: 7, createdAt: 8, reviewer: 9, reviewedAt: 10, reviewNote: 11, orderNo: 12, emailed: 13 };
+var CONSIGN_RESTOCK_HEADERS = ['叫貨ID', '經銷商', '申請日期', '狀態', '明細JSON', '希望到貨日', '備註', '申請人', '建立時間', '審核人', '審核時間', '審核備註', '建立訂單編號', 'email通知', 'email錯誤'];
+var CRS = { id: 0, dealer: 1, date: 2, status: 3, detail: 4, wishDate: 5, note: 6, applicant: 7, createdAt: 8, reviewer: 9, reviewedAt: 10, reviewNote: 11, orderNo: 12, emailed: 13, emailErr: 14 };
 // 合作寄售 FOQ（Molly 202609 報價單）：100ml 每款 25 瓶／500ml、700ml 每款 12 瓶
 function _consignFoqOf_(volume) { return (String(volume) === '100ml') ? 25 : 12; }
 // 依規格預設瓶型（建單頁同一套慣例；700ml 尚無庫存瓶型，留空讓 admin 在訂單補）
@@ -4297,7 +4297,7 @@ function _consignRestockObj_(r) {
     id: String(r[CRS.id] || ''), dealer: String(r[CRS.dealer] || ''), date: _fmtDate_(r[CRS.date]), status: String(r[CRS.status] || ''),
     lines: detail, wishDate: _fmtDate_(r[CRS.wishDate]), note: String(r[CRS.note] || ''), applicant: String(r[CRS.applicant] || ''),
     createdAt: _fmtDateTime_(r[CRS.createdAt]), reviewer: String(r[CRS.reviewer] || ''), reviewedAt: _fmtDateTime_(r[CRS.reviewedAt]),
-    reviewNote: String(r[CRS.reviewNote] || ''), orderNo: String(r[CRS.orderNo] || ''), emailed: _consignBool_(r[CRS.emailed]),
+    reviewNote: String(r[CRS.reviewNote] || ''), orderNo: String(r[CRS.orderNo] || ''), emailed: _consignBool_(r[CRS.emailed]), emailErr: String(r[CRS.emailErr] || ''),
     totalQty: detail.reduce(function (a, l) { return a + (Number(l.qty) || 0); }, 0)
   };
 }
@@ -4353,7 +4353,8 @@ function consignRestockCreate(p) {
       MailApp.sendEmail({ to: CONSIGN_NOTIFY_EMAILS.join(','), subject: subj, body: body, name: '南坡萬廠務系統' });
       emailed = true;
     } catch (e) { emailErr = String((e && e.message) || e); }
-    var row = [id, dealer, today, '待放行', JSON.stringify(use), wish, note, op, now, '', '', '', '', emailed ? 'TRUE' : 'FALSE'];
+    var row = [id, dealer, today, '待放行', JSON.stringify(use), wish, note, op, now, '', '', '', '', emailed ? 'TRUE' : 'FALSE', emailErr];   // v3.30 O 欄=寄信例外文字（診斷）
+    if (String(ws.getRange(1, CRS.emailErr + 1).getValue() || '') === '') ws.getRange(1, CRS.emailErr + 1).setValue('email錯誤');   // 舊分頁補表頭
     var r = ws.getLastRow() + 1;
     ws.getRange(r, CRS.date + 1).setNumberFormat('@'); ws.getRange(r, CRS.wishDate + 1).setNumberFormat('@');
     ws.getRange(r, 1, 1, CONSIGN_RESTOCK_HEADERS.length).setValues([row]);
