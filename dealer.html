@@ -135,7 +135,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
     document.body.appendChild(b);
   });
 }
-const APP_VERSION='v3.28';
+const APP_VERSION='v3.30';
 window.addEventListener('DOMContentLoaded', function () { const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION; });
 // 開頁暖機：趁使用者打密碼時吃掉 GAS 冷啟動
 window.addEventListener('DOMContentLoaded', function () { api({ action: 'getEnvInfo' }, true); });
@@ -325,8 +325,10 @@ function render() {
         <button class="btn btn-success" id="saleBtn" onclick="lockRun(this, submitSale)">💾 送出售出登記</button>
       </div>
     </div>
-    <div class="hint">每天打烊前，把今天賣掉的瓶數填進去按送出即可；架上還沒賣掉的酒不會被計入請款。</div>
+    <div class="hint">每天打烊前，對著 POS 的販售紀錄把今天賣掉的瓶數填進去按送出即可；架上還沒賣掉的酒不會被計入請款。</div>
   </div>
+
+  <div class="card" id="dailyCard">${dailyCardHtml(me.daily || { month: me.today.slice(0, 7), days: [], total: { qty: 0, owed: 0, retail: 0 } }, me.today)}</div>
 
   <div class="card">
     <div class="card-title">💰 本期對帳（${periodLabel(cur.period)}）</div>
@@ -358,7 +360,7 @@ function saleRowHtml(s, i) {
   const can = s.qty > 0 && s.unitPrice !== '';
   return `<div class="sale-row">
     <div class="sale-name"><div class="nm">${esc(s.pubName || s.product)}</div><div class="sub">${esc(s.volume)}${s.unitPrice !== '' ? `・單價 ${nt(s.unitPrice)}` : '・<span style="color:var(--red);">未設牌價</span>'}</div></div>
-    <div class="stock-n">在庫 <b>${s.qty}</b></div>
+    <div class="stock-n">在庫 <b style="${s.qty ? '' : 'color:var(--ink3);'}">${s.qty}</b>${s.placeholder ? '<div class="muted" style="font-size:10px;">尚未進貨</div>' : ''}</div>
     <div class="qty-ctl">
       <button type="button" onclick="bump(${i},-1)" ${can ? '' : 'disabled'}>−</button>
       <input type="number" inputmode="numeric" min="0" max="${s.qty}" value="0" id="sq_${i}" data-i="${i}" oninput="updateSaleSum()" ${can ? '' : 'disabled'}>
@@ -373,16 +375,16 @@ function bump(i, d) {
   v = Math.max(0, Math.min(max, v)); el.value = v; updateSaleSum();
 }
 function updateSaleSum() {
-  let n = 0, amt = 0, over = false;
+  let n = 0, amt = 0, retail = 0, over = false;
   (ME.stock || []).forEach((s, i) => {
     const el = document.getElementById('sq_' + i); if (!el) return;
     const v = parseInt(el.value, 10) || 0;
     el.classList.toggle('hot', v > 0);
     if (v > s.qty) over = true;
-    n += v; amt += v * (Number(s.unitPrice) || 0);
+    n += v; amt += v * (Number(s.unitPrice) || 0); retail += v * (Number(s.listPrice) || 0);
   });
   const el = document.getElementById('saleSum');
-  if (el) el.innerHTML = over ? '<span style="color:var(--red);font-weight:700;">有品項超過在庫數</span>' : (n ? `本次登記 <b>${n}</b> 瓶・${nt(amt)}` : '本次登記 0 瓶');
+  if (el) el.innerHTML = over ? '<span style="color:var(--red);font-weight:700;">有品項超過在庫數</span>' : (n ? `本次登記 <b>${n}</b> 瓶・牌價營業額 ${nt(retail)}・應付南坡萬 <b>${nt(amt)}</b>` : '本次登記 0 瓶');
   const b = document.getElementById('saleBtn'); if (b) b.disabled = !n || over;
 }
 async function submitSale() {
@@ -399,8 +401,50 @@ async function submitSale() {
   const p = { action: 'consignSale', date, lines: JSON.stringify(lines) };
   if (curUser.role !== '經銷商') p.dealer = curUser.dealer;
   const res = await api(p);
-  if (res.ok) { toast(`已登記售出 ${n} 瓶・${nt(res.amount)}`); await reload(false); }
+  if (res.ok) {
+    await reload(false);
+    const dd = ((ME.daily && ME.daily.days) || []).find(x => x.date === date);
+    toast(dd ? `已登記 ${n} 瓶。${date} 合計售出 ${dd.qty} 瓶・牌價營業額 ${nt(dd.retail)}・應付南坡萬 ${nt(dd.owed)}` : `已登記售出 ${n} 瓶・${nt(res.amount)}`, 5000);
+  }
   else toast(res.error || '登記失敗', 4500);
+}
+// ── v3.30 每日銷售紀錄：依日期分組（今天在最上）、每天兩口徑營業額；◀ ▶ 換月（consignDaily） ──
+function dailyCardHtml(daily, today) {
+  const m = daily.month, days = daily.days || [], t = daily.total || { qty: 0, owed: 0, retail: 0 };
+  const [y, mo] = m.split('-');
+  const rows = days.length ? days.map((d, i) => `
+    <div style="border:1px solid var(--border);border-radius:8px;margin-top:6px;${d.date === today ? 'background:#f2f8f2;border-color:var(--green);' : ''}">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;cursor:pointer;" onclick="toggleDetail('day_${i}')">
+        <div><b>${d.date}</b>${d.date === today ? ' <span class="badge bg-green">今天</span>' : ''} <span class="muted">${d.lines.length} 款</span></div>
+        <div style="text-align:right;white-space:nowrap;"><b>${d.qty}</b> 瓶<span class="muted">・牌價 ${nt(d.retail)}・應付 </span><b style="color:var(--gold-dk);">${nt(d.owed)}</b></div>
+      </div>
+      <div id="day_${i}" style="display:none;padding:0 10px 8px;">
+        <div class="tbl-wrap"><table><thead><tr><th>酒款</th><th class="tr">瓶數</th><th class="tr">牌價</th><th class="tr">應付單價</th><th class="tr">應付小計</th></tr></thead><tbody>
+          ${d.lines.map(l => `<tr><td>${esc(l.pubName || l.product)}<div class="muted">${esc(l.volume)}</div></td><td class="tr" style="font-weight:700;">${l.qty}</td><td class="tr muted">${nt(l.listPrice)}</td><td class="tr">${nt(l.unitPrice)}</td><td class="tr">${nt(l.owed)}</td></tr>`).join('')}
+        </tbody></table></div>
+      </div>
+    </div>`).join('') : `<div class="muted" style="padding:14px;text-align:center;">${y} 年 ${parseInt(mo, 10)} 月尚無銷售紀錄</div>`;
+  return `
+    <div class="sec-hd"><div class="card-title" style="margin:0;">📅 每日銷售紀錄</div>
+      <div style="display:flex;align-items:center;gap:4px;"><button class="btn btn-ghost btn-sm" onclick="dailyShift(-1)">◀</button><b id="dailyMonth" data-m="${m}">${y} 年 ${parseInt(mo, 10)} 月</b><button class="btn btn-ghost btn-sm" onclick="dailyShift(1)">▶</button></div></div>
+    <div class="stat-row">
+      <div class="stat"><div class="lb">本月售出</div><div class="vl">${t.qty} 瓶</div></div>
+      <div class="stat"><div class="lb">牌價營業額（參考）</div><div class="vl">${nt(t.retail)}</div></div>
+      <div class="stat"><div class="lb">應付南坡萬</div><div class="vl acc">${nt(t.owed)}</div></div>
+    </div>
+    ${rows}
+    <div class="hint">點任一天可展開當天各款明細。「牌價營業額」以建議零售價估算供參考，實際營業額以店內 POS 為準；「應付南坡萬」＝結帳日請款依據。</div>`;
+}
+async function dailyShift(delta) {
+  const el = document.getElementById('dailyMonth'); if (!el) return;
+  const [y, m] = el.dataset.m.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  const month = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  const p = { action: 'consignDaily', month };
+  if (curUser.role !== '經銷商') p.dealer = curUser.dealer;
+  const res = await api(p);
+  if (!res.ok) { toast(res.error || '讀取失敗'); return; }
+  const card = document.getElementById('dailyCard'); if (card) card.innerHTML = dailyCardHtml(res.daily, ME.today);
 }
 function showAdjust() {
   const stock = ME.stock || [];
