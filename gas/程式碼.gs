@@ -289,6 +289,7 @@ function doGet(e) {
       case 'consignAdjust':          result = consignAdjust(p); break;          // v3.28 寄售：退貨/損耗/盤點修正
       case 'consignLedger':          result = consignLedger(p); break;          // v3.28 寄售：流水帳
       case 'consignStatements':      result = consignStatements(p); break;      // v3.28 寄售：對帳單清單
+      case 'consignDaily':           result = consignDaily(p); break;           // v3.30 寄售：每日銷售紀錄（月）
       case 'consignDealers':         result = consignDealers(p); break;         // v3.28 寄售：經銷商設定清單
       case 'consignSaveDealer':      result = consignSaveDealer(p); break;      // v3.28 寄售：新增/修改經銷商（折扣/結帳日）
       case 'consignPrices':          result = consignPrices(p); break;          // v3.28 寄售：牌價表
@@ -3561,7 +3562,7 @@ function bootstrap(p) {
 // ============================================================
 var CONSIGN_ROLE = '經銷商';
 // 經銷商角色可呼叫的 action 白名單（比照 FBVIEW_ALLOWED_ACTIONS，未列者一律 403）
-var CONSIGN_DEALER_ACTIONS = ['changePassword', 'consignMe', 'consignSale', 'consignAdjust', 'consignLedger', 'consignStatements', 'consignRestockCreate', 'consignRestockList'];
+var CONSIGN_DEALER_ACTIONS = ['changePassword', 'consignMe', 'consignSale', 'consignAdjust', 'consignLedger', 'consignStatements', 'consignRestockCreate', 'consignRestockList', 'consignDaily'];
 var TYPE_CONSIGN_SETTLE = '經銷商寄售月結認列單';
 
 var CONSIGN_CFG_SHEET = '經銷商設定';
@@ -3800,6 +3801,45 @@ function _consignStockMap_(rows, dealer, untilDate) {
   return m;
 }
 function _consignStmtRows_() { return _consignRowsRO_(CONSIGN_STMT_SHEET, CONSIGN_STMT_HEADERS); }
+// v3.30 經銷商「預設規格」：目前寄售通路皆 100ml；日後可在經銷商設定備註欄寫 defaultVolume=500ml 覆寫
+function _consignDefaultVol_(cfg) {
+  var m = /defaultVolume\s*=\s*(\d+ml)/i.exec(String((cfg && cfg.note) || ''));
+  return m ? m[1] : '100ml';
+}
+// v3.30 每日銷售彙總（月）：售出＝POS 賣出瓶數；退貨列為負；營業額兩口徑＝牌價營業額(建議零售價×瓶數，參考) ／ 應付南坡萬(凍結成交單價×瓶數)
+function _consignDailyOf_(rows, dealer, month, pm) {
+  var byDay = {};
+  rows.forEach(function (r) {
+    if (String(r[CLG.dealer]) !== dealer) return;
+    var t = String(r[CLG.type] || ''); if (t !== '售出' && t !== '退貨') return;
+    var d = _fmtDate_(r[CLG.date]); if (d.slice(0, 7) !== month) return;
+    var prod = String(r[CLG.product] || ''), vol = String(r[CLG.volume] || '');
+    var q = -Math.round(Number(r[CLG.qty]) || 0);            // 售出/退貨在帳上是負數 → 轉成賣出瓶數（退貨變負）
+    var unit = (r[CLG.price] === '' || r[CLG.price] == null) ? 0 : (Number(r[CLG.price]) || 0);
+    var pe = _consignPriceOf_(pm, prod, vol);
+    var list = pe ? (Number(pe.price) || 0) : 0;
+    var day = byDay[d] || (byDay[d] = { date: d, qty: 0, owed: 0, retail: 0, lines: {} });
+    var k = _consignKeyOf_(prod, vol);
+    var ln = day.lines[k] || (day.lines[k] = { product: prod, pubName: pe ? pe.pubName : _consignStripVer_(prod), volume: vol, qty: 0, owed: 0, retail: 0, unitPrice: unit, listPrice: list });
+    ln.qty += q; ln.owed += q * unit; ln.retail += q * list;
+    day.qty += q; day.owed += q * unit; day.retail += q * list;
+  });
+  var days = Object.keys(byDay).sort().reverse().map(function (d) {
+    var day = byDay[d];
+    day.lines = Object.keys(day.lines).map(function (k) { return day.lines[k]; }).sort(function (a, b) { return a.product.localeCompare(b.product); });
+    return day;
+  });
+  var tot = days.reduce(function (a, x) { a.qty += x.qty; a.owed += x.owed; a.retail += x.retail; return a; }, { qty: 0, owed: 0, retail: 0 });
+  return { month: month, days: days, total: tot };
+}
+// v3.30 換月查每日銷售（經銷商＝自己；admin/財務 可帶 dealer）
+function consignDaily(p) {
+  var dealer = String((p && p.dealer) || '').trim();
+  if (!dealer) return { ok: false, error: '缺少經銷商' };
+  var month = String((p && p.month) || '').trim() || _consignPeriodOf_(_consignToday_());
+  if (!/^\d{4}-\d{2}$/.test(month)) return { ok: false, error: '月份格式須為 YYYY-MM' };
+  return { ok: true, dealer: dealer, daily: _consignDailyOf_(_consignLedgerRows_(), dealer, month, _consignPriceMap_()) };
+}
 function _consignStmtObj_(r) {
   var detail = [];
   try { detail = r[CST.detail] ? JSON.parse(r[CST.detail]) : []; } catch (e) { detail = []; }
@@ -3918,7 +3958,17 @@ function consignMe(p) {
     s.unitPrice = pe ? _consignUnitPrice_(pe, cfg.discount) : '';
     s.pubName = pe ? pe.pubName : _consignStripVer_(s.product);
     return s;
-  }).sort(function (a, b) { return a.product.localeCompare(b.product) || (parseInt(a.volume, 10) - parseInt(b.volume, 10)); });
+  });
+  // v3.30 主公指示：10 款酒永遠列出——牌價表有、但這家還沒進過貨的款式，以「預設規格」補一列在庫 0（placeholder），店長一眼看全 10 款
+  var defVol = _consignDefaultVol_(cfg);
+  var have = {}; stock.forEach(function (x) { have[x.product] = true; });
+  Object.keys(pm).forEach(function (k) {
+    var pe = pm[k]; if (String(pe.volume) !== defVol || have[pe.product]) return;
+    have[pe.product] = true;
+    stock.push({ key: _consignKeyOf_(pe.product, pe.volume), product: pe.product, volume: pe.volume, bottleType: _consignBottleFor_(pe.volume), qty: 0,
+      listPrice: pe.price, unitPrice: _consignUnitPrice_(pe, cfg.discount), pubName: pe.pubName, placeholder: true });
+  });
+  stock.sort(function (a, b) { return a.product.localeCompare(b.product) || (parseInt(a.volume, 10) - parseInt(b.volume, 10)); });
   var today = _consignToday_();
   var curPeriod = _consignPeriodOf_(today);
   var cur = _consignCalcPeriod_(dealer, curPeriod, rows, cfg);
@@ -3934,9 +3984,10 @@ function consignMe(p) {
   var lockedPeriods = stmts.filter(function (s) { return s.status === '已結清'; }).map(function (s) { return s.period; });
   var catalog = _consignCatalog_(cfg);   // v3.29 叫貨目錄（牌價表全款＋折扣後單價＋FOQ）
   var restocks = _consignRestockRows_().filter(function (r) { return String(r[CRS.dealer]) === dealer; }).map(_consignRestockObj_).reverse().slice(0, 10);
+  var daily = _consignDailyOf_(rows, dealer, curPeriod, pm);   // v3.30 本月每日銷售（換月由 consignDaily 抓）
   return { ok: true, dealer: cfg, today: today, stock: stock, todaySold: todaySold,
     current: cur, previous: prev, previousStatement: prevStmt, statements: stmts, recent: recent, lockedPeriods: lockedPeriods,
-    catalog: catalog, restocks: restocks };
+    catalog: catalog, restocks: restocks, daily: daily };
 }
 
 // ── 登記售出（經銷商本人／admin 代登）：lines=[{product, volume, qty}]，單價當下凍結 ──
@@ -4232,8 +4283,8 @@ function consignAlerts(p) {
 var CONSIGN_NOTIFY_EMAILS = ['molly_lin@kevinnumber1-cocktail.com', 'kevin_huang@kevinnumber1-cocktail.com'];
 var TYPE_CONSIGN_SHIP = '自有酒款出貨訂單(有金流)';   // 與前端 TYPE_SHIP 同字串（後端原本沒有這個常數）
 var CONSIGN_RESTOCK_SHEET = '經銷商叫貨單';
-var CONSIGN_RESTOCK_HEADERS = ['叫貨ID', '經銷商', '申請日期', '狀態', '明細JSON', '希望到貨日', '備註', '申請人', '建立時間', '審核人', '審核時間', '審核備註', '建立訂單編號', 'email通知'];
-var CRS = { id: 0, dealer: 1, date: 2, status: 3, detail: 4, wishDate: 5, note: 6, applicant: 7, createdAt: 8, reviewer: 9, reviewedAt: 10, reviewNote: 11, orderNo: 12, emailed: 13 };
+var CONSIGN_RESTOCK_HEADERS = ['叫貨ID', '經銷商', '申請日期', '狀態', '明細JSON', '希望到貨日', '備註', '申請人', '建立時間', '審核人', '審核時間', '審核備註', '建立訂單編號', 'email通知', 'email錯誤'];
+var CRS = { id: 0, dealer: 1, date: 2, status: 3, detail: 4, wishDate: 5, note: 6, applicant: 7, createdAt: 8, reviewer: 9, reviewedAt: 10, reviewNote: 11, orderNo: 12, emailed: 13, emailErr: 14 };
 // 合作寄售 FOQ（Molly 202609 報價單）：100ml 每款 25 瓶／500ml、700ml 每款 12 瓶
 function _consignFoqOf_(volume) { return (String(volume) === '100ml') ? 25 : 12; }
 // 依規格預設瓶型（建單頁同一套慣例；700ml 尚無庫存瓶型，留空讓 admin 在訂單補）
@@ -4246,7 +4297,7 @@ function _consignRestockObj_(r) {
     id: String(r[CRS.id] || ''), dealer: String(r[CRS.dealer] || ''), date: _fmtDate_(r[CRS.date]), status: String(r[CRS.status] || ''),
     lines: detail, wishDate: _fmtDate_(r[CRS.wishDate]), note: String(r[CRS.note] || ''), applicant: String(r[CRS.applicant] || ''),
     createdAt: _fmtDateTime_(r[CRS.createdAt]), reviewer: String(r[CRS.reviewer] || ''), reviewedAt: _fmtDateTime_(r[CRS.reviewedAt]),
-    reviewNote: String(r[CRS.reviewNote] || ''), orderNo: String(r[CRS.orderNo] || ''), emailed: _consignBool_(r[CRS.emailed]),
+    reviewNote: String(r[CRS.reviewNote] || ''), orderNo: String(r[CRS.orderNo] || ''), emailed: _consignBool_(r[CRS.emailed]), emailErr: String(r[CRS.emailErr] || ''),
     totalQty: detail.reduce(function (a, l) { return a + (Number(l.qty) || 0); }, 0)
   };
 }
@@ -4302,7 +4353,8 @@ function consignRestockCreate(p) {
       MailApp.sendEmail({ to: CONSIGN_NOTIFY_EMAILS.join(','), subject: subj, body: body, name: '南坡萬廠務系統' });
       emailed = true;
     } catch (e) { emailErr = String((e && e.message) || e); }
-    var row = [id, dealer, today, '待放行', JSON.stringify(use), wish, note, op, now, '', '', '', '', emailed ? 'TRUE' : 'FALSE'];
+    var row = [id, dealer, today, '待放行', JSON.stringify(use), wish, note, op, now, '', '', '', '', emailed ? 'TRUE' : 'FALSE', emailErr];   // v3.30 O 欄=寄信例外文字（診斷）
+    if (String(ws.getRange(1, CRS.emailErr + 1).getValue() || '') === '') ws.getRange(1, CRS.emailErr + 1).setValue('email錯誤');   // 舊分頁補表頭
     var r = ws.getLastRow() + 1;
     ws.getRange(r, CRS.date + 1).setNumberFormat('@'); ws.getRange(r, CRS.wishDate + 1).setNumberFormat('@');
     ws.getRange(r, 1, 1, CONSIGN_RESTOCK_HEADERS.length).setValues([row]);
@@ -4347,7 +4399,8 @@ function consignRestockApprove(p) {
     var res = createOrder({
       client: rq.dealer, orderType: TYPE_CONSIGN_SHIP, deliveryDate: deliveryDate, actualDeliveryDate: deliveryDate,
       items: items, total: 0, balance: 0, depositStatus: '寄售', pm: String((p && p.pm) || 'Molly'),
-      orderCreator: op, user: op, _user: op, _role: 'admin'
+      orderCreator: '經銷商叫貨(' + (rq.applicant || rq.dealer) + ')',   // v3.30 主公指示：內部一眼看出這是經銷商主動叫貨（列表「建單:經銷商叫貨(TP01-A)」）
+      user: op, _user: op, _role: 'admin'
     });
     if (!res || !res.ok) return { ok: false, error: '建立出貨訂單失敗：' + ((res && res.error) || '') };
     var row = f.row.slice();
