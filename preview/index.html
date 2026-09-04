@@ -4886,13 +4886,14 @@ async function showConsignDealerModal(i) {
   const prods = _consignProdRows(await _consignPriceList());
   const f = k => _escf((d && d[k]) || '');
   const sel = {}; ((d && d.products) || []).forEach(e => { sel[e.product] = (e.volumes && e.volumes.length) ? e.volumes : CONSIGN_VOLS; });
+  if (!Object.keys(sel).length) prods.forEach(p => { sel[p.product] = ['100ml', '500ml']; });   // v3.37.1 預設：100ml／500ml 全勾、700ml 不勾（尚無 700ml 瓶型）；儲存後即成為該店授權清單
   const mc = (d && d.moqCustom) || {};
   const knownKeys = (typeof TYPE_CLIENTS !== 'undefined' && TYPE_CLIENTS[TYPE_SHIP]) ? TYPE_CLIENTS[TYPE_SHIP].map(x => x[0]) : [];
   const keyField = d ? `<div class="fg"><label>經銷商鍵（＝建單客戶名，不可改）</label><input class="inp" value="${_escf(d.key)}" disabled style="margin:0;"></div>`
     : `<div class="fg"><label>經銷商鍵（必須＝建單時的客戶名稱，出貨才對得上）</label><input class="inp" id="cd_key" list="cdKeyList" placeholder="例：經銷商－島羽" style="margin:0;"><datalist id="cdKeyList">${knownKeys.map(k => `<option value="${_escf(k)}">`).join('')}</datalist></div>`;
   const secHd = (t, sub) => `<div style="font-weight:700;color:var(--gold-dk);margin:12px 0 6px;padding-bottom:4px;border-bottom:1px dashed var(--border);font-size:13px;">${t} <span style="font-weight:400;color:var(--ink3);font-size:11px;">${sub}</span></div>`;
   const m = makeModal(`
-    <div class="modal-title">⚙ ${d ? '修改經銷商設定' : '新增經銷商'}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;"><div class="modal-title" style="margin:0;">⚙ ${d ? '修改經銷商設定' : '新增經銷商'}</div><div style="display:flex;gap:6px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">✕ 關閉此分頁</button><button class="btn btn-primary btn-sm cd_sub">💾 儲存</button></div></div>
     ${keyField}
     ${secHd('🏢 基本資料', '南坡萬內部用（出貨貼標／開發票），店長頁不顯示')}
     <div class="form-row">
@@ -4920,7 +4921,7 @@ async function showConsignDealerModal(i) {
     <div class="form-row">
       ${CONSIGN_VOLS.map(v => `<div class="fg"><label>每次叫貨 MOQ ${v}（瓶）</label><input class="inp" id="cd_moq_${parseInt(v, 10)}" type="number" min="1" step="1" placeholder="預設 ${CONSIGN_MOQ_DEFAULT[v]}" value="${mc[v] != null ? mc[v] : ''}"></div>`).join('')}
     </div>
-    <div class="fg" style="margin-bottom:10px;"><label>授權經銷酒款與規格（都不勾＝不限定，全部 ${prods.length} 款皆可叫貨）</label>
+    <div class="fg" style="margin-bottom:10px;"><label>授權經銷酒款與規格（預設 100ml／500ml 全勾、700ml 不勾；都不勾＝不限定，全部 ${prods.length} 款皆可叫貨）</label>
       <div class="tbl-wrap" style="max-height:240px;overflow:auto;"><table style="font-size:12px;"><thead><tr><th>酒款</th>${CONSIGN_VOLS.map(v => `<th class="tr">${v}</th>`).join('')}</tr></thead><tbody>
         ${prods.map(p => `<tr><td>${_escf(p.pubName)}</td>${CONSIGN_VOLS.map(v => p.vols.includes(v) ? `<td class="tr"><input type="checkbox" class="cd_pv" data-product="${_escf(p.product)}" data-volume="${v}"${sel[p.product] && sel[p.product].includes(v) ? ' checked' : ''} onchange="consignPvSum(this.closest('.modal-box'))" style="width:18px;height:18px;vertical-align:middle;"></td>` : '<td class="tr" style="color:var(--ink3);">—</td>').join('')}</tr>`).join('')}
       </tbody></table></div>
@@ -4930,10 +4931,11 @@ async function showConsignDealerModal(i) {
     <div class="fg" style="margin-bottom:6px;"><label>特殊約定（店長看得到）</label><textarea class="inp" id="cd_special" rows="3" placeholder="例：首鋪 7 折為天花板非標準價；活動檔期價格另議" style="resize:vertical;">${f('specialTerms')}</textarea></div>
     <div style="font-size:11px;color:var(--ink3);line-height:1.6;">結帳日＝「次月第 N 日」對上個月的帳；到期未結清時，Kevin／Molly 登入會跳一次提醒（一天一次）。折扣改了只影響之後登記的售出（已登記的單價已凍結）。MOQ 與授權酒款改了立即影響店長的叫貨目錄、門市在庫列表與最低叫貨量檢查。</div>
     ${d && curUser && curUser.role === 'admin' ? `<div style="margin-top:12px;padding-top:8px;border-top:1px dashed var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><span style="font-size:11px;color:var(--ink3);">測試完要歸零用：刪「經銷商叫貨」來源的訂單與出貨（成品庫存回沖）、清此店門市在庫／叫貨單／對帳單。真單（非叫貨建立）不動。</span><button class="btn btn-ghost btn-sm" style="color:var(--red);border-color:var(--red);" onclick="consignResetDealer('${_escf(d.key)}','${_escf(d.label)}')">🧹 重置此經銷商測試資料</button></div>` : ''}
-    <div class="fe" style="margin-top:10px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="cd_sub">💾 儲存</button></div>`, { locked: true });
+    <div class="fe" style="margin-top:10px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">✕ 關閉此分頁</button><button class="btn btn-primary btn-sm cd_sub">💾 儲存</button></div>`, { locked: true });
   consignPvSum(m);
-  const b = m.querySelector('#cd_sub');
-  b.onclick = () => lockRun(b, async () => {
+  // v3.37.1 右上／右下兩顆儲存鈕共用同一段；按其中一顆時兩顆一起鎖
+  const subs = [...m.querySelectorAll('.cd_sub')];
+  const doSave = async () => {
     const g = id => { const el = m.querySelector('#' + id); return el ? String(el.value || '').trim() : ''; };
     const key = d ? d.key : g('cd_key');
     if (!key) { toast('請填經銷商鍵'); return; }
@@ -4947,7 +4949,8 @@ async function showConsignDealerModal(i) {
       moq100: g('cd_moq_100'), moq500: g('cd_moq_500'), moq700: g('cd_moq_700'), products: products.length ? JSON.stringify(products) : '',
       defaultVolume: g('cd_defvol'), sampleTerms: g('cd_sample'), specialTerms: g('cd_special'), contractStart: g('cd_contract') });
     if (res.ok) { toast('已儲存'); m.remove(); loadConsignOverview(); } else toast('儲存失敗：' + (res.error || ''), 4000);
-  });
+  };
+  subs.forEach(b => { b.onclick = () => { subs.forEach(x => { if (x !== b) x.disabled = true; }); lockRun(b, doSave).finally(() => subs.forEach(x => { x.disabled = false; })); }; });
 }
 // 🧾 產生／重算對帳單
 async function consignCreateStatement(i) {
