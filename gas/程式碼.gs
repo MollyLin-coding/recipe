@@ -3589,8 +3589,21 @@ var CONSIGN_DEALER_ACTIONS = ['changePassword', 'consignMe', 'consignSale', 'con
 var TYPE_CONSIGN_SETTLE = '經銷商寄售月結認列單';
 
 var CONSIGN_CFG_SHEET = '經銷商設定';
-var CONSIGN_CFG_HEADERS = ['經銷商鍵', '顯示名', '折扣率', '結帳日', '聯絡人', '啟用', '備註', '更新人', '更新時間'];
-var CCF = { key: 0, label: 1, discount: 2, closeDay: 3, contact: 4, enabled: 5, note: 6, updatedBy: 7, updatedAt: 8 };
+// v3.37 經銷條件擴充（主公 2026-09-04 拍板）：基本資料（抬頭／統編／地址／電話／Email，僅廠務端顯示）＋談定條件（MOQ×3 規格／授權酒款JSON／預設規格／試飲品約定／特殊約定／合約起日，店長頁「合作條件」卡顯示）。
+//   新欄一律加在表頭末尾、舊分頁由 _consignCfgEnsureHeaders_ 補表頭；空值走預設（MOQ 空＝100ml 25／500・700ml 12；授權酒款空＝全部可叫）＝舊資料零遷移。
+var CONSIGN_CFG_HEADERS = ['經銷商鍵', '顯示名', '折扣率', '結帳日', '聯絡人', '啟用', '備註', '更新人', '更新時間',
+  '公司抬頭', '統一編號', '收件地址', '聯絡電話', 'Email', 'MOQ_100ml', 'MOQ_500ml', 'MOQ_700ml', '授權酒款JSON', '預設規格', '試飲品約定', '特殊約定', '合約起日'];
+var CCF = { key: 0, label: 1, discount: 2, closeDay: 3, contact: 4, enabled: 5, note: 6, updatedBy: 7, updatedAt: 8,
+  company: 9, taxId: 10, address: 11, phone: 12, email: 13, moq100: 14, moq500: 15, moq700: 16, productsJson: 17, defaultVolume: 18, sampleTerms: 19, specialTerms: 20, contractStart: 21 };
+var CONSIGN_VOLS = ['100ml', '500ml', '700ml'];
+var CONSIGN_MOQ_DEFAULT = { '100ml': 25, '500ml': 12, '700ml': 12 };   // 未個別談定時的預設（Molly 202609 報價單 FOQ）
+// 舊「經銷商設定」分頁只有 9 欄：欄數不足先補欄，再補空白表頭（冪等）
+function _consignCfgEnsureHeaders_(ws) {
+  if (ws.getMaxColumns() < CONSIGN_CFG_HEADERS.length) ws.insertColumnsAfter(ws.getMaxColumns(), CONSIGN_CFG_HEADERS.length - ws.getMaxColumns());
+  for (var i = 0; i < CONSIGN_CFG_HEADERS.length; i++) {
+    if (String(ws.getRange(1, i + 1).getValue() || '') === '') ws.getRange(1, i + 1).setValue(CONSIGN_CFG_HEADERS[i]);
+  }
+}
 
 var CONSIGN_PRICE_SHEET = '牌價表';
 var CONSIGN_PRICE_HEADERS = ['酒款', '對外名稱', '規格', '建議零售價', '備註', '更新人', '更新時間'];
@@ -3638,15 +3651,20 @@ function _consignSheet_(name, headers) {
 function _consignRowsOf_(name, headers) {
   var ws = _consignSheet_(name, headers);
   if (ws.getLastRow() < 2) return [];
-  return ws.getRange(2, 1, ws.getLastRow() - 1, headers.length).getValues();
+  return _consignPadRows_(ws.getRange(2, 1, ws.getLastRow() - 1, Math.min(headers.length, ws.getMaxColumns())).getValues(), headers.length);
 }
 // 讀取路徑用（不建分頁；分頁不存在＝視為空）
 function _consignRowsRO_(name, headers) {
   try {
     var ws = SpreadsheetApp.openById(MAIN_SHEET_ID).getSheetByName(name);
     if (!ws || ws.getLastRow() < 2) return [];
-    return ws.getRange(2, 1, ws.getLastRow() - 1, headers.length).getValues();
+    return _consignPadRows_(ws.getRange(2, 1, ws.getLastRow() - 1, Math.min(headers.length, ws.getMaxColumns())).getValues(), headers.length);
   } catch (e) { return []; }
+}
+// v3.37 表頭加欄後，舊分頁實體欄數可能少於 headers.length：讀取只取現有欄、其餘補空字串（避免 getRange 超出範圍丟例外→整張表被當成空）
+function _consignPadRows_(rows, n) {
+  for (var i = 0; i < rows.length; i++) while (rows[i].length < n) rows[i].push('');
+  return rows;
 }
 function _consignNow_() { return Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss'); }
 function _consignToday_() { return Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd'); }
@@ -3699,10 +3717,23 @@ function _consignDealerMap_() {
   var map = {};
   _consignRowsRO_(CONSIGN_CFG_SHEET, CONSIGN_CFG_HEADERS).forEach(function (r) {
     var key = String(r[CCF.key] || '').trim(); if (!key) return;
+    // v3.37 MOQ：有填＝談定值（moqCustom），空＝預設；授權酒款 JSON 壞掉＝視為不限定
+    var moq = {}, moqCustom = {};
+    CONSIGN_VOLS.forEach(function (v) {
+      var raw = r[CCF['moq' + parseInt(v, 10)]], n = Math.floor(Number(raw));
+      if (raw !== '' && raw != null && n > 0) { moq[v] = n; moqCustom[v] = n; } else moq[v] = CONSIGN_MOQ_DEFAULT[v];
+    });
+    var products = [];
+    try { products = r[CCF.productsJson] ? JSON.parse(String(r[CCF.productsJson])) : []; } catch (e) { products = []; }
+    if (!Array.isArray(products)) products = [];
     map[key] = {
       key: key, label: String(r[CCF.label] || key), discount: Number(r[CCF.discount]) || 0,
       closeDay: Math.floor(Number(r[CCF.closeDay])) || 5, contact: String(r[CCF.contact] || ''),
-      enabled: _consignBool_(r[CCF.enabled]), note: String(r[CCF.note] || '')
+      enabled: _consignBool_(r[CCF.enabled]), note: String(r[CCF.note] || ''),
+      company: String(r[CCF.company] || ''), taxId: String(r[CCF.taxId] || ''), address: String(r[CCF.address] || ''),
+      phone: String(r[CCF.phone] || ''), email: String(r[CCF.email] || ''),
+      moq: moq, moqCustom: moqCustom, products: products, defaultVolume: String(r[CCF.defaultVolume] || '').trim(),
+      sampleTerms: String(r[CCF.sampleTerms] || ''), specialTerms: String(r[CCF.specialTerms] || ''), contractStart: _fmtDate_(r[CCF.contractStart])
     };
   });
   return map;
@@ -3723,21 +3754,47 @@ function consignSaveDealer(p) {
   if (!(discount > 0 && discount <= 1)) return { ok: false, error: '折扣率須介於 0~1（如 0.75）' };
   var closeDay = Math.floor(Number(p.closeDay)) || 0;
   if (closeDay < 1 || closeDay > 31) return { ok: false, error: '結帳日須為 1~31' };
+  // v3.37 經銷條件：MOQ（空＝預設）、授權酒款 JSON（空＝不限定）、預設規格、合約起日
+  var moqs = {};
+  for (var vi = 0; vi < CONSIGN_VOLS.length; vi++) {
+    var v = CONSIGN_VOLS[vi], raw = p['moq' + parseInt(v, 10)];
+    if (raw == null || String(raw).trim() === '') { moqs[v] = ''; continue; }
+    var n = Math.floor(Number(raw));
+    if (!(n > 0)) return { ok: false, error: 'MOQ ' + v + ' 須為正整數（留空＝預設 ' + CONSIGN_MOQ_DEFAULT[v] + ' 瓶）' };
+    moqs[v] = n;
+  }
+  var productsJson = '';
+  if (p.products != null && String(p.products).trim() !== '') {
+    try {
+      var arr = JSON.parse(String(p.products));
+      if (!Array.isArray(arr)) throw new Error('not array');
+      arr = arr.filter(function (e) { return e && String(e.product || '').trim(); }).map(function (e) {
+        return { product: String(e.product).trim(), volumes: Array.isArray(e.volumes) ? e.volumes.map(String) : [] };
+      });
+      productsJson = arr.length ? JSON.stringify(arr) : '';
+    } catch (e) { return { ok: false, error: '授權酒款格式錯誤' }; }
+  }
+  var defVol = String(p.defaultVolume || '').trim();
+  if (defVol && !/^\d+ml$/i.test(defVol)) return { ok: false, error: '預設規格格式須如 100ml' };
+  var contractStart = String(p.contractStart || '').trim();
+  if (contractStart && !/^\d{4}-\d{2}-\d{2}$/.test(contractStart)) return { ok: false, error: '合約起日格式須為 YYYY-MM-DD' };
   var lock = LockService.getScriptLock(); lock.waitLock(10000);
   try {
     var ws = _consignSheet_(CONSIGN_CFG_SHEET, CONSIGN_CFG_HEADERS);
+    _consignCfgEnsureHeaders_(ws);   // 舊分頁補第 10～22 欄表頭
     var rows = _consignRowsOf_(CONSIGN_CFG_SHEET, CONSIGN_CFG_HEADERS);
     var op = String((p && p._user) || '');
     var enabled = (p.enabled == null || p.enabled === '') ? 'TRUE' : (String(p.enabled).toLowerCase() === 'true' ? 'TRUE' : 'FALSE');
-    var row = [key, String(p.label || key), discount, closeDay, String(p.contact || ''), enabled, String(p.note || ''), op, _consignNow_()];
-    for (var i = 0; i < rows.length; i++) {
-      if (String(rows[i][CCF.key]).trim() === key) {
-        ws.getRange(i + 2, 1, 1, CONSIGN_CFG_HEADERS.length).setValues([row]);
-        return { ok: true, updated: true, dealer: key };
-      }
-    }
-    ws.appendRow(row);
-    return { ok: true, created: true, dealer: key };
+    var row = [key, String(p.label || key), discount, closeDay, String(p.contact || ''), enabled, String(p.note || ''), op, _consignNow_(),
+      String(p.company || ''), String(p.taxId || '').trim(), String(p.address || ''), String(p.phone || '').trim(), String(p.email || '').trim(),
+      moqs['100ml'], moqs['500ml'], moqs['700ml'], productsJson, defVol, String(p.sampleTerms || ''), String(p.specialTerms || ''), contractStart];
+    var r = 0;
+    for (var i = 0; i < rows.length; i++) if (String(rows[i][CCF.key]).trim() === key) { r = i + 2; break; }
+    var created = !r; if (!r) r = ws.getLastRow() + 1;
+    // 統編／電話／合約起日鎖文字格式：Sheets 會吃掉統編開頭的 0、把日期字串轉 Date
+    [CCF.taxId, CCF.phone, CCF.contractStart].forEach(function (c) { ws.getRange(r, c + 1).setNumberFormat('@'); });
+    ws.getRange(r, 1, 1, CONSIGN_CFG_HEADERS.length).setValues([row]);
+    return created ? { ok: true, created: true, dealer: key } : { ok: true, updated: true, dealer: key };
   } finally { lock.releaseLock(); }
 }
 
@@ -3826,8 +3883,23 @@ function _consignStockMap_(rows, dealer, untilDate) {
 function _consignStmtRows_() { return _consignRowsRO_(CONSIGN_STMT_SHEET, CONSIGN_STMT_HEADERS); }
 // v3.30 經銷商「預設規格」：目前寄售通路皆 100ml；日後可在經銷商設定備註欄寫 defaultVolume=500ml 覆寫
 function _consignDefaultVol_(cfg) {
-  var m = /defaultVolume\s*=\s*(\d+ml)/i.exec(String((cfg && cfg.note) || ''));
+  var dv = String((cfg && cfg.defaultVolume) || '').trim();   // v3.37 正式欄位「預設規格」
+  if (/^\d+ml$/i.test(dv)) return dv;
+  var m = /defaultVolume\s*=\s*(\d+ml)/i.exec(String((cfg && cfg.note) || ''));   // v3.30 備註暗碼寫法相容
   return m ? m[1] : '100ml';
+}
+// v3.37 授權酒款：cfg.products=[{product, volumes:[...]}]；空陣列＝不限定（全部可叫）；volumes 空＝該款全部規格。酒名比對容忍 V2 尾綴
+function _consignAllowed_(cfg, product, volume) {
+  var list = (cfg && cfg.products) || [];
+  if (!list.length) return true;
+  var pn = String(product || '').trim(), ps = _consignStripVer_(pn), v = String(volume || '').trim();
+  for (var i = 0; i < list.length; i++) {
+    var e = list[i] || {}, ep = String(e.product || '').trim();
+    if (ep !== pn && _consignStripVer_(ep) !== ps) continue;
+    var vols = Array.isArray(e.volumes) ? e.volumes.map(String) : [];
+    return !vols.length || vols.indexOf(v) >= 0;
+  }
+  return false;
 }
 // v3.30 每日銷售彙總（月）：售出＝POS 賣出瓶數；退貨列為負；營業額兩口徑＝牌價營業額(建議零售價×瓶數，參考) ／ 應付南坡萬(凍結成交單價×瓶數)
 function _consignDailyOf_(rows, dealer, month, pm) {
@@ -3983,11 +4055,18 @@ function consignMe(p) {
     return s;
   });
   // v3.30 主公指示：10 款酒永遠列出——牌價表有、但這家還沒進過貨的款式，以「預設規格」補一列在庫 0（placeholder），店長一眼看全 10 款
+  //   v3.37：只補「授權」的款（未限定＝全部）；預設規格若未授權就改列該款第一個授權規格
   var defVol = _consignDefaultVol_(cfg);
   var have = {}; stock.forEach(function (x) { have[x.product] = true; });
-  Object.keys(pm).forEach(function (k) {
-    var pe = pm[k]; if (String(pe.volume) !== defVol || have[pe.product]) return;
-    have[pe.product] = true;
+  var byProd = {};
+  Object.keys(pm).forEach(function (k) { var pe = pm[k]; (byProd[pe.product] = byProd[pe.product] || []).push(pe); });
+  Object.keys(byProd).forEach(function (prod) {
+    if (have[prod]) return;
+    var allowed = byProd[prod].filter(function (pe) { return _consignAllowed_(cfg, pe.product, pe.volume); });
+    if (!allowed.length) return;
+    allowed.sort(function (a, b) { return parseInt(a.volume, 10) - parseInt(b.volume, 10); });
+    var pe = allowed.filter(function (x) { return String(x.volume) === defVol; })[0] || allowed[0];
+    have[prod] = true;
     stock.push({ key: _consignKeyOf_(pe.product, pe.volume), product: pe.product, volume: pe.volume, bottleType: _consignBottleFor_(pe.volume), qty: 0,
       listPrice: pe.price, unitPrice: _consignUnitPrice_(pe, cfg.discount), pubName: pe.pubName, placeholder: true });
   });
@@ -4343,8 +4422,12 @@ function _consignRestockOnShipDelete_(orderNo, remainingBatches, lastDate) {
   }
   return n;
 }
-// 合作寄售 FOQ（Molly 202609 報價單）：100ml 每款 25 瓶／500ml、700ml 每款 12 瓶
-function _consignFoqOf_(volume) { return (String(volume) === '100ml') ? 25 : 12; }
+// 最低叫貨量：v3.37 起每家可在「經銷商設定」談定（MOQ_100ml／500ml／700ml），未填走預設（Molly 202609 報價單：100ml 25 瓶／500・700ml 12 瓶）
+function _consignFoqOf_(volume, cfg) {
+  var v = String(volume);
+  if (cfg && cfg.moq && Number(cfg.moq[v]) > 0) return Number(cfg.moq[v]);
+  return CONSIGN_MOQ_DEFAULT[v] || 12;
+}
 // 依規格預設瓶型（建單頁同一套慣例；700ml 尚無庫存瓶型，留空讓 admin 在訂單補）
 function _consignBottleFor_(volume) { return ({ '100ml': '100ml山形香水瓶', '500ml': '500ml大香水瓶' })[String(volume)] || ''; }
 function _consignRestockRows_() { return _consignRowsRO_(CONSIGN_RESTOCK_SHEET, CONSIGN_RESTOCK_HEADERS); }
@@ -4359,12 +4442,12 @@ function _consignRestockObj_(r) {
     totalQty: detail.reduce(function (a, l) { return a + (Number(l.qty) || 0); }, 0)
   };
 }
-// 經銷商可叫貨的目錄＝牌價表全款（含該經銷商折扣後單價）
+// 經銷商可叫貨的目錄＝牌價表（含該經銷商折扣後單價）；v3.37 只列該家授權的酒款規格（未限定＝全款），MOQ 依該家設定
 function _consignCatalog_(cfg) {
   var pm = _consignPriceMap_();
-  return Object.keys(pm).map(function (k) {
+  return Object.keys(pm).filter(function (k) { return _consignAllowed_(cfg, pm[k].product, pm[k].volume); }).map(function (k) {
     var e = pm[k];
-    return { product: e.product, pubName: e.pubName, volume: e.volume, listPrice: e.price, unitPrice: _consignUnitPrice_(e, cfg.discount), foq: _consignFoqOf_(e.volume), bottleType: _consignBottleFor_(e.volume) };
+    return { product: e.product, pubName: e.pubName, volume: e.volume, listPrice: e.price, unitPrice: _consignUnitPrice_(e, cfg.discount), foq: _consignFoqOf_(e.volume, cfg), bottleType: _consignBottleFor_(e.volume) };
   }).sort(function (a, b) { return a.product.localeCompare(b.product) || (parseInt(a.volume, 10) - parseInt(b.volume, 10)); });
 }
 // ── 送出叫貨（經銷商本人／admin 代填）：lines=[{product, volume, qty}]；每款須 ≥ FOQ；寫單＋寄信 ──
@@ -4387,7 +4470,8 @@ function consignRestockCreate(p) {
     var prod = String(ln.product || '').trim(), vol = _consignVolOf_(ln.volume, ln.bottleType);
     var pe = _consignPriceOf_(pm, prod, vol);
     if (!pe) { bad.push('「' + prod + ' ' + vol + '」不在牌價表／目錄內'); return; }
-    var foq = _consignFoqOf_(vol);
+    if (!_consignAllowed_(cfg, pe.product, vol)) { bad.push('「' + pe.pubName + ' ' + vol + '」不在貴店的經銷品項內，如需新增請聯絡南坡萬'); return; }   // v3.37
+    var foq = _consignFoqOf_(vol, cfg);
     if (q < foq) { bad.push('「' + pe.pubName + ' ' + vol + '」' + q + ' 瓶，低於最低叫貨量 ' + foq + ' 瓶'); return; }
     use.push({ product: pe.product, pubName: pe.pubName, volume: vol, bottleType: _consignBottleFor_(vol), qty: q, unitPrice: _consignUnitPrice_(pe, cfg.discount) });
   });
