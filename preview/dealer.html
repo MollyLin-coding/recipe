@@ -95,6 +95,10 @@ tr:last-child td{border-bottom:none;}
 .stock-n{font-size:12px;color:var(--ink2);white-space:nowrap;}
 .stock-n b{font-size:15px;color:var(--gold-dk);}
 .hint{background:#fdf8f0;border:1px solid #e8dcc8;border-radius:var(--r-sm);padding:8px 10px;font-size:12px;color:var(--ink2);margin-top:8px;}
+/* v3.37 合作條件卡 */
+.terms-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;}
+.terms-grid>div{background:var(--gold-lt);border:1px solid #e8dcc8;border-radius:var(--r-sm);padding:8px 10px;font-size:13px;font-weight:600;color:var(--gold-dk);line-height:1.4;}
+.tlb{font-size:10px;color:var(--ink3);font-weight:400;margin-bottom:2px;}
 .warn{background:#fbeaea;border:1px solid #f0c0c0;color:var(--red);border-radius:var(--r-sm);padding:8px 10px;font-size:12px;margin-top:8px;}
 #apiLoadBar{position:fixed;top:0;left:0;height:3px;width:0;background:var(--gold);z-index:9999;transition:width .3s;opacity:0;}
 #apiLoadBar.on{width:80%;opacity:1;}
@@ -345,6 +349,8 @@ function render() {
     <span class="chip" style="background:#fff;">📅 ${me.today}</span>
   </div>
 
+  ${termsCardHtml(d, me)}
+
   <div class="card">
     <div class="sec-hd"><div class="card-title" style="margin:0;">🍶 門市在庫・登記售出</div>
       <div class="muted">在庫共 <b style="color:var(--gold-dk);">${stockTotal}</b> 瓶${me.todaySold ? `・今日已登記售出 ${me.todaySold} 瓶` : ''}</div></div>
@@ -553,9 +559,35 @@ function recentHtml(list) {
 }
 function toggleDetail(id) { const el = document.getElementById(id); if (el) el.style.display = el.style.display === 'none' ? '' : 'none'; }
 
-// ── v3.29 叫貨補貨：目錄＝牌價表全款（依經銷商折扣算單價）；每款每規格有最低叫貨量 FOQ（100ml 25 瓶／500・700ml 12 瓶）──
+// ── v3.29 叫貨補貨：目錄＝牌價表（依經銷商折扣算單價）；每款每規格有最低叫貨量（v3.37 起依每家「經銷商設定」的 MOQ，未談定走預設 100ml 25／500・700ml 12）──
+//   v3.37 目錄與門市在庫列表只含該店「授權經銷」的酒款規格（後端 consignMe 已過濾；未限定＝全款）
 //   送出 → 南坡萬收到 email → 放行後自動變成出貨訂單；店長在下方看得到每張叫貨單的狀態
 const VOLS = ['100ml', '500ml', '700ml'];
+const MOQ_DEFAULT = { '100ml': 25, '500ml': 12, '700ml': 12 };
+function moqLine(d) { const moq = (d && d.moq) || {}; return VOLS.map(v => `${v} 每款 ${moq[v] || MOQ_DEFAULT[v]} 瓶`).join('・'); }
+// v3.37 合作條件卡：與南坡萬談定的條件（折扣／結帳日／MOQ／可經銷品項／試飲品／特殊約定），資料來源＝廠務端「經銷商設定」；公司抬頭／統編／地址屬南坡萬內部資料，此頁不顯示
+function termsCardHtml(d, me) {
+  const cat = me.catalog || [];
+  const byProd = {};
+  cat.forEach(c => { (byProd[c.product] = byProd[c.product] || { pubName: c.pubName, vols: [] }).vols.push(c.volume); });
+  const names = Object.keys(byProd).sort().map(p => `${esc(byProd[p].pubName)}<span class="muted">（${byProd[p].vols.join('/')}）</span>`);
+  const limited = (d.products || []).length > 0;
+  return `<div class="card">
+    <div class="sec-hd"><div class="card-title" style="margin:0;">🤝 合作條件</div><button class="btn btn-ghost btn-sm" onclick="toggleDetail('termsBody')">展開／收合</button></div>
+    <div id="termsBody">
+      <div class="terms-grid">
+        <div><div class="tlb">經銷折扣</div>牌價 ${pct(d.discount)}</div>
+        <div><div class="tlb">結帳日</div>每月 ${d.closeDay} 日（對上月帳）</div>
+        <div><div class="tlb">每次最低叫貨量</div>${VOLS.map(v => `${v} ≥ ${(d.moq && d.moq[v]) || MOQ_DEFAULT[v]} 瓶`).join('<br>')}</div>
+        ${d.contractStart ? `<div><div class="tlb">合作起日</div>${esc(d.contractStart)}</div>` : ''}
+      </div>
+      <div style="margin-top:10px;"><div class="tlb">可經銷品項${limited ? `（限定 ${Object.keys(byProd).length} 款）` : `（全部 ${Object.keys(byProd).length} 款）`}</div><div style="font-size:13px;line-height:1.8;">${names.join('、') || '<span class="muted">尚未建立，請聯絡南坡萬</span>'}</div></div>
+      ${d.sampleTerms ? `<div style="margin-top:8px;"><div class="tlb">試飲品</div><div style="font-size:13px;">${esc(d.sampleTerms)}</div></div>` : ''}
+      ${d.specialTerms ? `<div style="margin-top:8px;"><div class="tlb">特殊約定</div><div style="font-size:13px;white-space:pre-line;">${esc(d.specialTerms)}</div></div>` : ''}
+      <div class="hint">以上為貴店與南坡萬談定的合作條件；如有異動或想新增經銷品項，請聯絡南坡萬更新。</div>
+    </div>
+  </div>`;
+}
 function restockCardHtml(me) {
   const cat = me.catalog || [];
   const byProd = {};
@@ -569,7 +601,7 @@ function restockCardHtml(me) {
   const hist = (me.restocks || []);
   const badge = s => ({ '待放行': 'bg-yellow', '已放行': 'bg-green', '部分出貨': 'bg-blue', '已出貨': 'bg-blue', '已駁回': 'bg-red' }[s] || 'bg-brown');
   return `<div class="card">
-    <div class="sec-hd"><div class="card-title" style="margin:0;">📦 叫貨補貨</div><span class="muted">最低叫貨量：100ml 每款 25 瓶・500/700ml 每款 12 瓶</span></div>
+    <div class="sec-hd"><div class="card-title" style="margin:0;">📦 叫貨補貨</div><span class="muted">最低叫貨量：${moqLine(me.dealer)}</span></div>
     ${prods.length ? `<div class="tbl-wrap"><table><thead><tr><th>酒款</th>${VOLS.map(v => `<th class="tr">${v}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="muted" style="padding:10px;">目錄尚未建立，請聯絡南坡萬</div>'}
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
       <label class="muted" style="white-space:nowrap;">希望到貨日</label><input class="inp" id="rqDate" type="date" min="${me.today}" style="margin:0;width:auto;padding:6px 10px;font-size:13px;">
