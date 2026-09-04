@@ -155,6 +155,14 @@ var ROLE_MATRIX = {
   // v3.29 叫貨：送出＝經銷商本人或 admin 代填；放行/駁回/測試信 僅 admin
   consignRestockCreate: ['admin', '經銷商'], consignRestockList: ['admin', '財務', '經銷商'], consignRestockApprove: ['admin'], consignRestockReject: ['admin'], consignMailTest: ['admin'], consignResetDealer: ['admin']
 };
+// v3.38 POST 入口：大 payload（經銷商設定含授權酒款 JSON／長文字、建單明細…）走 POST，免 GET 網址過長被 Google 回 400 HTML 頁。
+//   前端以 text/plain 送 JSON body（免 CORS preflight）；解析後與 doGet 走完全相同的流程（token 閘門／角色／派發）。
+function doPost(e) {
+  var p = null;
+  try { p = JSON.parse((e && e.postData && e.postData.contents) || ''); } catch (err) { p = null; }
+  if (!p || typeof p !== 'object' || Array.isArray(p)) p = (e && e.parameter) || {};
+  return doGet({ parameter: p });
+}
 function doGet(e) {
   const p = e.parameter || {};
   const action = p.action || '';
