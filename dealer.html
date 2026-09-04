@@ -148,7 +148,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
     document.body.appendChild(b);
   });
 }
-const APP_VERSION='v3.37.1';
+const APP_VERSION='v3.38';
 window.addEventListener('DOMContentLoaded', function () { const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION; });
 // 開頁暖機：趁使用者打密碼時吃掉 GAS 冷啟動
 window.addEventListener('DOMContentLoaded', function () { api({ action: 'getEnvInfo' }, true); });
@@ -185,11 +185,12 @@ async function api(params, silent) {
   const _isRead = /^(get|consignMe|consignLedger|consignStatements)/.test(String(send.action || ''));
   const _delays = _isRead ? [400, 1200, 2500] : [];
   const url = API + '?' + Object.entries(send).map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&');
+  const _post = url.length > 6000;   // v3.38 大 payload 走 POST（後端 doPost 同流程），免 GET 網址過長回 400
   let _lastErr = '';
   try {
     for (let t = 0; ; t++) {
       try {
-        const res = await fetch(url);
+        const res = _post ? await fetch(API, { method: 'POST', body: JSON.stringify(send), headers: { 'Content-Type': 'text/plain;charset=utf-8' } }) : await fetch(url);
         const txt = await res.text();
         if (txt.trim().charAt(0) === '<') throw new Error('THROTTLED_HTML');
         const j = JSON.parse(txt);

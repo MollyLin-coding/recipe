@@ -410,7 +410,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.37.1';
+const APP_VERSION='v3.38';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -464,11 +464,14 @@ async function api(params, silent) {
   if (_isRead && window._apiFreshUntil && Date.now() < window._apiFreshUntil && send.fresh == null) send.fresh = '1';
   const _delays = _isRead ? [400, 1200, 2500] : [];
   const url = API + '?' + Object.entries(send).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
+  // v3.38 大 payload 走 POST（後端 doPost 同流程）：GET 網址超過 ~10KB Google 直接回 400 HTML → 前端誤判「系統忙碌」而資料沒存。
+  //   經銷商設定（授權酒款 JSON＋多段長文字）固定走 POST；其餘 action 網址超過 6000 字元自動改 POST。text/plain 免 preflight。
+  const _post = /^(consignSaveDealer)$/.test(_act) || url.length > 6000;
   let _lastErr = '';
   try {
     for (let _try = 0; ; _try++) {
       try {
-        const res = await fetch(url);
+        const res = _post ? await fetch(API, { method: 'POST', body: JSON.stringify(send), headers: { 'Content-Type': 'text/plain;charset=utf-8' } }) : await fetch(url);
         const txt = await res.text();
         if (txt.trim().charAt(0) === '<') throw new Error('THROTTLED_HTML'); // 限流/錯誤頁，不是 JSON
         const j = JSON.parse(txt);
@@ -4944,13 +4947,23 @@ async function showConsignDealerModal(i) {
     const disc = Number(g('cd_disc')) / 100;
     const pv = {}; m.querySelectorAll('.cd_pv:checked').forEach(c => { (pv[c.dataset.product] = pv[c.dataset.product] || []).push(c.dataset.volume); });
     const products = Object.keys(pv).map(p => ({ product: p, volumes: pv[p] }));
-    const res = await api({ action: 'consignSaveDealer', key, label: g('cd_label') || key, discount: disc, closeDay: g('cd_close'), contact: g('cd_contact'), enabled: g('cd_enabled'), note: g('cd_note'),
+    const payload = { action: 'consignSaveDealer', key, label: g('cd_label') || key, discount: disc, closeDay: g('cd_close'), contact: g('cd_contact'), enabled: g('cd_enabled'), note: g('cd_note'),
       company: g('cd_company'), taxId, address: g('cd_address'), phone: g('cd_phone'), email: g('cd_email'),
       moq100: g('cd_moq_100'), moq500: g('cd_moq_500'), moq700: g('cd_moq_700'), products: products.length ? JSON.stringify(products) : '',
-      defaultVolume: g('cd_defvol'), sampleTerms: g('cd_sample'), specialTerms: g('cd_special'), contractStart: g('cd_contract') });
-    if (res.ok) { toast('已儲存'); m.remove(); loadConsignOverview(); } else toast('儲存失敗：' + (res.error || ''), 4000);
+      defaultVolume: g('cd_defvol'), sampleTerms: g('cd_sample'), specialTerms: g('cd_special'), contractStart: g('cd_contract') };
+    let res = await api(payload);
+    // v3.38 網路／限流失敗自動重試一次（此 action 為 upsert、冪等，重送無副作用）
+    if (!res.ok && res._offline) { await new Promise(r => setTimeout(r, 1500)); res = await api(payload); }
+    if (res.ok) { toast('✅ 已儲存 ' + (payload.label || key), 3000); m.remove(); loadConsignOverview(); return; }
+    // v3.38 失敗改紅色彈窗（原 toast 4 秒易漏看＝主公 9/4 反映「按了儲存資料卻沒進去」）；表單保留，修正後可再按儲存
+    makeModal(`<div class="modal-title" style="color:var(--red);">❌ 儲存失敗，資料尚未寫入</div>
+      <div style="font-size:13px;line-height:1.7;padding:8px 10px;background:#fbeaea;border:1px solid #f0c0c0;border-radius:8px;">${_escf(res.error || '未知錯誤（可能是網路或系統忙碌）')}</div>
+      <div style="font-size:12px;color:var(--ink3);margin-top:8px;line-height:1.6;">你填的內容都還在表單裡，請依訊息修正後再按一次「💾 儲存」；儲存成功時視窗會自動關閉並顯示「✅ 已儲存」。若一直失敗請截圖給軍師。</div>
+      <div class="fe" style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="this.closest('.modal-bg').remove()">知道了</button></div>`, { locked: true });
   };
-  subs.forEach(b => { b.onclick = () => { subs.forEach(x => { if (x !== b) x.disabled = true; }); lockRun(b, doSave).finally(() => subs.forEach(x => { x.disabled = false; })); }; });
+  // 儲存中：另一顆儲存鈕＋兩顆「關閉此分頁」一起鎖住，避免請求飛行中把視窗關掉
+  const closes = [...m.querySelectorAll('button')].filter(x => x.textContent.includes('關閉此分頁'));
+  subs.forEach(b => { b.onclick = () => { const others = [...subs, ...closes].filter(x => x !== b); others.forEach(x => { x.disabled = true; }); lockRun(b, doSave).finally(() => others.forEach(x => { x.disabled = false; })); }; });
 }
 // 🧾 產生／重算對帳單
 async function consignCreateStatement(i) {
