@@ -153,7 +153,9 @@ var ROLE_MATRIX = {
   consignDealers: ['admin', '財務', 'PM'], consignPrices: ['admin', '財務'], consignOverview: ['admin', '財務'], consignAlerts: ['admin', '財務'],
   consignSaveDealer: ['admin'], consignStatementCreate: ['admin'], consignStatementSettle: ['admin'], consignSeed: ['admin'], consignStatementDelete: ['admin'],
   // v3.29 叫貨：送出＝經銷商本人或 admin 代填；放行/駁回/測試信 僅 admin
-  consignRestockCreate: ['admin', '經銷商'], consignRestockList: ['admin', '財務', '經銷商'], consignRestockApprove: ['admin'], consignRestockReject: ['admin'], consignMailTest: ['admin'], consignResetDealer: ['admin']
+  consignRestockCreate: ['admin', '經銷商'], consignRestockList: ['admin', '財務', '經銷商'], consignRestockApprove: ['admin'], consignRestockReject: ['admin'], consignMailTest: ['admin'], consignResetDealer: ['admin'],
+  // v3.39 業績模型：僅 admin（Kevin／Molly）；財務／PM／倉管／FB觀看 一律 403，CONSIGN_DEALER_ACTIONS 白名單不加（經銷商 403）
+  perfGet: ['admin'], perfSave: ['admin'], perfReset: ['admin']
 };
 // v3.38 POST 入口：大 payload（經銷商設定含授權酒款 JSON／長文字、建單明細…）走 POST，免 GET 網址過長被 Google 回 400 HTML 頁。
 //   前端以 text/plain 送 JSON body（免 CORS preflight）；解析後與 doGet 走完全相同的流程（token 閘門／角色／派發）。
@@ -208,7 +210,7 @@ function doGet(e) {
       case 'getEnvInfo':
         try { CacheService.getScriptCache().removeAll(V3144_CACHE_KEYS); } catch (e) {}
         result = getEnvInfo();
-        result.modules = { consign: (typeof consignMe === 'function') };   // v3.28 免登入探針：consign.gs 是否真的在部署版本裡（2026-09-03 Action 漏檔事故）
+        result.modules = { consign: (typeof consignMe === 'function'), perf: (typeof perfGet === 'function') };   // v3.39 perf 探針   // v3.28 免登入探針：consign.gs 是否真的在部署版本裡（2026-09-03 Action 漏檔事故）
         // v3.14.5 診斷：CacheService 到底能不能用（put→get→remove 全程回報例外）
         result.cacheDiag = (function () {
           var d = {};
@@ -313,6 +315,9 @@ function doGet(e) {
       case 'consignRestockReject':   result = consignRestockReject(p); break;   // v3.29 叫貨：駁回(admin)
       case 'consignMailTest':        result = consignMailTest(p); break;        // v3.29 叫貨：寄信授權驗證(admin)
       case 'consignResetDealer':     result = consignResetDealer(p); break;     // v3.35 重置經銷商測試資料(admin，不可逆)
+      case 'perfGet':                result = perfGet(p); break;                // v3.39 業績模型：整頁資料(admin；首次自動種子)
+      case 'perfSave':               result = perfSave(p); break;               // v3.39 業績模型：整包覆寫(admin；走 doPost)
+      case 'perfReset':              result = perfReset(p); break;              // v3.39 業績模型：恢復種子預設(admin；confirm=業績模型)
       case 'deleteShipment':         result = deleteShipment(p); break;          // 實際出貨紀錄：刪除某一次出貨(v3.26, admin 限定)
       case 'getBottleOverview':      result = getBottleOverview(); break;        // 玻璃瓶庫存
       case 'bottleIn':               result = bottleIn(p); break;                // 玻璃瓶庫存
@@ -370,6 +375,7 @@ var AUDIT_ACTIONS = {
   addShipment:1, deleteShipment:1,
   consignSale:1, consignAdjust:1, consignSaveDealer:1, consignStatementCreate:1, consignStatementSettle:1, consignSeed:1, consignStatementDelete:1,
   consignRestockCreate:1, consignRestockApprove:1, consignRestockReject:1, consignMailTest:1, consignResetDealer:1,
+  perfSave:1, perfReset:1,   // v3.39 業績模型寫入（摘要只收白名單參數，整包 JSON 不入紀錄）
   saveRunCard:1, deleteRunCard:1, saveProcessNote:1,
   addBatchRecord:1, updateBatchRecord:1, deleteBatchRecord:1,
   submitApply:1, reviewApply:1, saveRdRecord:1, deleteRdRecord:1, submitRdApply:1, reviewRdApply:1,
@@ -1535,6 +1541,21 @@ function crmCashRead(p) {
 }
 
 var FINANCE_USERS = ['Kevin', 'Molly', 'Lulu'];
+// v3.39 共用：一列訂單的「損益口徑」出貨月與有效金額（原 getFinanceSummary 內聯邏輯原樣抽出；perfGet 實際營收共用）
+//   出貨月＝實際出貨日 L 欄，無則表訂 D 欄；有效金額＝總金額 F，若尾款有調整（T=TRUE 且 U 有值）→ 總金額 − 原尾款 ＋ 調整後尾款
+function _orderRevenueRow_(r) {
+  const total = Number(r[5]) || 0;
+  const finalAmt = _numOrBlank_(r[16]);
+  const adjusted = (String(r[19]).toUpperCase() === 'TRUE' || r[19] === true);
+  const adjAmt = _numOrBlank_(r[20]);
+  const shipMonth = (_fmtDate_(r[11]) || _fmtDate_(r[3])).slice(0, 7);
+  let eff = total;
+  if (adjusted && adjAmt !== '') {
+    const origFinal = (finalAmt !== '') ? finalAmt : (Number(r[6]) || 0);
+    eff = total - origFinal + adjAmt;
+  }
+  return { shipMonth: shipMonth, eff: eff, total: total };
+}
 function getFinanceSummary(p) {
   const user = String((p && p.user) || '');
   if (FINANCE_USERS.indexOf(user) < 0) return { ok: false, error: '無權限查看金流摘要' };
@@ -1554,16 +1575,8 @@ function getFinanceSummary(p) {
     const adjAmt = _numOrBlank_(r[20]);
     // 實際尾款：有調整→調整後金額；否則 Q 尾款金額，再退回舊 G 尾款欄
     const effFinal = (adjusted && adjAmt !== '') ? adjAmt : (finalAmt !== '' ? finalAmt : (Number(r[6]) || 0));
-    const shipMonth = (_fmtDate_(r[11]) || _fmtDate_(r[3])).slice(0, 7);
-    if (shipMonth === month) {
-      count++;
-      let eff = total;
-      if (adjusted && adjAmt !== '') {
-        const origFinal = (finalAmt !== '') ? finalAmt : (Number(r[6]) || 0);
-        eff = total - origFinal + adjAmt;
-      }
-      revenue += eff;
-    }
+    const rev = _orderRevenueRow_(r);   // v3.39 抽成共用函式（業績模型「實際營收」同口徑）；算法逐字不變
+    if (rev.shipMonth === month) { count++; revenue += rev.eff; }
     if (_fmtDate_(r[15]).slice(0, 7) === month && depositAmt !== '') cash += depositAmt;
     if (_fmtDate_(r[18]).slice(0, 7) === month) cash += effFinal;
   }
@@ -4636,4 +4649,174 @@ function __authMail() {
 function consignMailTest(p) {
   try { __authMail(); return { ok: true, sent: true, to: CONSIGN_NOTIFY_EMAILS }; }
   catch (e) { return { ok: false, error: String((e && e.message) || e), hint: '請由 joyhouse.rental 在 Apps Script 編輯器執行 __authMail 完成授權' }; }
+}
+// ============================================================
+// 📈 業績模型（perf 模組，v3.39・2026-09-05・主公派工／Cowork spec「Code交接_業績模型分頁_spec_20260905」）
+// ##  一句話：Cowork 的「Q4 獲客缺口試算頁」搬進廠務APP；參數＋逐月目標存主表、Kevin／Molly 共用同一組；
+// ##          每月「目標營收／推估營收／實際營收」並排，實際營收＝金流總覽「當月訂單營收（損益）」同一算法（_orderRevenueRow_）。
+// ##  資料：主表分頁「業績模型參數」（key／value 一參數一列）＋「業績模型月表」（一月一列，A 月份鎖 @ 文字格式）。
+// ##  action（皆 admin-only，ROLE_MATRIX）：perfGet（首次自動種子，冪等）／perfSave（走 doPost，整包覆寫）／perfReset（需 confirm=業績模型）。
+// ##  演算法在前端（life／alive／calc 自參考 html 原樣移植）；後端只管存取與實際營收。
+// ============================================================
+var PERF_PARAM_SHEET = '業績模型參數';
+var PERF_PARAM_HEADERS = ['參數鍵', '值', '說明', '更新人', '更新時間'];
+var PERF_MONTH_SHEET = '業績模型月表';
+var PERF_MONTH_HEADERS = ['月份', '目標營收', '活躍經銷家數', '大單張數', '備註'];
+// 模型期間（v1.2：2026-09 → 2027-12 共 16 個月）。日後延長：改 PERF_MODEL_END（前端 PERF 期間吃後端回傳的 months，不必再改前端）；_perfEnsure_ 會自動補列。
+var PERF_MODEL_START = '2026-09', PERF_MODEL_END = '2027-12';
+// 參數種子＝參考 html DEF 物件（rifuOn 存 1／0）
+var PERF_PARAM_DEF = [
+  ['base', 180000, '既有代工客戶每月回購底盤（元）'],
+  ['baseGrow', 0, '底盤年成長率（%）；0＝持平'],
+  ['tGrow', 0, '月營業額目標成長率（%／月，自第 2 個月起以首月目標複利自動填目標）；0＝維持手填目標'],
+  ['perSku', 100000, '新代工客戶每款首單金額（元）'],
+  ['skus', 1, '新代工客戶平均款數'],
+  ['gapM', 3, '首單→續單間隔（月）'],
+  ['repPct', 50, '續單金額佔首單（%）'],
+  ['surv', 70, '每輪續單存活率（%）'],
+  ['rifuOn', 1, '日富一日是否簽下（1＝簽下、0＝沒簽）'],
+  ['rifuSku', 125000, '日富一日每款首單金額（元）'],
+  ['rifuN', 2, '日富一日款數'],
+  ['rifuGap', 3, '日富一日續單間隔（月）'],
+  ['bottles', 40, '經銷商 100ml 每家月售瓶數'],
+  ['price', 150, '經銷商 100ml 認列單價（元）'],
+  ['bottles5', 5, '經銷商 500ml 每家月售瓶數'],
+  ['price5', 640, '經銷商 500ml 認列單價（元）'],
+  ['upRate', 20, '經銷商升級換前標比率（%）'],
+  ['upVal', 72000, '升級單金額（元）'],
+  ['bigVal', 250000, '軌道 B 每張大單金額（元）']
+];
+function _perfMonths_() {
+  var out = [], y = Number(PERF_MODEL_START.slice(0, 4)), m = Number(PERF_MODEL_START.slice(5, 7));
+  for (var i = 0; i < 240; i++) {
+    var ym = y + '-' + ('0' + m).slice(-2);
+    out.push(ym);
+    if (ym === PERF_MODEL_END) break;
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return out;
+}
+// 月表種子（＝參考 html DEF）：目標 30／45／67.5／100 萬，之後各月 100 萬；活躍經銷 2／6／10／10，之後皆 10；大單 0
+function _perfMonthSeed_(ym) {
+  var i = _perfMonths_().indexOf(ym);
+  var target = [300000, 450000, 675000, 1000000], dealers = [2, 6, 10, 10];
+  return { target: (i >= 0 && i < 4) ? target[i] : 1000000, dealers: (i >= 0 && i < 4) ? dealers[i] : 10, big: 0 };
+}
+function _perfNum_(v, def) { if (v === '' || v == null) return def; var n = Number(v); return isFinite(n) ? n : def; }
+// 兩分頁不存在即建＋種子；缺的參數鍵／月份補列（冪等，沿用 consignSeed 模式）
+function _perfEnsure_(op) {
+  var now = _consignNow_(), added = { params: 0, months: 0 };
+  var pws = _consignSheet_(PERF_PARAM_SHEET, PERF_PARAM_HEADERS);
+  var have = {};
+  if (pws.getLastRow() >= 2) pws.getRange(2, 1, pws.getLastRow() - 1, 1).getValues().forEach(function (r) { if (r[0] !== '') have[String(r[0])] = true; });
+  var rows = [];
+  PERF_PARAM_DEF.forEach(function (d) { if (!have[d[0]]) rows.push([d[0], d[1], d[2], op || 'seed', now]); });
+  if (rows.length) { pws.getRange(pws.getLastRow() + 1, 1, rows.length, PERF_PARAM_HEADERS.length).setValues(rows); added.params = rows.length; }
+  var mws = _consignSheet_(PERF_MONTH_SHEET, PERF_MONTH_HEADERS);
+  mws.getRange(1, 1, mws.getMaxRows(), 1).setNumberFormat('@');   // ⚠️ A 月份整欄鎖文字：Sheets 會把 2026-09 轉 Date（對帳單期別同一顆地雷）
+  var haveM = {};
+  if (mws.getLastRow() >= 2) mws.getRange(2, 1, mws.getLastRow() - 1, 1).getValues().forEach(function (r) { var k = _consignPeriodStr_(r[0]); if (k) haveM[k] = true; });
+  var mrows = [];
+  _perfMonths_().forEach(function (ym) { if (haveM[ym]) return; var s = _perfMonthSeed_(ym); mrows.push([ym, s.target, s.dealers, s.big, '']); });
+  if (mrows.length) { var r0 = mws.getLastRow() + 1; mws.getRange(r0, 1, mrows.length, PERF_MONTH_HEADERS.length).setValues(mrows); added.months = mrows.length; }
+  return added;
+}
+function _perfReadParams_() {
+  var out = {}, meta = { updatedBy: '', updatedAt: '' };
+  var defMap = {}; PERF_PARAM_DEF.forEach(function (d) { defMap[d[0]] = d[1]; });
+  _consignRowsRO_(PERF_PARAM_SHEET, PERF_PARAM_HEADERS).forEach(function (r) {
+    var k = String(r[0] || ''); if (!k || !(k in defMap)) return;
+    out[k] = _perfNum_(r[1], defMap[k]);
+    var at = _fmtDateTime_(r[4]); if (at && at > meta.updatedAt) { meta.updatedAt = at; meta.updatedBy = String(r[3] || ''); }
+  });
+  PERF_PARAM_DEF.forEach(function (d) { if (out[d[0]] == null) out[d[0]] = d[1]; });
+  out.rifuOn = (Number(out.rifuOn) === 1) ? '1' : '0';   // 前端算法用字串 "1"/"0"（同參考 html）
+  return { params: out, meta: meta };
+}
+// 實際營收：全部訂單一次掃，依出貨月彙總（口徑＝getFinanceSummary 的 orderRevenue，共用 _orderRevenueRow_）
+//   zeroCount＝資料洞提示：出貨日在該月、類型有金流（非「無金流」）、總金額 0；寄售純物流單（訂金狀態＝寄售）金額 0 屬正常，不計。
+function _perfActualMap_() {
+  var map = {};
+  var ws = SpreadsheetApp.openById(MAIN_SHEET_ID).getSheetByName('訂單主表');
+  if (!ws) return map;
+  var data = ws.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    var r = data[i]; if (!r[0]) continue;
+    var rev = _orderRevenueRow_(r); if (!rev.shipMonth) continue;
+    var m = map[rev.shipMonth] || (map[rev.shipMonth] = { actual: 0, orderCount: 0, zeroCount: 0 });
+    m.actual += rev.eff; m.orderCount++;
+    if (rev.total === 0 && !/無金流/.test(String(r[2] || '')) && String(r[7] || '') !== '寄售') m.zeroCount++;
+  }
+  return map;
+}
+// admin：整頁資料（首次呼叫自動種子）。actual：已過月份＝金額、當月＝目前累計、未來月＝null
+function perfGet(p) {
+  _perfEnsure_(String((p && p._user) || ''));
+  var pr = _perfReadParams_();
+  var now = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM');
+  var act = _perfActualMap_();
+  var byYm = {};
+  _consignRowsRO_(PERF_MONTH_SHEET, PERF_MONTH_HEADERS).forEach(function (r) { var ym = _consignPeriodStr_(r[0]); if (ym) byYm[ym] = r; });
+  var months = _perfMonths_().map(function (ym) {
+    var r = byYm[ym], s = _perfMonthSeed_(ym), a = act[ym], past = ym <= now;
+    return {
+      ym: ym,
+      target: r ? _perfNum_(r[1], s.target) : s.target, dealers: r ? _perfNum_(r[2], s.dealers) : s.dealers, big: r ? _perfNum_(r[3], s.big) : s.big,
+      note: r ? String(r[4] == null ? '' : r[4]) : '',
+      actual: past ? Math.round((a && a.actual) || 0) : null,
+      orderCount: past ? ((a && a.orderCount) || 0) : 0, zeroCount: past ? ((a && a.zeroCount) || 0) : 0
+    };
+  });
+  // 模型期間之前最近 3 個月的實績（對照用：2026-07／08 等，與金流總覽切月數字相同）
+  var prior = Object.keys(act).filter(function (ym) { return /^\d{4}-\d{2}$/.test(ym) && ym < PERF_MODEL_START; }).sort().slice(-3)
+    .map(function (ym) { return { ym: ym, actual: Math.round(act[ym].actual), orderCount: act[ym].orderCount, zeroCount: act[ym].zeroCount }; });
+  return { ok: true, params: pr.params, months: months, now: now, prior: prior, updatedBy: pr.meta.updatedBy, updatedAt: pr.meta.updatedAt, modelStart: PERF_MODEL_START, modelEnd: PERF_MODEL_END };
+}
+// admin：整包覆寫（走 doPost；GET 亦相容——params／months 若為 JSON 字串自動解析）。參數只覆寫 B 值＋更新人／時間，C 說明保留；月表依 A 月份對應覆寫 B～E。
+function perfSave(p) {
+  var params = p && p.params, months = p && p.months;
+  if (typeof params === 'string') { try { params = JSON.parse(params); } catch (e) { params = null; } }
+  if (typeof months === 'string') { try { months = JSON.parse(months); } catch (e) { months = null; } }
+  if (!params || typeof params !== 'object' || Array.isArray(params)) return { ok: false, error: '缺少 params' };
+  if (!Array.isArray(months) || !months.length) return { ok: false, error: '缺少 months' };
+  var op = String((p && p._user) || ''), now = _consignNow_(), changed = 0;
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    _perfEnsure_(op);
+    var defMap = {}; PERF_PARAM_DEF.forEach(function (d) { defMap[d[0]] = d[1]; });
+    var pws = _consignSheet_(PERF_PARAM_SHEET, PERF_PARAM_HEADERS);
+    var n = pws.getLastRow() - 1;
+    if (n > 0) {
+      var grid = pws.getRange(2, 1, n, PERF_PARAM_HEADERS.length).getValues();
+      for (var i = 0; i < grid.length; i++) {
+        var k = String(grid[i][0] || ''); if (!(k in defMap) || !(k in params)) continue;
+        var v = (k === 'rifuOn') ? ((String(params[k]) === '1' || params[k] === 1 || params[k] === true) ? 1 : 0) : _perfNum_(params[k], defMap[k]);
+        if (grid[i][1] === '' || Number(grid[i][1]) !== v) changed++;
+        grid[i][1] = v; grid[i][3] = op; grid[i][4] = now;
+      }
+      pws.getRange(2, 2, n, PERF_PARAM_HEADERS.length - 1).setValues(grid.map(function (r) { return r.slice(1); }));   // 只寫 B～E，A 鍵不動
+    }
+    var mws = _consignSheet_(PERF_MONTH_SHEET, PERF_MONTH_HEADERS);
+    var mn = mws.getLastRow() - 1;
+    if (mn > 0) {
+      var mg = mws.getRange(2, 1, mn, PERF_MONTH_HEADERS.length).getValues();
+      var byYm = {}; months.forEach(function (m) { if (m && m.ym) byYm[String(m.ym)] = m; });
+      for (var j = 0; j < mg.length; j++) {
+        var ym = _consignPeriodStr_(mg[j][0]), m = byYm[ym]; if (!m) continue;
+        var s = _perfMonthSeed_(ym);
+        mg[j][1] = _perfNum_(m.target, s.target); mg[j][2] = _perfNum_(m.dealers, s.dealers); mg[j][3] = _perfNum_(m.big, s.big);
+        mg[j][4] = String(m.note == null ? '' : m.note).slice(0, 200);
+      }
+      mws.getRange(2, 2, mn, PERF_MONTH_HEADERS.length - 1).setValues(mg.map(function (r) { return r.slice(1); }));   // 只寫 B～E，A 月份不動（保住 @ 文字）
+    }
+  } finally { lock.releaseLock(); }
+  var out = perfGet(p); out.saved = true; out.paramsChanged = changed; return out;
+}
+// admin：恢復種子預設（參數＋月表全部覆寫，備註清空）。需 confirm=業績模型
+function perfReset(p) {
+  if (String((p && p.confirm) || '') !== '業績模型') return { ok: false, error: '請輸入確認字串「業績模型」' };
+  var params = {}; PERF_PARAM_DEF.forEach(function (d) { params[d[0]] = d[1]; });
+  var months = _perfMonths_().map(function (ym) { var s = _perfMonthSeed_(ym); return { ym: ym, target: s.target, dealers: s.dealers, big: s.big, note: '' }; });
+  var out = perfSave({ params: params, months: months, _user: p && p._user, _role: p && p._role });
+  out.reset = true; return out;
 }

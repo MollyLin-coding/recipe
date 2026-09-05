@@ -322,6 +322,59 @@ tbody tr:hover td{background:#faf3e8;}
 #rcBody .rc-sec{font-size:15px!important;}
 #rcBody .rc-sno{font-size:14px!important;}
 #rcBody .ing-inp{padding:4px 4px;}
+/* ── v3.39 📈 業績模型（獲客缺口試算；沿用既有色票，不另起字型／色系）── */
+.perf-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:start;}
+.perf-main{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;min-width:0;}   /* minmax(0,1fr)：避免寬表把欄位撐成 max-content 溢出畫面 */
+@media(min-width:1000px){.perf-grid{grid-template-columns:340px minmax(0,1fr);}.perf-aside{position:sticky;top:0;max-height:calc(100vh - var(--top-h) - var(--nav-h) - 28px);overflow:auto;}}
+.perf-aside details{border-bottom:1px solid var(--border);}
+.perf-aside details:last-of-type{border-bottom:none;}
+.perf-aside summary{cursor:pointer;padding:9px 2px;font-weight:600;font-size:13px;list-style:none;display:flex;justify-content:space-between;align-items:center;color:var(--gold-dk);gap:6px;}
+.perf-aside summary::-webkit-details-marker{display:none;}
+.perf-aside summary .hint{font-weight:400;color:var(--ink3);font-size:11px;flex:1;text-align:right;}
+.perf-aside summary::after{content:"＋";color:var(--ink3);}
+.perf-aside details[open] summary::after{content:"－";}
+.perf-fields{display:grid;gap:6px;padding:2px 2px 10px;}
+.perf-f{display:grid;grid-template-columns:1fr 104px;gap:8px;align-items:center;}
+.perf-f label{font-size:12px;color:var(--ink2);line-height:1.3;}
+.perf-f small{display:block;color:var(--ink3);font-size:10.5px;line-height:1.3;}
+.perf-f input,.perf-f select{font-size:13px;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;background:#fff;color:var(--ink);width:100%;text-align:right;outline:none;font-family:'DM Sans',sans-serif;}
+.perf-f select{text-align:left;}
+.perf-f input:focus,.perf-f select:focus{border-color:var(--gold);}
+.perf-changed{border-color:var(--gold)!important;background:var(--gold-lt)!important;}
+.perf-tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+@media(max-width:700px){.perf-tiles{grid-template-columns:repeat(2,1fr);}}
+.perf-tile{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;border-left:4px solid var(--gold);min-width:0;}
+.perf-tile.ok{border-left-color:var(--green);}.perf-tile.bad{border-left-color:var(--red);}
+.perf-tile .m{font-size:11px;color:var(--ink3);}
+.perf-tile .n{font-family:'Noto Serif TC',serif;font-size:24px;line-height:1.15;color:var(--gold-dk);font-variant-numeric:tabular-nums;}
+.perf-tile .n em{font-style:normal;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--ink2);margin-left:3px;}
+.perf-tile .s{font-size:11px;color:var(--ink2);margin-top:2px;word-break:break-all;}
+.perf-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r-sm);max-height:70vh;overflow-y:auto;}
+.perf-wrap table{font-size:12.5px;font-variant-numeric:tabular-nums;}
+.perf-wrap th,.perf-wrap td{text-align:right;white-space:nowrap;padding:7px 8px;}
+.perf-wrap th{position:sticky;top:0;z-index:2;}
+.perf-wrap th:first-child,.perf-wrap td:first-child{text-align:left;position:sticky;left:0;background:#fff;z-index:1;}
+.perf-wrap th:first-child{background:#faf9f6;z-index:3;}
+.perf-wrap td input{font-size:12.5px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;background:#fff;color:var(--ink);width:92px;text-align:right;outline:none;font-family:'DM Sans',sans-serif;}
+.perf-wrap td input.sm{width:52px;text-align:center;}
+.perf-wrap td input.note{width:150px;text-align:left;}
+.perf-wrap td input:focus{border-color:var(--gold);}
+.perf-wrap td.est{font-weight:600;color:var(--gold-dk);background:var(--gold-lt);}
+.perf-wrap td.key{font-weight:700;font-size:14px;}
+.perf-wrap td.act{font-weight:600;color:var(--blue);}
+.perf-wrap tr.yr td{background:var(--bg);font-weight:600;text-align:left;color:var(--ink2);cursor:pointer;user-select:none;font-size:12px;}
+.perf-wrap tr.yr td .cnt{font-weight:400;color:var(--ink3);margin-left:8px;}
+.perf-wrap tr.total td{font-weight:700;border-top:2px solid #c9aa78;background:#fff;}
+.perf-wrap tr.hide{display:none;}
+.perf-chip{display:inline-block;font-size:11px;padding:2px 7px;border-radius:99px;font-weight:600;}
+.perf-chip.ok{background:#e3f2e8;color:var(--green);}.perf-chip.warn{background:var(--gold-lt);color:var(--gold-dk);}.perf-chip.bad{background:#fde8e8;color:var(--red);}.perf-chip.na{background:var(--bg);color:var(--ink3);font-weight:400;}
+.perf-chart svg{width:100%;height:auto;display:block;}
+.perf-legend{display:flex;gap:14px;font-size:11.5px;color:var(--ink2);flex-wrap:wrap;margin-bottom:6px;}
+.perf-legend i{display:inline-block;width:11px;height:11px;border-radius:2px;vertical-align:-1px;margin-right:5px;}
+.perf-sum{white-space:pre-wrap;font-size:12px;padding:10px 12px;background:var(--bg);border-radius:8px;color:var(--ink2);margin:0;font-family:ui-monospace,Menlo,Consolas,monospace;line-height:1.55;word-break:break-all;}
+.perf-formula{font-size:11.5px;background:var(--bg);padding:8px 10px;border-radius:8px;line-height:1.6;color:var(--ink2);font-family:ui-monospace,Menlo,Consolas,monospace;overflow-x:auto;}
+.btn-dirty{background:var(--red)!important;color:#fff!important;animation:perfPulse 1.2s ease-in-out infinite;}
+@keyframes perfPulse{0%,100%{box-shadow:0 0 0 0 rgba(184,50,50,.45);}50%{box-shadow:0 0 0 6px rgba(184,50,50,0);}}
 </style>
 </head>
 <body>
@@ -376,6 +429,7 @@ tbody tr:hover td{background:#faf3e8;}
     <div class="nav-tab"        data-tab="rd"        onclick="switchTab('rd')">       <span class="ni">🔬</span><span>研發試算</span></div>
     <div class="nav-tab"        data-tab="stock"     onclick="switchTab('stock')">    <span class="ni">🗄️</span><span>成品庫存</span></div>
     <div class="nav-tab admin-only" data-tab="consign" onclick="switchTab('consign')"><span class="ni">🤝</span><span>經銷商寄售</span></div><!-- v3.28 -->
+    <div class="nav-tab admin-only" data-tab="perf" onclick="switchTab('perf')"><span class="ni">📈</span><span>業績模型</span></div><!-- v3.39 admin-only -->
     <div class="nav-tab admin-only" data-tab="apply" onclick="switchTab('apply')">   <span class="ni">✏️</span><span>審核</span></div>
   </div>
 </div>
@@ -432,7 +486,7 @@ document.addEventListener('wheel', function (e) {
 let _sessExpiredShown = false;
 // v3.33 寫入處理中遮罩（計數器＋延遲顯示，多個寫入重疊也只有一層）
 let _busyN = 0, _busyTimer = null;
-const BUSY_READ_RE = /^(get|bootstrap|login|checkUser|consignMe|consignDealers|consignPrices|consignOverview|consignAlerts|consignLedger|consignStatements|consignDaily|consignRestockList)/;
+const BUSY_READ_RE = /^(get|bootstrap|login|checkUser|consignMe|consignDealers|consignPrices|consignOverview|consignAlerts|consignLedger|consignStatements|consignDaily|consignRestockList|perfGet)/;   // v3.39 +perfGet
 function _busyEl() {
   let el = document.getElementById('busyOverlay');
   if (!el) { el = document.createElement('div'); el.id = 'busyOverlay'; el.innerHTML = '<div class="busy-box"><div class="busy-spin"></div><div id="busyMsg">系統處理中，請稍候…</div></div>'; document.body.appendChild(el); }
@@ -466,7 +520,7 @@ async function api(params, silent) {
   const url = API + '?' + Object.entries(send).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
   // v3.38 大 payload 走 POST（後端 doPost 同流程）：GET 網址超過 ~10KB Google 直接回 400 HTML → 前端誤判「系統忙碌」而資料沒存。
   //   經銷商設定（授權酒款 JSON＋多段長文字）固定走 POST；其餘 action 網址超過 6000 字元自動改 POST。text/plain 免 preflight。
-  const _post = /^(consignSaveDealer)$/.test(_act) || url.length > 6000;
+  const _post = /^(consignSaveDealer|perfSave)$/.test(_act) || url.length > 6000;   // v3.39 perfSave 整包 params/months 物件固定 POST
   let _lastErr = '';
   try {
     for (let _try = 0; ; _try++) {
@@ -693,8 +747,8 @@ async function _bootApp(username, role) {
     document.querySelectorAll('#navbar .nav-tab').forEach(el => {
       if (!el.classList.contains('admin-only')) el.style.display = '';
     });
-    const _tabsOK = ['recipe','profit','inventory','rd','batch','stock','apply','consign'];
-    switchTab((_rt && _tabsOK.includes(_rt) && ((_rt !== 'apply' && _rt !== 'consign') || role === 'admin')) ? _rt : 'batch'); // v3.9.2 登入預設=訂單分頁(主公指示)
+    const _tabsOK = ['recipe','profit','inventory','rd','batch','stock','apply','consign','perf'];   // v3.39 +perf
+    switchTab((_rt && _tabsOK.includes(_rt) && (!['apply', 'consign', 'perf'].includes(_rt) || role === 'admin')) ? _rt : 'batch'); // v3.9.2 登入預設=訂單分頁(主公指示)
   }
   showStockAlerts(window._bootStockAlerts);
   showShipDateAlerts(window._bootOrders);   // v3.14.4 與訂單列表共用同一份，不再重複打 getOrders
@@ -737,6 +791,7 @@ async function _sessRestore() {
 _sessRestore();
 function doLogout() {
   _sessClear(); // v3.12 登出/逾時即清 session
+  _perfDirty = false;   // v3.39 登出即放棄業績模型未存變更（避免下次登入切分頁被舊 dirty 擋）
   const _ab = document.getElementById('stockAlertBar'); if (_ab) _ab.remove();
   const _sb = document.getElementById('shipDateAlertBar'); if (_sb) _sb.remove();
   curUser = null; curToken = null; rdata = null; curSheet = '';
@@ -820,12 +875,14 @@ function wmAttach(box){
   box.style.position='relative'; box.appendChild(d);
 }
 function switchTab(tab) {
+  // v3.39 業績模型有未儲存變更 → 離開前確認（留在原分頁）
+  if (tab !== curTab && curTab === 'perf' && _perfDirty && !confirm('📈 業績模型有未儲存的變更，離開將捨棄，確定離開？')) return;
   curTab = tab;
   _sessTab(tab); // v3.19 F5 還原到原分頁：切分頁即記錄
 
   document.querySelectorAll('.nav-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
   const mc = document.getElementById('mainContent'); mc.scrollTop = 0;
-  ({ recipe:renderRecipePage, profit:renderProfitPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderRuncardPage, order:renderOrderPage, stock:renderStockPage, apply:renderApplyPage, consign:renderConsignPage })[tab]?.(mc);
+  ({ recipe:renderRecipePage, profit:renderProfitPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderRuncardPage, order:renderOrderPage, stock:renderStockPage, apply:renderApplyPage, consign:renderConsignPage, perf:renderPerfPage })[tab]?.(mc);
   wmUpdate(); // v3.8 酒譜頁浮水印開/關
 }
 
@@ -5051,6 +5108,314 @@ async function showConsignPrices() {
     <div class="fe" style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="this.closest('.modal-bg').remove()">關閉</button></div>`);
 }
 
+// ════════════════════════════════════════════════
+// 📈 業績模型（v3.39・2026-09-05 主公派工／Cowork spec「Code交接_業績模型分頁_spec_20260905」）
+// ・算法＝`參考_業績模型試算頁_v1.2_20260905.html` 的 life()／alive()／calc() **原樣移植**（perfLife／perfAlive／perfCalc；不改公式，
+//   只把資料來源 S 換成 PERF.S、M／N 吃後端回傳的模型期間）。改公式請同步改參考 html 與 Python 正本。
+// ・參數＋逐月目標／經銷家數／大單張數 存主表「業績模型參數」「業績模型月表」，**全站共用一組**（perfGet／perfSave／perfReset，admin-only）。
+// ・左欄改值即前端重算、不打後端；「💾 儲存」才寫回（走 POST，免 GET 10KB 上限）。有未存變更：儲存鈕變紅＋切分頁／關頁 confirm。
+// ・實際營收＝後端 perfGet 依出貨日算，與訂單頁「金流總覽・當月訂單營收（損益）」同一算法（共用 _orderRevenueRow_）。
+// ════════════════════════════════════════════════
+var PERF = null;              // { S:{參數…, target[], dealers[], big[], note[]}, M:[{y,m,label,short}], N, actual[], orderCount[], zeroCount[], now, prior[], meta }
+var _perfDirty = false;       // var：switchTab／beforeunload 在模組宣告前就可能被呼叫，var 提升成 undefined＝falsy 安全
+const PERF_DEF = { base:180000, tGrow:0, baseGrow:0, perSku:100000, skus:1, gapM:3, repPct:50, surv:70, rifuOn:"1", rifuSku:125000, rifuN:2, rifuGap:3, bottles:40, price:150, bottles5:5, price5:640, upRate:20, upVal:72000, bigVal:250000 };
+const PERF_DEF_MONTH = i => ({ target: i < 4 ? [300000, 450000, 675000, 1000000][i] : 1000000, dealers: i < 4 ? [2, 6, 10, 10][i] : 10, big: 0 });
+const PERF_SCALAR = ["base","tGrow","baseGrow","perSku","skus","gapM","repPct","surv","rifuOn","rifuSku","rifuN","rifuGap","bottles","price","bottles5","price5","upRate","upVal","bigVal"];
+let _perfFold = (() => { try { return JSON.parse(localStorage.getItem('npw-perf-fold')) || null; } catch (e) { return null; } })();
+const perfW = n => Math.round(n).toLocaleString('zh-TW');
+const perfWan = n => (n / 10000).toFixed(1) + ' 萬';
+function perfNum(v) { const n = parseFloat(v); return isFinite(n) ? n : 0; }
+
+function renderPerfPage(mc) {
+  if (!curUser || curUser.role !== 'admin') { mc.innerHTML = '<div class="card"><div style="color:var(--ink3);padding:14px;font-size:13px;">此分頁僅 admin 可見</div></div>'; return; }
+  mc.innerHTML = `
+  <div class="card" style="margin-bottom:10px;">
+    <div class="sec-hd">
+      <div class="card-title" style="margin:0;">📈 業績模型（獲客缺口試算）</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" onclick="perfLoad()" title="重新讀取主表">↻</button>
+        <button class="btn btn-ghost btn-sm" onclick="perfCopySummary(this)">📋 複製摘要</button>
+        <button class="btn btn-ghost btn-sm" onclick="perfResetAsk()">↺ 重設為預設</button>
+        <button class="btn btn-primary btn-sm" id="perfSaveBtn" onclick="perfSaveClick(this)">💾 儲存</button>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--ink3);line-height:1.6;">左欄改假設、表內改各月<b>目標／活躍經銷家數／大單張數</b>即時重算；<b>按「💾 儲存」才寫回主表</b>（Kevin 與 Molly 共用同一組參數，任一人存檔全員看到）。<b>實際營收</b>＝訂單頁「金流總覽・當月訂單營收（損益）」同一算法（依出貨日）；<b>寄售營收落在結清月</b>而非售出月（結清時自動建認列單、出貨日＝入帳日）。<span id="perfMeta"></span></div>
+  </div>
+  <div id="perfArea"><div class="card"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div></div>`;
+  perfLoad();
+}
+async function perfLoad() {
+  if (_perfDirty && !confirm('📈 有未儲存的變更，重新載入會捨棄，確定？')) return;
+  const area = document.getElementById('perfArea'); if (!area) return;
+  const res = await api({ action: 'perfGet' });
+  if (!res.ok) { area.innerHTML = `<div class="card"><div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${_escf(res.error || '')}</div></div>`; return; }
+  perfApply(res); _perfDirty = false; perfDirtyUI();
+  perfBuild(); perfFill(); perfRender();
+}
+// 後端回傳 → PERF 狀態（S 的形狀與參考 html 的 S 完全相同，算法函式才能原樣搬）
+function perfApply(res) {
+  const S = {};
+  PERF_SCALAR.forEach(k => { S[k] = (k === 'rifuOn') ? String(res.params[k]) : perfNum(res.params[k]); });
+  S.target = res.months.map(m => perfNum(m.target)); S.dealers = res.months.map(m => perfNum(m.dealers)); S.big = res.months.map(m => perfNum(m.big)); S.note = res.months.map(m => String(m.note || ''));
+  const M = res.months.map(m => { const y = +m.ym.slice(0, 4), mo = +m.ym.slice(5, 7); return { y, m: mo, label: m.ym, short: String(y).slice(2) + '/' + mo }; });
+  PERF = { S, M, N: M.length, actual: res.months.map(m => (m.actual == null ? null : Number(m.actual))), orderCount: res.months.map(m => m.orderCount || 0), zeroCount: res.months.map(m => m.zeroCount || 0),
+    now: res.now, prior: res.prior || [], meta: { by: res.updatedBy || '', at: res.updatedAt || '' } };
+  if (!_perfFold) { _perfFold = {}; M.forEach(x => { if (_perfFold[x.y] == null) _perfFold[x.y] = (x.y !== M[0].y); }); }   // 首年展開、之後年份收納
+  const meta = document.getElementById('perfMeta');
+  if (meta) meta.innerHTML = `<br>期間 ${_escf(res.modelStart)} → ${_escf(res.modelEnd)}（${M.length} 個月）${PERF.meta.at ? '・參數最後儲存：' + _escf(PERF.meta.by) + ' ' + _escf(PERF.meta.at) : '・參數為預設種子'}` +
+    (PERF.prior.length ? `<br>模型期間前實績（同金流總覽口徑）：${PERF.prior.map(p => `${p.ym} NT$${perfW(p.actual)}（${p.orderCount} 張${p.zeroCount ? '、<span style="color:var(--red);">' + p.zeroCount + ' 張金額 0</span>' : ''}）`).join('・')}` : '');
+}
+
+// ── 算法：自參考 html 原樣移植（只改資料來源）──────────────
+function perfLife(first,d,G,repPct,surv){if(d===0)return first;if(G<1||d%G!==0)return 0;return first*(repPct/100)*Math.pow(surv/100,d/G)}
+function perfAlive(d,G,surv){return d<0?0:Math.pow(surv/100,Math.floor(d/G))}
+function perfCalc(){
+  const S=PERF.S,M=PERF.M,N=PERF.N;
+  const G=Math.max(1,Math.round(S.gapM)),rg=Math.max(1,Math.round(S.rifuGap));
+  const first=S.skus*S.perSku,rifuFirst=S.rifuN*S.rifuSku,dm=S.bottles*S.price,dm5=S.bottles5*S.price5;
+  const need=Array(N).fill(0),rows=[];
+  for(let i=0;i<N;i++){
+    const r={i,m:M[i],target:S.target[i]};
+    r.base=S.base*Math.pow(1+S.baseGrow/100,i/12);
+    r.rifu=S.rifuOn==="1"?perfLife(rifuFirst,i,rg,S.repPct,S.surv):0;
+    r.dealer=S.dealers[i]*dm;r.dealer5=S.dealers[i]*dm5;
+    r.up=i>=2?Math.max(S.dealers[i-1]-S.dealers[i-2],0)*(S.upRate/100)*S.upVal:0;
+    r.big=S.big[i]*S.bigVal;
+    r.cohortRep=0;for(let j=0;j<i;j++)r.cohortRep+=need[j]*perfLife(first,i-j,G,S.repPct,S.surv);
+    r.baseline=r.base+r.rifu+r.dealer+r.dealer5+r.up+r.big+r.cohortRep;
+    r.gap=r.target-r.baseline;
+    need[i]=r.gap>0&&first>0?Math.ceil(r.gap/first):0;
+    r.need=need[i];r.est=r.baseline+need[i]*first;
+    r.alive=0;for(let j=0;j<=i;j++)r.alive+=need[j]*perfAlive(i-j,G,S.surv);
+    rows.push(r);
+  }
+  return {rows,first};
+}
+function perfApplyTGrow(){const S=PERF.S,N=PERF.N;if(S.tGrow===0)return;const g=S.tGrow/100,b=S.target[0];for(let i=1;i<N;i++)S.target[i]=Math.round(b*Math.pow(1+g,i)/1000)*1000}
+
+// ── 版面骨架（一次建；之後只重繪動態區）──────────────────────
+function perfBuild() {
+  const area = document.getElementById('perfArea'); if (!area || !PERF) return;
+  const f = (k, label, small, attrs) => `<div class="perf-f"><label for="perf_${k}">${label}${small ? `<small>${small}</small>` : ''}</label><input id="perf_${k}" data-k="${k}" type="number" ${attrs || ''} oninput="perfOnParam(this)"></div>`;
+  const m0 = PERF.M[0], m1 = PERF.M[1] || PERF.M[0], mL = PERF.M[PERF.N - 1];
+  area.innerHTML = `
+  <div class="perf-grid">
+    <div class="card perf-aside" style="margin-bottom:0;">
+      <div class="card-title" style="margin-bottom:4px;">假設參數</div>
+      <details open><summary>既有代工客戶 <span class="hint">已在回購循環中</span></summary><div class="perf-fields">
+        ${f('base', '每月回購底盤（元）', 'Babyface／好野吧／恰比／滿枝枒等已進入月頻回購；8 月實績 21.8 萬', 'step="10000"')}
+        ${f('tGrow', '月營業額目標成長率（%／月）', `以 ${m0.label} 目標為基準逐月複利，自動填入 ${m1.label}～${mL.label} 全部目標；0＝維持手填目標；填完仍可在表內逐月微調`, 'step="1" min="-50" max="100"')}
+        ${f('baseGrow', '底盤年成長率（%）', `既有客戶月回購額自 ${m0.label} 起按此年化率逐月複利（10＝一年後 18→19.8 萬）；0＝持平，保守底線`, 'step="5" min="-50" max="200"')}
+      </div></details>
+      <details open><summary>新代工客戶 <span class="hint">合約生命週期</span></summary><div class="perf-fields">
+        ${f('perSku', '每款首單金額（元）', '首批 MOQ 100L ≈ 10 萬（酒肉朋友 224 瓶×450＝100,800）', 'step="10000"')}
+        ${f('skus', '平均款數', '酒肉朋友 1 款、日富一日 2 款；可填 1.5', 'step="0.5" min="0.5"')}
+        ${f('gapM', '首單→續單間隔（月）', '客戶先鋪貨賣一輪，約 2～3 個月回來', 'step="1" min="1"')}
+        ${f('repPct', '續單金額佔首單（%）', '續單 MOQ 50L＝首批一半', 'step="5" min="0" max="200"')}
+        ${f('surv', '每輪續單存活率（%）', '每隔一個間隔仍下單的機率；100＝一直活著', 'step="5" min="0" max="100"')}
+      </div></details>
+      <details open><summary>日富一日 <span class="hint">9/7 待簽</span></summary><div class="perf-fields">
+        <div class="perf-f"><label for="perf_rifuOn">是否簽下</label><select id="perf_rifuOn" data-k="rifuOn" onchange="perfOnParam(this)"><option value="1">簽下（${m0.label} 入帳）</option><option value="0">沒簽</option></select></div>
+        ${f('rifuSku', '每款首單金額（元）', '報價 250 瓶×500ml ≈ 12～13 萬／款', 'step="5000"')}
+        ${f('rifuN', '款數', '', 'step="1" min="1"')}
+        ${f('rifuGap', '續單間隔（月）', '續單金額與存活率沿用上方新客參數', 'step="1" min="1"')}
+      </div></details>
+      <details open><summary>經銷商（寄售） <span class="hint">售出才認列</span></summary><div class="perf-fields">
+        ${f('bottles', '100ml 每家月售瓶數', '純假設，待島羽三本帳 4～6 週後校正', 'step="5"')}
+        ${f('price', '100ml 認列單價（元）', '牌價 200 × 75 折', 'step="10"')}
+        ${f('bottles5', '500ml 每家月售瓶數', '禮贈品場景；純假設', 'step="1"')}
+        ${f('price5', '500ml 認列單價（元）', '牌價 850 × 75 折 ≈ 640（典藏 750）', 'step="10"')}
+        ${f('upRate', '升級換前標比率（%）', '新增家數在上架後第 2 個月，滿枝枒案例', 'step="5" min="0" max="100"')}
+        ${f('upVal', '升級單金額（元）', '', 'step="5000"')}
+        <div style="font-size:11px;color:var(--ink3);">各月活躍家數在右側表格直接改。</div>
+      </div></details>
+      <details><summary>軌道 B：大單 <span class="hint">品牌商／企業禮贈</span></summary><div class="perf-fields">
+        ${f('bigVal', '每張大單金額（元）', '日富級 ≈ 25 萬；只算當月，不推續單', 'step="10000"')}
+        <div style="font-size:11px;color:var(--ink3);">各月大單張數在右側表格直接改。</div>
+      </div></details>
+    </div>
+    <div class="perf-main">
+      <div class="perf-tiles" id="perfTiles"></div>
+      <div class="card" style="margin-bottom:0;">
+        <div class="sec-hd"><div class="card-title" style="margin:0;">逐月拆解（${m0.label} → ${mL.label}）</div><span class="perf-chip warn">目標／活躍經銷／大單張數／備註可直接在表內改</span></div>
+        <div class="perf-wrap"><table id="perfTbl"><thead><tr>
+          <th>月份</th><th>目標營收</th><th>推估營收</th><th>實際營收</th><th>達成率<br><span style="font-weight:400;">實際/目標</span></th><th>推估準確度<br><span style="font-weight:400;">實際/推估</span></th><th>基線</th><th>缺口</th><th>需新增<br>代工客</th><th>活躍<br>經銷</th><th>大單<br>張</th><th>既有底盤</th><th>日富一日</th><th>經銷 100ml</th><th>經銷 500ml</th><th>升級換前標</th><th>大單</th><th>新客續單</th><th>累計新客<br><span style="font-weight:400;">存活期望</span></th><th>備註</th>
+        </tr></thead><tbody></tbody></table></div>
+        <div id="perfZeroWarn" style="margin-top:8px;font-size:12px;color:var(--red);line-height:1.5;"></div>
+        <div style="margin-top:8px;font-size:11.5px;color:var(--ink3);line-height:1.55;">「基線」＝不在該月新增代工客時的月營收（含之前月份新客的續單）；「需新增代工客」＝用首單填滿當月缺口的最小家數；「累計新客」＝到該月為止簽下且仍在續單循環中的期望家數。「實際營收」已過月份＝該月出貨日訂單總金額（損益口徑），當月標「進行中」，未來月 —。達成率 ≥100% 綠、80～99% 金、&lt;80% 紅。</div>
+      </div>
+      <div class="card" style="margin-bottom:0;">
+        <div class="sec-hd"><div class="card-title" style="margin:0;">目標 vs 基線 vs 實際</div><span style="font-size:11.5px;color:var(--ink3);">目標與基線柱之間的距離＝該月要靠新客填的洞</span></div>
+        <div class="perf-legend"><span><i style="background:var(--green)"></i>營收目標</span><span><i style="background:var(--gold)"></i>不新增代工客的基線</span><span><i style="background:var(--blue)"></i>實際營收（已過月份）</span><span style="color:var(--red)">柱頂 +N ＝ 該月需新增代工客家數</span></div>
+        <div class="perf-chart"><svg id="perfSvg" viewBox="0 0 1000 320" role="img" aria-label="各月營收目標、基線與實際柱狀圖"></svg></div>
+      </div>
+      <div class="card" style="margin-bottom:0;">
+        <div class="sec-hd"><div class="card-title" style="margin:0;">一句話摘要</div><button class="btn btn-ghost btn-sm" onclick="perfCopySummary(this)">📋 複製摘要</button></div>
+        <pre class="perf-sum" id="perfSum"></pre>
+      </div>
+      <div class="card" style="margin-bottom:0;">
+        <div class="card-title">算式</div>
+        <div class="perf-formula">新代工客生命週期（每一家）：<br>　第 0 月：首單 = 款數 × 每款首單金額（MOQ 100L）<br>　第 G、2G、3G… 月：續單 = 首單 × 續單佔比（MOQ 50L）× 存活率ᵏ<br><br>月營收 = 既有底盤 ×（1＋年成長率）^(月數/12)<br>　　　+ 日富一日（同一生命週期，款數與每款金額另設）<br>　　　+ Σ 各月新客 cohort（依生命週期落在該月的金額）<br>　　　+ 活躍家數 × (100ml 瓶 × 單價 + 500ml 瓶 × 單價)<br>　　　+ 前月新增家數 × 升級比率 × 升級單金額<br>　　　+ 大單張數 × 大單金額</div>
+        <div style="font-size:11.5px;color:var(--ink3);margin-top:6px;">正本演算法＝專區 <b>Q4獲客缺口模型_20260905.py</b>／<b>參考_業績模型試算頁_v1.2</b>（三邊算式相同）。經銷商售出瓶數／單價待島羽三本帳 4～6 週真數字後回校（另開 spec）。</div>
+      </div>
+    </div>
+  </div>`;
+}
+function perfFill() {
+  if (!PERF) return;
+  PERF_SCALAR.forEach(k => {
+    const el = document.getElementById('perf_' + k); if (!el) return;
+    if (el !== document.activeElement) el.value = PERF.S[k];   // 正在打字的欄位不回填（避免游標跳掉）
+    el.classList.toggle('perf-changed', String(PERF.S[k]) !== String(PERF_DEF[k]));
+  });
+}
+function perfOnParam(el) {
+  if (!PERF) return;
+  const k = el.dataset.k;
+  PERF.S[k] = (el.tagName === 'SELECT') ? el.value : perfNum(el.value);
+  if (k === 'tGrow') perfApplyTGrow();
+  perfMarkDirty(); perfFill(); perfRender();
+}
+function perfOnCell(el) {
+  if (!PERF) return;
+  const k = el.dataset.key, i = +el.dataset.i;
+  if (k === 'note') PERF.S.note[i] = String(el.value || '').slice(0, 200);
+  else { PERF.S[k][i] = perfNum(el.value); if (k === 'target' && i === 0 && PERF.S.tGrow !== 0) perfApplyTGrow(); }
+  perfMarkDirty(); perfRender();
+}
+function perfMarkDirty() { _perfDirty = true; perfDirtyUI(); }
+function perfDirtyUI() {
+  const b = document.getElementById('perfSaveBtn'); if (!b) return;
+  b.classList.toggle('btn-dirty', !!_perfDirty);
+  if (!b.disabled) b.textContent = _perfDirty ? '💾 儲存（未存）' : '💾 儲存';
+}
+function perfToggleYear(y) { _perfFold[y] = !_perfFold[y]; try { localStorage.setItem('npw-perf-fold', JSON.stringify(_perfFold)); } catch (e) {} perfRender(); }
+
+// ── 動態區：摘要卡／逐月表／柱狀圖／一句話摘要 ─────────────────
+function perfRender() {
+  if (!PERF) return;
+  const { rows, first } = perfCalc();
+  const S = PERF.S, N = PERF.N, now = PERF.now;
+  rows.forEach((r, i) => { r.actual = PERF.actual[i]; r.hasAct = (r.actual != null); r.cur = (r.m.label === now); });
+  const sum = (arr, k) => arr.reduce((a, r) => a + r[k], 0);
+  const sumAct = arr => arr.filter(r => r.hasAct).reduce((a, r) => a + r.actual, 0);
+  // 年份分段（首段通常是 2026 Q4、之後整年）
+  const years = [...new Set(rows.map(r => r.m.y))];
+  const seg = years.map(y => rows.filter(r => r.m.y === y));
+  const segLabel = s => s[0].m.y + ' ' + (s.length === 12 ? '全年' : (s[0].m.m === 10 && s.length === 3) || (s[0].m.m === 9 && s.length === 4) ? 'Q4' : (s[0].m.m + '～' + s[s.length - 1].m.m + ' 月'));
+  const s0 = seg[0], s1 = seg[1] || [];
+  const tile = (m, n, em, s, cls) => `<div class="perf-tile ${cls}"><div class="m">${m}</div><div class="n">${n}<em>${em}</em></div><div class="s">${s}</div></div>`;
+  const t = document.getElementById('perfTiles');
+  if (t) t.innerHTML =
+    tile(segLabel(s0) + ' · 需新增代工客', sum(s0, 'need'), '家', s0.map(r => r.m.m + '月 ' + r.need).join('・'), sum(s0, 'need') > 12 ? 'bad' : 'warn') +
+    (s1.length ? tile(segLabel(s1) + ' · 需新增代工客', sum(s1, 'need'), '家', '平均每月 ' + (sum(s1, 'need') / s1.length).toFixed(1) + ' 家', sum(s1, 'need') > 60 ? 'bad' : 'warn') : '') +
+    (s1.length ? tile(segLabel(s1) + ' 目標 vs 基線', perfWan(sum(s1, 'target')), '', `基線 ${perfWan(sum(s1, 'baseline'))}，其中新客續單 ${perfWan(sum(s1, 'cohortRep'))}`, 'ok') : '') +
+    tile(rows[N - 1].m.label + ' · 仍活躍的新代工客', rows[N - 1].alive.toFixed(1), '家', `${s0[0].m.label} 起累計簽下 ${sum(rows, 'need')} 家，存活率 ${S.surv}%／輪`, 'ok');
+  // 逐月表
+  const tb = document.querySelector('#perfTbl tbody'); if (!tb) return;
+  const pctChip = (num, den, kind) => {
+    if (num == null || !den) return '<span class="perf-chip na">—</span>';
+    const p = num / den * 100;
+    let cls;
+    if (kind === 'acc') { const d = Math.abs(p - 100); cls = d <= 15 ? 'ok' : d <= 30 ? 'warn' : 'bad'; }
+    else cls = p >= 100 ? 'ok' : p >= 80 ? 'warn' : 'bad';
+    return `<span class="perf-chip ${cls}">${p.toFixed(0)}%</span>`;
+  };
+  const actCell = r => !r.hasAct ? '<td style="color:var(--ink3);">—</td>' : `<td class="act">${perfW(r.actual)}${r.cur ? '<span style="font-weight:400;color:var(--ink3);font-size:11px;">（進行中）</span>' : ''}</td>`;
+  const inp = (k, cls, r) => `<input type="number" class="${cls} ${PERF.S[k][r.i] !== PERF_DEF_MONTH(r.i)[k] ? 'perf-changed' : ''}" data-key="${k}" data-i="${r.i}" value="${PERF.S[k][r.i]}" step="${k === 'target' ? 50000 : 1}" onchange="perfOnCell(this)">`;
+  let html = '', lastY = null;
+  rows.forEach(r => {
+    if (r.m.y !== lastY) {
+      lastY = r.m.y; const fd = !!_perfFold[r.m.y];
+      html += `<tr class="yr" onclick="perfToggleYear(${r.m.y})"><td colspan="20" title="點一下展開／收納"><span style="display:inline-block;width:16px;color:var(--gold-dk);">${fd ? '▸' : '▾'}</span>${r.m.y} 年<span class="cnt">${fd ? '已收納（小計仍顯示）— 點此展開逐月' : '點此收納'}</span></td></tr>`;
+    }
+    const chip = r.gap <= 0 ? '<span class="perf-chip ok">達標</span>' : `<span class="perf-chip ${r.need <= 4 ? 'warn' : 'bad'}">缺 ${perfWan(r.gap)}</span>`;
+    html += `<tr class="${_perfFold[r.m.y] ? 'hide' : ''}"><td>${r.m.label}${r.cur ? ' <span class="perf-chip na">本月</span>' : ''}</td><td>${inp('target', '', r)}</td><td class="est">${perfW(r.est)}</td>${actCell(r)}<td>${pctChip(r.hasAct ? r.actual : null, r.target)}</td><td>${pctChip(r.hasAct ? r.actual : null, r.est, 'acc')}</td><td>${perfW(r.baseline)}</td><td>${chip}</td><td class="key">${r.need}</td><td>${inp('dealers', 'sm', r)}</td><td>${inp('big', 'sm', r)}</td><td>${perfW(r.base)}</td><td>${perfW(r.rifu)}</td><td>${perfW(r.dealer)}</td><td>${perfW(r.dealer5)}</td><td>${perfW(r.up)}</td><td>${perfW(r.big)}</td><td>${perfW(r.cohortRep)}</td><td>${r.alive.toFixed(1)}</td><td><input type="text" class="note" data-key="note" data-i="${r.i}" value="${_escf(PERF.S.note[r.i])}" placeholder="選填" maxlength="200" onchange="perfOnCell(this)"></td></tr>`;
+    const sg = seg.find(s => s[s.length - 1] === r);
+    if (sg) {
+      const actRows = sg.filter(x => x.hasAct), tA = actRows.reduce((a, x) => a + x.target, 0), eA = actRows.reduce((a, x) => a + x.est, 0), aA = sumAct(sg);
+      html += `<tr class="total"><td>${segLabel(sg)} 合計</td><td>${perfW(sum(sg, 'target'))}</td><td class="est">${perfW(sum(sg, 'est'))}</td><td class="act">${actRows.length ? perfW(aA) + `<span style="font-weight:400;color:var(--ink3);font-size:11px;">（${actRows.length} 個月）</span>` : '<span style="color:var(--ink3);font-weight:400;">—</span>'}</td><td>${pctChip(actRows.length ? aA : null, tA)}</td><td>${pctChip(actRows.length ? aA : null, eA, 'acc')}</td><td>${perfW(sum(sg, 'baseline'))}</td><td></td><td class="key">${sum(sg, 'need')}</td><td></td><td>${sg.reduce((a, x) => a + PERF.S.big[x.i], 0)}</td><td>${perfW(sum(sg, 'base'))}</td><td>${perfW(sum(sg, 'rifu'))}</td><td>${perfW(sum(sg, 'dealer'))}</td><td>${perfW(sum(sg, 'dealer5'))}</td><td>${perfW(sum(sg, 'up'))}</td><td>${perfW(sum(sg, 'big'))}</td><td>${perfW(sum(sg, 'cohortRep'))}</td><td></td><td></td></tr>`;
+    }
+  });
+  tb.innerHTML = html;
+  // 資料洞提示（有金流類型、總金額 0 的單會讓實際營收低估；根本解法＝Molly 把金額補上）
+  const zw = document.getElementById('perfZeroWarn');
+  if (zw) { const z = rows.filter(r => r.hasAct && PERF.zeroCount[r.i] > 0); zw.innerHTML = z.length ? z.map(r => `⚠ ${r.m.label} 有 ${PERF.zeroCount[r.i]} 張有金流訂單總金額為 0，實際營收可能低估（請到訂單頁補金額）`).join('<br>') : ''; }
+  perfChart(rows);
+  // 一句話摘要（LINE 回報用）
+  const actLine = rows.filter(r => r.hasAct).map(r => `${r.m.m}月 ${perfW(r.actual)}${r.cur ? '(進行中)' : ''}／目標 ${perfW(r.target)}（${r.target ? Math.round(r.actual / r.target * 100) : 0}%）`).join('、');
+  const sumEl = document.getElementById('perfSum');
+  if (sumEl) sumEl.textContent =
+`南坡萬 業績模型 v1.2（${rows[0].m.label} → ${rows[N - 1].m.label}；${S.rifuOn === "1" ? "日富一日簽下" : "日富一日未簽"}）
+${segLabel(s0)} 需新增代工客：${s0.map(r => r.m.m + "月 " + r.need).join("、")}（合計 ${sum(s0, "need")} 家）
+${s1.length ? `${segLabel(s1)} 需新增代工客：${s1.map(r => r.m.m + "月 " + r.need).join("、")}（合計 ${sum(s1, "need")} 家）
+${segLabel(s1)} 目標 ${perfWan(sum(s1, "target"))}；基線 ${perfWan(sum(s1, "baseline"))}（新客續單 ${perfWan(sum(s1, "cohortRep"))}、日富 ${perfWan(sum(s1, "rifu"))}、經銷 ${perfWan(sum(s1, "dealer") + sum(s1, "dealer5"))}）
+` : ''}生命週期：首單 ${S.skus} 款 × ${perfWan(S.perSku)}，隔 ${S.gapM} 月續單 ${S.repPct}%、存活率 ${S.surv}%；底盤 ${perfWan(S.base)}／月、年成長 ${S.baseGrow}%
+${rows[N - 1].m.label} 仍活躍新代工客 ${rows[N - 1].alive.toFixed(1)} 家${actLine ? `
+實際營收：${actLine}` : ''}`;
+}
+function perfChart(rows) {
+  const svg = document.getElementById('perfSvg'); if (!svg) return;
+  const N = rows.length, W = 1000, H = 320, padL = 56, padR = 12, padT = 26, padB = 40;
+  const max = Math.max(...rows.map(r => Math.max(r.target, r.baseline, r.hasAct ? r.actual : 0))) * 1.18 || 1;
+  const y = v => padT + (H - padT - padB) * (1 - v / max);
+  const gw = (W - padL - padR) / N, bw = Math.min(16, gw * 0.26), gap = 2;
+  let s = '';
+  const ticks = 5; for (let k = 0; k <= ticks; k++) { const v = max / ticks * k; s += `<line x1="${padL}" x2="${W - padR}" y1="${y(v)}" y2="${y(v)}" stroke="#e4ddd0" stroke-width="1"/><text x="${padL - 8}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="#7d6e5d">${Math.round(v / 10000)}萬</text>`; }
+  rows.forEach((r, i) => {
+    const cx = padL + gw * i + gw / 2;
+    const bars = [{ v: r.target, c: '#2e7d50', l: '目標' }, { v: r.baseline, c: '#a0722a', l: '基線' }];
+    if (r.hasAct) bars.push({ v: r.actual, c: '#2563a8', l: r.cur ? '實際(進行中)' : '實際' });
+    const tot = bars.length * bw + (bars.length - 1) * gap;
+    bars.forEach((b, k) => { const x = cx - tot / 2 + k * (bw + gap); const yy = y(Math.max(b.v, 0)), h = H - padB - yy;
+      s += `<g><title>${r.m.label} ${b.l} NT$${perfW(b.v)}</title><rect x="${x}" y="${yy}" width="${bw}" height="${Math.max(h, 0)}" rx="3" ry="3" fill="${b.c}"/><rect x="${x}" y="${H - padB - 3}" width="${bw}" height="3" fill="${b.c}"/></g>`; });
+    if (r.need > 0) { const top = Math.min(y(r.baseline), y(r.target)) - 8; s += `<text x="${cx}" y="${top}" text-anchor="middle" font-size="11" font-weight="600" fill="#b83232">+${r.need}</text>`; }
+    s += `<text x="${cx}" y="${H - padB + 18}" text-anchor="middle" font-size="11" fill="#6b5e4e">${r.m.short}</text>`;
+    if (r.m.m === 1) { s += `<line x1="${padL + gw * i}" x2="${padL + gw * i}" y1="${padT - 10}" y2="${H - padB}" stroke="#c9aa78" stroke-dasharray="3 3"/><text x="${padL + gw * i + 6}" y="${padT - 12}" font-size="11" fill="#7d6e5d">${r.m.y}</text>`; }
+  });
+  s += `<line x1="${padL}" x2="${W - padR}" y1="${H - padB}" y2="${H - padB}" stroke="#c9aa78" stroke-width="1"/>`;
+  svg.innerHTML = s;
+}
+
+// ── 儲存／重設／複製 ───────────────────────────────────────
+async function perfSaveClick(btn) {
+  if (!PERF) return;
+  await lockRun(btn, async () => {
+    const months = PERF.M.map((x, i) => ({ ym: x.label, target: PERF.S.target[i], dealers: PERF.S.dealers[i], big: PERF.S.big[i], note: PERF.S.note[i] }));
+    const params = {}; PERF_SCALAR.forEach(k => { params[k] = PERF.S[k]; });
+    const res = await api({ action: 'perfSave', params, months });   // api() 對 perfSave 固定走 POST（物件原樣進 JSON body）
+    if (!res.ok) {
+      makeModal(`<div class="modal-title" style="color:var(--red);">❌ 業績模型儲存失敗</div><div style="font-size:13px;line-height:1.6;">${_escf(res.error || '網路錯誤')}<br><span style="color:var(--ink3);font-size:12px;">畫面上的變更仍保留，修正後可再按儲存。</span></div><div class="fe" style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="this.closest('.modal-bg').remove()">知道了</button></div>`, { locked: true });
+      return;
+    }
+    perfApply(res); _perfDirty = false;
+    perfFill(); perfRender();
+    toast('✅ 業績模型已儲存（Kevin／Molly 共用）');
+  });
+  perfDirtyUI();
+}
+function perfResetAsk() {
+  const modal = makeModal(`
+    <div class="modal-title">↺ 重設為預設參數</div>
+    <div style="font-size:13px;line-height:1.6;margin-bottom:10px;">會把<b>全站共用</b>的參數、各月目標／經銷家數／大單張數全部覆寫回 v1.2 種子預設，備註清空；Kevin 與 Molly 都會看到。此動作寫入主表、不可復原。<br>請輸入 <b>業績模型</b> 確認：</div>
+    <input class="inp" id="perfResetConfirm" placeholder="業績模型" autocomplete="off">
+    <div class="fe"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-danger btn-sm" id="perfResetGo">↺ 確定重設</button></div>`, { locked: true });
+  modal.querySelector('#perfResetGo').onclick = () => lockRun(modal.querySelector('#perfResetGo'), async () => {
+    const v = modal.querySelector('#perfResetConfirm').value.trim();
+    if (v !== '業績模型') { toast('請輸入「業績模型」確認'); return; }
+    const res = await api({ action: 'perfReset', confirm: v });
+    if (!res.ok) { toast('重設失敗：' + (res.error || '')); return; }
+    modal.remove(); perfApply(res); _perfDirty = false; perfDirtyUI(); perfFill(); perfRender(); toast('已重設為預設參數');
+  });
+}
+async function perfCopySummary(btn) {
+  const el = document.getElementById('perfSum'); if (!el) return;
+  const t = btn.textContent;
+  try { await navigator.clipboard.writeText(el.textContent); btn.textContent = '已複製'; } catch (e) { btn.textContent = '請手動選取複製'; }
+  setTimeout(() => { btn.textContent = t; }, 1500);
+}
+// 關閉／重新整理分頁前提醒未存變更（切分頁的提醒在 switchTab）
+window.addEventListener('beforeunload', function (e) { if (_perfDirty) { e.preventDefault(); e.returnValue = ''; } });
 </script>
 </body>
 </html>
