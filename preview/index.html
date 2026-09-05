@@ -350,6 +350,8 @@ tbody tr:hover td{background:#faf3e8;}
 .perf-tile .n em{font-style:normal;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--ink2);margin-left:3px;}
 .perf-tile .s{font-size:11px;color:var(--ink2);margin-top:2px;word-break:break-all;}
 .perf-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:var(--r-sm);max-height:70vh;overflow-y:auto;}
+.perf-xscroll{overflow-x:auto;overflow-y:hidden;height:16px;margin-bottom:4px;border:1px solid var(--border);border-radius:99px;background:var(--bg);}   /* v3.39.1 主公指示：橫向捲軸搬到表格上方（與表格連動） */
+.perf-xscroll>div{height:1px;}
 .perf-wrap table{font-size:12.5px;font-variant-numeric:tabular-nums;}
 .perf-wrap th,.perf-wrap td{text-align:right;white-space:nowrap;padding:7px 8px;}
 .perf-wrap th{position:sticky;top:0;z-index:2;}
@@ -5238,6 +5240,7 @@ function perfBuild() {
       <div class="perf-tiles" id="perfTiles"></div>
       <div class="card" style="margin-bottom:0;">
         <div class="sec-hd"><div class="card-title" style="margin:0;">逐月拆解（${m0.label} → ${mL.label}）</div><span class="perf-chip warn">目標／活躍經銷／大單張數／備註可直接在表內改</span></div>
+        <div class="perf-xscroll" id="perfXTop" title="拖這裡可左右捲動表格"><div id="perfXTopInner"></div></div>
         <div class="perf-wrap"><table id="perfTbl"><thead><tr>
           <th>月份</th><th>目標營收</th><th>推估營收</th><th>實際營收</th><th>達成率<br><span style="font-weight:400;">實際/目標</span></th><th>推估準確度<br><span style="font-weight:400;">實際/推估</span></th><th>基線</th><th>缺口</th><th>需新增<br>代工客</th><th>活躍<br>經銷</th><th>大單<br>張</th><th>既有底盤</th><th>日富一日</th><th>經銷 100ml</th><th>經銷 500ml</th><th>升級換前標</th><th>大單</th><th>新客續單</th><th>累計新客<br><span style="font-weight:400;">存活期望</span></th><th>備註</th>
         </tr></thead><tbody></tbody></table></div>
@@ -5341,6 +5344,7 @@ function perfRender() {
   // 資料洞提示（有金流類型、總金額 0 的單會讓實際營收低估；根本解法＝Molly 把金額補上）
   const zw = document.getElementById('perfZeroWarn');
   if (zw) { const z = rows.filter(r => r.hasAct && PERF.zeroCount[r.i] > 0); zw.innerHTML = z.length ? z.map(r => `⚠ ${r.m.label} 有 ${PERF.zeroCount[r.i]} 張有金流訂單總金額為 0，實際營收可能低估（請到訂單頁補金額）`).join('<br>') : ''; }
+  perfSyncXScroll();
   perfChart(rows);
   // 一句話摘要（LINE 回報用）
   const actLine = rows.filter(r => r.hasAct).map(r => `${r.m.m}月 ${perfW(r.actual)}${r.cur ? '(進行中)' : ''}／目標 ${perfW(r.target)}（${r.target ? Math.round(r.actual / r.target * 100) : 0}%）`).join('、');
@@ -5353,6 +5357,18 @@ ${segLabel(s1)} 目標 ${perfWan(sum(s1, "target"))}；基線 ${perfWan(sum(s1, 
 ` : ''}生命週期：首單 ${S.skus} 款 × ${perfWan(S.perSku)}，隔 ${S.gapM} 月續單 ${S.repPct}%、存活率 ${S.surv}%；底盤 ${perfWan(S.base)}／月、年成長 ${S.baseGrow}%
 ${rows[N - 1].m.label} 仍活躍新代工客 ${rows[N - 1].alive.toFixed(1)} 家${actLine ? `
 實際營收：${actLine}` : ''}`;
+}
+// v3.39.1 表格上方的橫向捲軸代理：寬度＝表格可捲寬度，兩邊 scrollLeft 互相同步（主公：捲軸在最底下不好瀏覽）
+function perfSyncXScroll() {
+  const top = document.getElementById('perfXTop'), wrap = document.querySelector('.perf-wrap'), inner = document.getElementById('perfXTopInner');
+  if (!top || !wrap || !inner) return;
+  inner.style.width = wrap.scrollWidth + 'px';
+  top.style.display = wrap.scrollWidth > wrap.clientWidth + 2 ? '' : 'none';
+  if (!top._perfBound) {
+    top._perfBound = true;
+    top.addEventListener('scroll', () => { if (Math.abs(wrap.scrollLeft - top.scrollLeft) > 1) wrap.scrollLeft = top.scrollLeft; });
+    wrap.addEventListener('scroll', () => { if (Math.abs(top.scrollLeft - wrap.scrollLeft) > 1) top.scrollLeft = wrap.scrollLeft; });
+  }
 }
 function perfChart(rows) {
   const svg = document.getElementById('perfSvg'); if (!svg) return;
