@@ -155,7 +155,9 @@ var ROLE_MATRIX = {
   // v3.29 叫貨：送出＝經銷商本人或 admin 代填；放行/駁回/測試信 僅 admin
   consignRestockCreate: ['admin', '經銷商'], consignRestockList: ['admin', '財務', '經銷商'], consignRestockApprove: ['admin'], consignRestockReject: ['admin'], consignMailTest: ['admin'], consignResetDealer: ['admin'],
   // v3.39 業績模型：僅 admin（Kevin／Molly）；財務／PM／倉管／FB觀看 一律 403，CONSIGN_DEALER_ACTIONS 白名單不加（經銷商 403）
-  perfGet: ['admin'], perfSave: ['admin'], perfReset: ['admin']
+  perfGet: ['admin'], perfSave: ['admin'], perfReset: ['admin'],
+  // v3.40 廠務支出／固定成本：僅 admin（Kevin／Molly）；expImport 另可帶 CRM_CASH_KEY 免 token（本機匯入腳本）
+  expList: ['admin'], expSave: ['admin'], expDelete: ['admin'], expImport: ['admin'], fixedGet: ['admin'], fixedSave: ['admin']
 };
 // v3.38 POST 入口：大 payload（經銷商設定含授權酒款 JSON／長文字、建單明細…）走 POST，免 GET 網址過長被 Google 回 400 HTML 頁。
 //   前端以 text/plain 送 JSON body（免 CORS preflight）；解析後與 doGet 走完全相同的流程（token 閘門／角色／派發）。
@@ -171,7 +173,10 @@ function doGet(e) {
   let result;
   try {
     // v2.1 輕量 session token：除 login/getEnvInfo 外，所有 action 一律要求有效 token
-    if (action !== 'login' && action !== 'getEnvInfo' && action !== 'crmCashRead' && action !== 'crmCashKeySetup') {
+    // v3.40 匯入腳本免 token：expImport 帶 key＝Script Property CRM_CASH_KEY 時視為 admin（操作人「匯入腳本」；一次性搬 Google 支出表用）
+    var _expKeyOk = (action === 'expImport' && !!_crmCashKey_() && String(p.key || '') === _crmCashKey_());
+    if (_expKeyOk) { p._user = '匯入腳本'; p._role = 'admin'; }
+    if (!_expKeyOk && action !== 'login' && action !== 'getEnvInfo' && action !== 'crmCashRead' && action !== 'crmCashKeySetup') {
       const sess = _getSession_(p.token);
       if (!sess) {
         return ContentService.createTextOutput(JSON.stringify({ ok: false, error: 'SESSION_EXPIRED' }))
@@ -210,7 +215,7 @@ function doGet(e) {
       case 'getEnvInfo':
         try { CacheService.getScriptCache().removeAll(V3144_CACHE_KEYS); } catch (e) {}
         result = getEnvInfo();
-        result.modules = { consign: (typeof consignMe === 'function'), perf: (typeof perfGet === 'function') };   // v3.39 perf 探針   // v3.28 免登入探針：consign.gs 是否真的在部署版本裡（2026-09-03 Action 漏檔事故）
+        result.modules = { consign: (typeof consignMe === 'function'), perf: (typeof perfGet === 'function'), expense: (typeof expList === 'function') };   // v3.40 expense 探針   // v3.39 perf 探針   // v3.28 免登入探針：consign.gs 是否真的在部署版本裡（2026-09-03 Action 漏檔事故）
         // v3.14.5 診斷：CacheService 到底能不能用（put→get→remove 全程回報例外）
         result.cacheDiag = (function () {
           var d = {};
@@ -317,6 +322,12 @@ function doGet(e) {
       case 'consignResetDealer':     result = consignResetDealer(p); break;     // v3.35 重置經銷商測試資料(admin，不可逆)
       case 'perfGet':                result = perfGet(p); break;                // v3.39 業績模型：整頁資料(admin；首次自動種子)
       case 'perfSave':               result = perfSave(p); break;               // v3.39 業績模型：整包覆寫(admin；走 doPost)
+      case 'expList':                result = expList(p); break;                // v3.40 廠務支出：該月列＋摘要＋固定成本＋金流四格(admin)
+      case 'expSave':                result = expSave(p); break;                // v3.40 廠務支出：新增/覆寫一筆(admin)
+      case 'expDelete':              result = expDelete(p); break;              // v3.40 廠務支出：刪一筆(admin)
+      case 'expImport':              result = expImport(p); break;              // v3.40 廠務支出：批次匯入(admin 或 CRM_CASH_KEY；來源鍵去重)
+      case 'fixedGet':               result = fixedGet(p); break;               // v3.40 固定成本：該月(含沿用)(admin)
+      case 'fixedSave':              result = fixedSave(p); break;              // v3.40 固定成本：寫該月列(admin)
       case 'perfReset':              result = perfReset(p); break;              // v3.39 業績模型：恢復種子預設(admin；confirm=業績模型)
       case 'deleteShipment':         result = deleteShipment(p); break;          // 實際出貨紀錄：刪除某一次出貨(v3.26, admin 限定)
       case 'getBottleOverview':      result = getBottleOverview(); break;        // 玻璃瓶庫存
@@ -376,13 +387,14 @@ var AUDIT_ACTIONS = {
   consignSale:1, consignAdjust:1, consignSaveDealer:1, consignStatementCreate:1, consignStatementSettle:1, consignSeed:1, consignStatementDelete:1,
   consignRestockCreate:1, consignRestockApprove:1, consignRestockReject:1, consignMailTest:1, consignResetDealer:1,
   perfSave:1, perfReset:1,   // v3.39 業績模型寫入（摘要只收白名單參數，整包 JSON 不入紀錄）
+  expSave:1, expDelete:1, expImport:1, fixedSave:1,   // v3.40 廠務支出／固定成本寫入
   saveRunCard:1, deleteRunCard:1, saveProcessNote:1,
   addBatchRecord:1, updateBatchRecord:1, deleteBatchRecord:1,
   submitApply:1, reviewApply:1, saveRdRecord:1, deleteRdRecord:1, submitRdApply:1, reviewRdApply:1,
   changePassword:1, migrateOrderNos:1, migrateOrderTypes:1, backfillOrderCreators:1,
   getRecipe:1, getRecipeForProduction:1 // 敏感讀取：誰、何時、開了哪張配方(外洩溯源)
 };
-var AUDIT_PARAM_KEYS = ['orderNo','client','sheet','product','item','qty','id','itemIndex','category','name','level','username','approve','seq','date','dealer','period','type','paidDate'];
+var AUDIT_PARAM_KEYS = ['orderNo','client','sheet','product','item','qty','id','itemIndex','category','name','level','username','approve','seq','date','dealer','period','type','paidDate','month','amount','source'];   // v3.40 +month/amount/source
 function _logAction_(action, p, result) {
   if (!AUDIT_ACTIONS[action]) return;
   try {
@@ -1556,13 +1568,11 @@ function _orderRevenueRow_(r) {
   }
   return { shipMonth: shipMonth, eff: eff, total: total };
 }
-function getFinanceSummary(p) {
-  const user = String((p && p.user) || '');
-  if (FINANCE_USERS.indexOf(user) < 0) return { ok: false, error: '無權限查看金流摘要' };
-  const month = String((p && p.month) || '') || Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM');
+// v3.40 共用：某月金流摘要（原 getFinanceSummary 迴圈原樣抽出；廠務支出分頁 expList 的「實收現金」共用同一口徑）
+function _financeMonth_(month) {
   const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
   const ws = ss.getSheetByName('訂單主表');
-  if (!ws) return { ok: true, month: month, orderRevenue: 0, cashReceived: 0, orderCount: 0 };
+  if (!ws) return { orderRevenue: 0, cashReceived: 0, orderCount: 0 };
   const data = ws.getDataRange().getValues();
   let revenue = 0, cash = 0, count = 0;
   for (let i = 1; i < data.length; i++) {
@@ -1580,7 +1590,14 @@ function getFinanceSummary(p) {
     if (_fmtDate_(r[15]).slice(0, 7) === month && depositAmt !== '') cash += depositAmt;
     if (_fmtDate_(r[18]).slice(0, 7) === month) cash += effFinal;
   }
-  return { ok: true, month: month, orderRevenue: revenue, cashReceived: cash, orderCount: count };
+  return { orderRevenue: revenue, cashReceived: cash, orderCount: count };
+}
+function getFinanceSummary(p) {
+  const user = String((p && p.user) || '');
+  if (FINANCE_USERS.indexOf(user) < 0) return { ok: false, error: '無權限查看金流摘要' };
+  const month = String((p && p.month) || '') || Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM');
+  const f = _financeMonth_(month);
+  return { ok: true, month: month, orderRevenue: f.orderRevenue, cashReceived: f.cashReceived, orderCount: f.orderCount };
 }
 
 // 完成回報：共用 addBatchRecord 寫一筆製作記錄(F欄=關聯訂單編號)，再更新訂單主表 item 狀態
@@ -4819,4 +4836,204 @@ function perfReset(p) {
   var months = _perfMonths_().map(function (ym) { var s = _perfMonthSeed_(ym); return { ym: ym, target: s.target, dealers: s.dealers, big: s.big, note: '' }; });
   var out = perfSave({ params: params, months: months, _user: p && p._user, _role: p && p._role });
   out.reset = true; return out;
+}
+
+// ============================================================
+// 💸 廠務支出（exp 模組，v3.40・2026-09-05・主公拍板／spec「Code交接_廠務支出分頁_spec_20260905」）
+// ##  一句話：Molly 的 Google 支出表自 2026-09 起改在 APP 登記——一筆支出一列（固定 19 欄）＋「固定成本表」（一月一列、未填月份自動沿用最近一月）；
+// ##          頁首四格＝本月變動支出／固定成本／實收現金（_financeMonth_ 同金流總覽口徑）／淨現金流。
+// ##  資料：主表分頁「廠務支出」「固定成本表」（表頭自動建；B 日期／C 月份／M 代墊結清日、固定成本 A 月份 皆鎖 @ 文字格式＝對帳單期別同一顆地雷）。
+// ##  action（皆 admin-only，ROLE_MATRIX）：expList／expSave／expDelete／expImport（POST；帶 CRM_CASH_KEY 可免 token＝本機匯入腳本用）／fixedGet／fixedSave。
+// ##  「零用金補款」是類別之一：不計入支出合計，只算零用金進帳（Kevin 轉帳補 Molly 零用金）。
+// ============================================================
+var EXP_SHEET = '廠務支出';
+var EXP_HEADERS = ['支出ID', '日期', '月份', '類別', '廠商', '採購目的', '採購人員', '明細', '金額', '付款出處', '發票已歸位', '員工代墊', '代墊結清日', '備註', '來源鍵', '建立人', '建立時間', '更新人', '更新時間'];
+var EXC = { id: 0, date: 1, month: 2, category: 3, vendor: 4, purpose: 5, buyer: 6, item: 7, amount: 8, source: 9, invoice: 10, advance: 11, advanceSettled: 12, note: 13, srcKey: 14, createdBy: 15, createdAt: 16, updatedBy: 17, updatedAt: 18 };
+var EXP_CAT_TOPUP = '零用金補款';
+var EXP_CATEGORIES = ['食材', '酒材', '資材', '設備', '廠務', '雜支', EXP_CAT_TOPUP];
+var EXP_SOURCES = ['Molly零用金', '月結', 'Kevin轉帳', 'Kevin現金', 'Kevin信用卡', '其他'];
+var EXP_SRC_PETTY = 'Molly零用金';
+var EXP_VENDOR_SEED = ['開元', '一海香', '純露', '全祥', '鉦旺', '仰南', '驪展', '酒田', '創兆', '享樂', '彩昇', '人事', '稅務', '電費', '電信', '物流', '其他'];
+var EXP_PURPOSE_SEED = ['生產', '研發', '廠內備品', '行銷', '代購'];
+
+var FIXED_SHEET = '固定成本表';
+var FIXED_HEADERS = ['月份', '廠租', '薪資_Molly', '薪資_Vic', '薪資_阿軒', '薪資_PT小李', '貸款本息', '保險', '其他固定', '備註', '更新人', '更新時間'];
+var FIXED_NUM_KEYS = ['rent', 'salMolly', 'salVic', 'salXuan', 'salPtLi', 'loan', 'insurance', 'other'];   // 對應 B～I
+
+function _expSheet_() {
+  var ws = _consignSheet_(EXP_SHEET, EXP_HEADERS);
+  if (ws.getMaxColumns() < EXP_HEADERS.length) ws.insertColumnsAfter(ws.getMaxColumns(), EXP_HEADERS.length - ws.getMaxColumns());
+  // ⚠️ 日期／月份／代墊結清日整欄鎖文字：Sheets 會把 2026-09 轉 Date（對帳單期別同一顆地雷）
+  [EXC.date + 1, EXC.month + 1, EXC.advanceSettled + 1].forEach(function (c) { ws.getRange(1, c, ws.getMaxRows(), 1).setNumberFormat('@'); });
+  return ws;
+}
+function _fixedSheet_() {
+  var ws = _consignSheet_(FIXED_SHEET, FIXED_HEADERS);
+  ws.getRange(1, 1, ws.getMaxRows(), 1).setNumberFormat('@');
+  return ws;
+}
+function _expMonthOf_(dateStr) { return String(dateStr || '').slice(0, 7); }
+function _expDateStr_(v) { var s = _fmtDate_(v).trim(); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : ''; }
+function _expNum_(v) { var n = Number(v); return isFinite(n) ? n : 0; }
+function _expRowObj_(r) {
+  return {
+    id: String(r[EXC.id] || ''), date: _expDateStr_(r[EXC.date]), month: _consignPeriodStr_(r[EXC.month]) || _expMonthOf_(_expDateStr_(r[EXC.date])),
+    category: String(r[EXC.category] || '').trim(), vendor: String(r[EXC.vendor] || '').trim(), purpose: String(r[EXC.purpose] || '').trim(), buyer: String(r[EXC.buyer] || '').trim(),
+    item: String(r[EXC.item] || ''), amount: _expNum_(r[EXC.amount]), source: String(r[EXC.source] || '').trim(),
+    invoice: _consignBool_(r[EXC.invoice]), advance: _consignBool_(r[EXC.advance]), advanceSettled: _expDateStr_(r[EXC.advanceSettled]),
+    note: String(r[EXC.note] || ''), srcKey: String(r[EXC.srcKey] || ''),
+    createdBy: String(r[EXC.createdBy] || ''), createdAt: _fmtDateTime_(r[EXC.createdAt]), updatedBy: String(r[EXC.updatedBy] || ''), updatedAt: _fmtDateTime_(r[EXC.updatedAt])
+  };
+}
+// 驗證＋正規化一筆輸入（expSave／expImport 共用）；回 {ok, row(物件)} 或 {ok:false,error}
+function _expNormalize_(p) {
+  var date = _expDateStr_(p.date);
+  if (!date) return { ok: false, error: '日期格式須為 yyyy-MM-dd' };
+  var cat = String(p.category || '').trim().replace(/厰務/g, '廠務');
+  if (EXP_CATEGORIES.indexOf(cat) < 0) return { ok: false, error: '類別須為：' + EXP_CATEGORIES.join('／') };
+  var item = String(p.item || '').trim();
+  if (!item) return { ok: false, error: '明細不可空白' };
+  var amount = Number(p.amount);
+  if (!isFinite(amount) || amount <= 0) return { ok: false, error: '金額須為大於 0 的數字' };
+  var source = String(p.source || '').trim();
+  if (!source) return { ok: false, error: '付款出處不可空白' };
+  var settled = _expDateStr_(p.advanceSettled);
+  return { ok: true, row: {
+    date: date, month: _expMonthOf_(date), category: cat, vendor: String(p.vendor || '').trim().slice(0, 60), purpose: String(p.purpose || '').trim().slice(0, 60),
+    buyer: String(p.buyer || '').trim().slice(0, 30), item: item.slice(0, 200), amount: Math.round(amount * 100) / 100, source: source.slice(0, 30),
+    invoice: _consignBool_(p.invoice), advance: _consignBool_(p.advance), advanceSettled: settled, note: String(p.note || '').trim().slice(0, 300), srcKey: String(p.srcKey || '').trim().slice(0, 80)
+  } };
+}
+function _expRowArr_(id, o, createdBy, createdAt, updatedBy, updatedAt) {
+  return [id, o.date, o.month, o.category, o.vendor, o.purpose, o.buyer, o.item, o.amount, o.source, o.invoice ? 'TRUE' : 'FALSE', o.advance ? 'TRUE' : 'FALSE', o.advanceSettled, o.note, o.srcKey, createdBy, createdAt, updatedBy, updatedAt];
+}
+function _expAllRows_() { return _consignRowsRO_(EXP_SHEET, EXP_HEADERS).map(_expRowObj_).filter(function (o) { return o.id; }); }
+
+// ── 固定成本：讀某月（無該月列→沿用「月份 < 該月」最近一列）──
+function _fixedRead_(month) {
+  var rows = _consignRowsRO_(FIXED_SHEET, FIXED_HEADERS).map(function (r) { return { ym: _consignPeriodStr_(r[0]), r: r }; }).filter(function (x) { return /^\d{4}-\d{2}$/.test(x.ym); });
+  var exact = null, prior = null;
+  rows.forEach(function (x) { if (x.ym === month) exact = x; else if (x.ym < month && (!prior || x.ym > prior.ym)) prior = x; });
+  var src = exact || prior;
+  var out = { month: month, inherited: !exact && !!prior, from: src ? src.ym : '', empty: !src, note: '', updatedBy: '', updatedAt: '', total: 0 };
+  FIXED_NUM_KEYS.forEach(function (k, i) { out[k] = src ? _expNum_(src.r[i + 1]) : 0; out.total += out[k]; });
+  if (src) { out.note = String(src.r[9] || ''); out.updatedBy = String(src.r[10] || ''); out.updatedAt = _fmtDateTime_(src.r[11]); }
+  out.total = Math.round(out.total * 100) / 100;
+  return out;
+}
+// 月份金流摘要（與 getFinanceSummary 同一迴圈；perf／exp 共用）
+function _expFinance_(month) {
+  try { var f = _financeMonth_(month); return { orderRevenue: Math.round(f.orderRevenue), cashReceived: Math.round(f.cashReceived), orderCount: f.orderCount }; }
+  catch (e) { return { orderRevenue: 0, cashReceived: 0, orderCount: 0, error: String((e && e.message) || e) }; }
+}
+// admin：該月支出列＋摘要＋固定成本＋金流四格（首次呼叫自動建分頁）
+function expList(p) {
+  var month = _consignPeriodStr_(p && p.month) || Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM');
+  if (!/^\d{4}-\d{2}$/.test(month)) return { ok: false, error: '月份格式須為 yyyy-MM' };
+  _expSheet_(); _fixedSheet_();
+  var all = _expAllRows_();
+  var vendors = {}, purposes = {};
+  all.forEach(function (o) { if (o.vendor) vendors[o.vendor] = 1; if (o.purpose) purposes[o.purpose] = 1; });
+  EXP_VENDOR_SEED.forEach(function (v) { vendors[v] = 1; }); EXP_PURPOSE_SEED.forEach(function (v) { purposes[v] = 1; });
+  var rows = all.filter(function (o) { return o.month === month; }).sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : (a.createdAt < b.createdAt ? 1 : -1); });
+  var s = { total: 0, count: 0, byCat: {}, bySrc: {}, invoiceMissing: 0, advanceOpen: 0, pettyIn: 0, pettyOut: 0 };
+  rows.forEach(function (o) {
+    if (o.category === EXP_CAT_TOPUP) { s.pettyIn += o.amount; return; }
+    s.total += o.amount; s.count++;
+    s.byCat[o.category] = (s.byCat[o.category] || 0) + o.amount;
+    s.bySrc[o.source] = (s.bySrc[o.source] || 0) + o.amount;
+    if (!o.invoice) s.invoiceMissing++;
+    if (o.advance && !o.advanceSettled) s.advanceOpen++;
+    if (o.source === EXP_SRC_PETTY) s.pettyOut += o.amount;
+  });
+  ['total', 'pettyIn', 'pettyOut'].forEach(function (k) { s[k] = Math.round(s[k] * 100) / 100; });
+  var fixed = _fixedRead_(month), fin = _expFinance_(month);
+  return { ok: true, month: month, rows: rows, summary: s, fixed: fixed, finance: fin,
+    net: Math.round(fin.cashReceived - s.total - fixed.total), categories: EXP_CATEGORIES, sources: EXP_SOURCES,
+    vendors: Object.keys(vendors).sort(), purposes: Object.keys(purposes).sort() };
+}
+// admin：新增（無 id）或覆寫（有 id）一筆
+function expSave(p) {
+  var v = _expNormalize_(p || {});
+  if (!v.ok) return v;
+  var op = String((p && p._user) || ''), now = _consignNow_(), id = String((p && p.id) || '').trim();
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    var ws = _expSheet_();
+    if (id) {
+      var n = ws.getLastRow() - 1;
+      var ids = n > 0 ? ws.getRange(2, 1, n, 1).getValues() : [];
+      for (var i = 0; i < ids.length; i++) {
+        if (String(ids[i][0]) === id) {
+          var old = ws.getRange(i + 2, 1, 1, EXP_HEADERS.length).getValues()[0];
+          var oldObj = _expRowObj_(old);
+          v.row.srcKey = oldObj.srcKey;   // 來源鍵不可由前端改
+          ws.getRange(i + 2, 1, 1, EXP_HEADERS.length).setValues([_expRowArr_(id, v.row, oldObj.createdBy || op, oldObj.createdAt || now, op, now)]);
+          return { ok: true, id: id, updated: true, row: _expRowObj_(ws.getRange(i + 2, 1, 1, EXP_HEADERS.length).getValues()[0]) };
+        }
+      }
+      return { ok: false, error: '找不到支出：' + id };
+    }
+    id = _consignGenId_('E');
+    ws.appendRow(_expRowArr_(id, v.row, op, now, op, now));
+    return { ok: true, id: id, created: true, row: _expRowObj_(_expRowArr_(id, v.row, op, now, op, now)) };
+  } finally { lock.releaseLock(); }
+}
+// admin：刪一列
+function expDelete(p) {
+  var id = String((p && p.id) || '').trim();
+  if (!id) return { ok: false, error: '缺少 id' };
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    var ws = _expSheet_(), n = ws.getLastRow() - 1;
+    var ids = n > 0 ? ws.getRange(2, 1, n, 1).getValues() : [];
+    for (var i = 0; i < ids.length; i++) if (String(ids[i][0]) === id) { ws.deleteRow(i + 2); return { ok: true, id: id, deleted: true }; }
+    return { ok: false, error: '找不到支出：' + id };
+  } finally { lock.releaseLock(); }
+}
+// admin（或帶 CRM_CASH_KEY 免 token）：批次匯入；來源鍵已存在者跳過（冪等）。rows 可為陣列或 JSON 字串。
+function expImport(p) {
+  var rows = p && p.rows;
+  if (typeof rows === 'string') { try { rows = JSON.parse(rows); } catch (e) { rows = null; } }
+  if (!Array.isArray(rows) || !rows.length) return { ok: false, error: '缺少 rows' };
+  if (rows.length > 500) return { ok: false, error: '單次最多 500 筆' };
+  var op = String((p && p._user) || '匯入腳本'), now = _consignNow_();
+  var lock = LockService.getScriptLock(); lock.waitLock(20000);
+  try {
+    var ws = _expSheet_();
+    var have = {};
+    _expAllRows_().forEach(function (o) { if (o.srcKey) have[o.srcKey] = true; });
+    var out = [], added = 0, skipped = 0, errors = [];
+    rows.forEach(function (r, i) {
+      var v = _expNormalize_(r || {});
+      if (!v.ok) { errors.push({ i: i, error: v.error }); return; }
+      if (v.row.srcKey && have[v.row.srcKey]) { skipped++; return; }
+      if (v.row.srcKey) have[v.row.srcKey] = true;
+      out.push(_expRowArr_(_consignGenId_('E') + i, v.row, op, now, op, now)); added++;
+    });
+    if (out.length) ws.getRange(ws.getLastRow() + 1, 1, out.length, EXP_HEADERS.length).setValues(out);
+    return { ok: true, added: added, skipped: skipped, errors: errors, total: ws.getLastRow() - 1 };
+  } finally { lock.releaseLock(); }
+}
+// admin：該月固定成本（含沿用）
+function fixedGet(p) {
+  var month = _consignPeriodStr_(p && p.month) || Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM');
+  if (!/^\d{4}-\d{2}$/.test(month)) return { ok: false, error: '月份格式須為 yyyy-MM' };
+  _fixedSheet_();
+  var f = _fixedRead_(month); f.ok = true; return f;
+}
+// admin：寫該月固定成本列（不存在即建；A 月份不動）
+function fixedSave(p) {
+  var month = _consignPeriodStr_(p && p.month);
+  if (!/^\d{4}-\d{2}$/.test(month)) return { ok: false, error: '月份格式須為 yyyy-MM' };
+  var vals = FIXED_NUM_KEYS.map(function (k) { var n = Number(p[k]); if (!isFinite(n) || n < 0) n = 0; return Math.round(n * 100) / 100; });
+  var note = String((p && p.note) || '').trim().slice(0, 300), op = String((p && p._user) || ''), now = _consignNow_();
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    var ws = _fixedSheet_(), n = ws.getLastRow() - 1, rowIdx = -1;
+    if (n > 0) { var ms = ws.getRange(2, 1, n, 1).getValues(); for (var i = 0; i < ms.length; i++) if (_consignPeriodStr_(ms[i][0]) === month) { rowIdx = i + 2; break; } }
+    if (rowIdx < 0) { ws.appendRow([month].concat(vals, [note, op, now])); }
+    else ws.getRange(rowIdx, 2, 1, FIXED_HEADERS.length - 1).setValues([vals.concat([note, op, now])]);
+  } finally { lock.releaseLock(); }
+  var f = _fixedRead_(month); f.ok = true; f.saved = true; return f;
 }
