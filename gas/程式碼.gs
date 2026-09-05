@@ -4907,7 +4907,22 @@ function _expNormalize_(p) {
 function _expRowArr_(id, o, createdBy, createdAt, updatedBy, updatedAt) {
   return [id, o.date, o.month, o.category, o.vendor, o.purpose, o.buyer, o.item, o.amount, o.source, o.invoice ? 'TRUE' : 'FALSE', o.advance ? 'TRUE' : 'FALSE', o.advanceSettled, o.note, o.srcKey, createdBy, createdAt, updatedBy, updatedAt];
 }
-function _expAllRows_() { return _consignRowsRO_(EXP_SHEET, EXP_HEADERS).map(_expRowObj_).filter(function (o) { return o.id; }); }
+function _expAllRows_() { return _consignRowsRO_(EXP_SHEET, EXP_HEADERS).map(function (r, i) { var o = _expRowObj_(r); o.rowIdx = i; return o; }).filter(function (o) { return o.id; }); }
+// v3.41 零用金結餘（衍生值，不落地）：依 日期→列序 逐筆累計——類別「零用金補款」＋、付款出處「Molly零用金」−、其他付款出處不動。
+//   回 { byId:{id:結餘}, start(月初), end(月底), current(最新) }；start＝該月第一筆之前的結餘。期初用一筆「零用金補款」列表示（明細註明期初）。
+function _expPettyCalc_(all, month) {
+  var seq = all.slice().sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : a.rowIdx - b.rowIdx; });
+  var bal = 0, byId = {}, start = null, end = null;
+  seq.forEach(function (o) {
+    if (start === null && o.month >= month) start = bal;
+    var d = o.category === EXP_CAT_TOPUP ? o.amount : (o.source === EXP_SRC_PETTY ? -o.amount : 0);
+    if (d) { bal = Math.round((bal + d) * 100) / 100; byId[o.id] = bal; }
+    if (o.month <= month) end = bal;
+  });
+  if (start === null) start = bal;
+  if (end === null) end = start;
+  return { byId: byId, start: start, end: end, current: bal };
+}
 
 // ── 固定成本：讀某月（無該月列→沿用「月份 < 該月」最近一列）──
 function _fixedRead_(month) {
@@ -4935,6 +4950,8 @@ function expList(p) {
   var vendors = {}, purposes = {};
   all.forEach(function (o) { if (o.vendor) vendors[o.vendor] = 1; if (o.purpose) purposes[o.purpose] = 1; });
   EXP_VENDOR_SEED.forEach(function (v) { vendors[v] = 1; }); EXP_PURPOSE_SEED.forEach(function (v) { purposes[v] = 1; });
+  var petty = _expPettyCalc_(all, month);
+  all.forEach(function (o) { o.pettyAfter = (o.id in petty.byId) ? petty.byId[o.id] : null; });
   var rows = all.filter(function (o) { return o.month === month; }).sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : (a.createdAt < b.createdAt ? 1 : -1); });
   var s = { total: 0, count: 0, byCat: {}, bySrc: {}, invoiceMissing: 0, advanceOpen: 0, pettyIn: 0, pettyOut: 0 };
   rows.forEach(function (o) {
@@ -4948,7 +4965,7 @@ function expList(p) {
   });
   ['total', 'pettyIn', 'pettyOut'].forEach(function (k) { s[k] = Math.round(s[k] * 100) / 100; });
   var fixed = _fixedRead_(month), fin = _expFinance_(month);
-  return { ok: true, month: month, rows: rows, summary: s, fixed: fixed, finance: fin,
+  return { ok: true, month: month, rows: rows, summary: s, fixed: fixed, finance: fin, petty: { start: petty.start, end: petty.end, current: petty.current },
     net: Math.round(fin.cashReceived - s.total - fixed.total), categories: EXP_CATEGORIES, sources: EXP_SOURCES,
     vendors: Object.keys(vendors).sort(), purposes: Object.keys(purposes).sort() };
 }

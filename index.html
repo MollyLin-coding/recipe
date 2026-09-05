@@ -368,6 +368,7 @@ tbody tr:hover td{background:#faf3e8;}
 .exp-acts{display:flex;gap:2px;justify-content:flex-end;margin-top:2px;}.exp-acts .btn{padding:3px 7px;font-size:12px;}
 .exp-flag{display:inline-block;font-size:10.5px;padding:0 6px;border-radius:99px;border:1px solid var(--border);color:var(--ink3);}.exp-flag.ok{color:var(--green);border-color:#bfe0cb;}.exp-flag.warn{color:var(--red);border-color:#efc2c2;background:#fff5f5;}
 @media(max-width:600px){.exp-bar-row{grid-template-columns:78px minmax(0,1fr) 104px;font-size:12px;}}
+.exp-petty{color:var(--gold-dk);font-variant-numeric:tabular-nums;}.exp-petty.neg{color:var(--red);font-weight:600;}
 .exp-fold-bar{display:flex;align-items:center;gap:8px;margin:0 2px 6px;font-size:12px;color:var(--ink3);min-width:0;}
 .exp-fold-lb{font-weight:600;color:var(--gold-dk);white-space:nowrap;}
 .exp-fold-sum{flex:1;min-width:0;font-size:12px;color:var(--ink2);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:400;}
@@ -5515,10 +5516,10 @@ function expRender() {
   const tile = (m, n, sub, cls) => `<div class="perf-tile ${cls || ''}"><div class="m">${m}</div><div class="n">${n}</div><div class="s">${sub}</div></div>`;
   const fixedSub = f.empty ? '<span style="color:var(--red);">尚未填寫，按「⚙ 固定成本」</span>' : (f.inherited ? `沿用 ${_escf(f.from)} 的值（本月尚未另存）` : `本月已填${f.updatedBy ? '・' + _escf(f.updatedBy) : ''}`);
   const netTxt = (D.net < 0 ? '−' : '') + 'NT$' + expW(Math.abs(D.net));
-  const tilesSum = `變動 NT$${expW(s.total)}・固定 NT$${expW(f.total)}・實收 NT$${expW(fin.cashReceived)}・淨 <b style="color:${D.net < 0 ? 'var(--red)' : 'var(--green)'};">${netTxt}</b>`;
+  const tilesSum = `變動 NT$${expW(s.total)}・固定 NT$${expW(f.total)}・實收 NT$${expW(fin.cashReceived)}・淨 <b style="color:${D.net < 0 ? 'var(--red)' : 'var(--green)'};">${netTxt}</b>${D.petty ? '・零用金 NT$' + expW(D.petty.end) : ''}`;
   const tiles = `<div class="exp-fold-bar"><span class="exp-fold-lb">本月現金健檢</span><span class="exp-fold-sum">${_expFold.tiles ? tilesSum : ''}</span>${expFoldBtn('tiles')}</div>
   <div ${_expFold.tiles ? 'hidden' : ''}><div class="perf-tiles" style="margin-bottom:10px;">
-    ${tile('本月變動支出', 'NT$' + expW(s.total), `${s.count} 筆${s.pettyIn ? '・零用金補款 NT$' + expW(s.pettyIn) : ''}`, 'warn')}
+    ${tile('本月變動支出', 'NT$' + expW(s.total), `${s.count} 筆${s.pettyIn ? '・補款 NT$' + expW(s.pettyIn) : ''}${D.petty ? '・零用金月底結餘 NT$' + expW(D.petty.end) : ''}`, 'warn')}
     ${tile('固定成本', 'NT$' + expW(f.total), fixedSub, f.empty ? 'bad' : '')}
     ${tile('實收現金', 'NT$' + expW(fin.cashReceived), `依訂金／尾款實際收取日；出貨損益 NT$${expW(fin.orderRevenue)}（${fin.orderCount} 張）`, 'ok')}
     ${tile('淨現金流', netTxt, '實收 − 變動 − 固定', D.net < 0 ? 'bad' : 'ok')}
@@ -5532,7 +5533,7 @@ function expRender() {
       <div class="exp-bar-v">NT$${expW(v)} <span>${pct.toFixed(0)}%</span></div>
     </div>`; }).join('') : '<div style="font-size:12px;color:var(--ink3);">本月尚無支出</div>';
   const srcChips = Object.keys(s.bySrc).sort((a, b) => s.bySrc[b] - s.bySrc[a]).map(k => `<span class="perf-chip na">${_escf(k)} NT$${expW(s.bySrc[k])}</span>`).join(' ');
-  const gov = `<span class="perf-chip ${s.invoiceMissing ? 'warn' : 'ok'}">發票未歸位 ${s.invoiceMissing} 筆</span> <span class="perf-chip ${s.advanceOpen ? 'warn' : 'ok'}">代墊未結清 ${s.advanceOpen} 筆</span> <span class="perf-chip na">零用金 補 NT$${expW(s.pettyIn)}・支 NT$${expW(s.pettyOut)}・淨 ${s.pettyIn - s.pettyOut < 0 ? '−' : '+'}NT$${expW(Math.abs(s.pettyIn - s.pettyOut))}</span>`;
+  const gov = `<span class="perf-chip ${s.invoiceMissing ? 'warn' : 'ok'}">發票未歸位 ${s.invoiceMissing} 筆</span> <span class="perf-chip ${s.advanceOpen ? 'warn' : 'ok'}">代墊未結清 ${s.advanceOpen} 筆</span> <span class="perf-chip na">零用金 補 NT$${expW(s.pettyIn)}・支 NT$${expW(s.pettyOut)}・淨 ${s.pettyIn - s.pettyOut < 0 ? '−' : '+'}NT$${expW(Math.abs(s.pettyIn - s.pettyOut))}</span> <span class="perf-chip ${(D.petty && D.petty.end < 0) ? 'bad' : 'ok'}" title="依流水帳逐筆推算：零用金補款＋、Molly零用金付款−，其他付款出處不動">💵 零用金結餘 月初 NT$${expW(D.petty ? D.petty.start : 0)} → 月底 <b>${(D.petty && D.petty.end < 0) ? '−' : ''}NT$${expW(Math.abs(D.petty ? D.petty.end : 0))}</b></span>`;
   const structSum = cats.slice(0, 3).map(c => `${c} ${(s.total ? s.byCat[c] / s.total * 100 : 0).toFixed(0)}%`).join('・') || '本月尚無支出';
   const structure = `<div class="card" style="margin-bottom:10px;${_expFold.structure ? 'padding-bottom:10px;' : ''}">
     <div class="sec-hd" style="${_expFold.structure ? 'margin-bottom:0;' : ''}"><div class="card-title" style="margin:0;">支出結構${_expFold.structure ? ' <span class="exp-fold-sum">' + structSum + '</span>' : ''}</div><div style="display:flex;gap:6px;align-items:center;"><span style="font-size:11px;color:var(--ink3);">${_expFold.structure ? '' : '點類別可篩選明細'}</span>${expFoldBtn('structure')}</div></div>
@@ -5576,7 +5577,7 @@ function expRenderRows() {
     return `<div class="exp-row${topup ? ' topup' : ''}">
       <div class="exp-row-main">
         <div class="exp-row-l1"><span class="exp-date">${_escf(r.date.slice(5))}</span> <span class="perf-chip na">${EXP_CAT_ICON[r.category] || ''} ${_escf(r.category)}</span> ${r.vendor ? '<b>' + _escf(r.vendor) + '</b>' : ''} <span class="exp-item">${_escf(r.item)}</span></div>
-        <div class="exp-row-l2">${_escf(r.source)}${r.buyer ? '・' + _escf(r.buyer) : ''}${r.purpose ? '・' + _escf(r.purpose) : ''}${r.note ? '・<span style="color:var(--ink3);">' + _escf(r.note) + '</span>' : ''} ${flags}</div>
+        <div class="exp-row-l2">${r.pettyAfter != null ? `<span class="exp-petty${r.pettyAfter < 0 ? ' neg' : ''}" title="這筆之後的零用金結餘">💵 結餘 ${r.pettyAfter < 0 ? '−' : ''}NT$${expW(Math.abs(r.pettyAfter))}</span>・` : ''}${_escf(r.source)}${r.buyer ? '・' + _escf(r.buyer) : ''}${r.purpose ? '・' + _escf(r.purpose) : ''}${r.note ? '・<span style="color:var(--ink3);">' + _escf(r.note) + '</span>' : ''} ${flags}</div>
       </div>
       <div class="exp-row-r"><div class="exp-amt${topup ? ' in' : ''}">${topup ? '+' : ''}NT$${expW(r.amount)}</div>
         <div class="exp-acts"><button class="btn btn-ghost btn-sm" onclick="expShowModal('${r.id}')" title="編輯">✏️</button><button class="btn btn-ghost btn-sm" style="color:var(--red);" onclick="expDeleteAsk('${r.id}')" title="刪除">🗑</button></div></div>
@@ -5598,6 +5599,7 @@ function expShowModal(id) {
       <div class="fg" style="flex:1 1 130px"><label>類別 *</label><select id="exp_category">${opt(D.categories, v.category)}</select></div>
       <div class="fg" style="flex:1 1 130px"><label>付款出處 *</label><select id="exp_source">${opt(D.sources, v.source)}</select></div>
     </div>
+    ${D.petty ? `<div style="font-size:11.5px;color:var(--ink3);margin:-4px 0 8px;">💵 Molly 零用金目前結餘 <b style="color:${D.petty.current < 0 ? 'var(--red)' : 'var(--gold-dk)'};">${D.petty.current < 0 ? '−' : ''}NT$${expW(Math.abs(D.petty.current))}</b>（付款出處選「Molly零用金」會扣、類別選「零用金補款」會加；Kevin 直接轉帳的不動）</div>` : ''}
     <div class="form-row">
       <div class="fg" style="flex:2 1 200px"><label>明細 *</label><input class="inp" id="exp_item" value="${_escf(v.item)}" placeholder="例：全祥-四季春×1 茉莉香片×2"></div>
       <div class="fg" style="flex:1 1 110px"><label>金額 *</label><input class="inp" id="exp_amount" type="number" min="0" step="1" inputmode="decimal" value="${_escf(v.amount)}"></div>
