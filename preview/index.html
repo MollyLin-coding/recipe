@@ -368,6 +368,12 @@ tbody tr:hover td{background:#faf3e8;}
 .exp-acts{display:flex;gap:2px;justify-content:flex-end;margin-top:2px;}.exp-acts .btn{padding:3px 7px;font-size:12px;}
 .exp-flag{display:inline-block;font-size:10.5px;padding:0 6px;border-radius:99px;border:1px solid var(--border);color:var(--ink3);}.exp-flag.ok{color:var(--green);border-color:#bfe0cb;}.exp-flag.warn{color:var(--red);border-color:#efc2c2;background:#fff5f5;}
 @media(max-width:600px){.exp-bar-row{grid-template-columns:78px minmax(0,1fr) 104px;font-size:12px;}}
+.exp-fold-bar{display:flex;align-items:center;gap:8px;margin:0 2px 6px;font-size:12px;color:var(--ink3);min-width:0;}
+.exp-fold-lb{font-weight:600;color:var(--gold-dk);white-space:nowrap;}
+.exp-fold-sum{flex:1;min-width:0;font-size:12px;color:var(--ink2);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:400;}
+.exp-fold-bar .exp-fold-btn{margin-left:auto;}
+.exp-fold-btn{padding:3px 9px;font-size:12px;white-space:nowrap;}
+#expArea [hidden],#expIntro[hidden]{display:none!important;}
 .perf-wrap th,.perf-wrap td{text-align:right;white-space:nowrap;padding:7px 8px;}
 .perf-wrap th{position:sticky;top:0;z-index:2;}
 .perf-wrap th:first-child,.perf-wrap td:first-child{text-align:left;position:sticky;left:0;background:#fff;z-index:1;}
@@ -5459,6 +5465,9 @@ window.addEventListener('beforeunload', function (e) { if (_perfDirty) { e.preve
 let expMonth = '';            // YYYY-MM
 let _expData = null;          // expList 回傳
 let _expFilterCat = '', _expFilterQ = '';
+// v3.40.1 三區收納狀態（說明卡 intro／四格 tiles／支出結構 structure），存 localStorage 下次開啟沿用
+let _expFold = (() => { try { return Object.assign({ intro: false, tiles: false, structure: false }, JSON.parse(localStorage.getItem('npw-exp-fold') || '{}')); } catch (e) { return { intro: false, tiles: false, structure: false }; } })();
+const expFoldBtn = (k, lb) => `<button class="btn btn-ghost btn-sm exp-fold-btn" id="expFoldBtn_${k}" onclick="expToggleFold('${k}')" title="${_expFold[k] ? '展開' : '收納'}">${_expFold[k] ? '▸' : '▾'} ${lb || ''}</button>`;
 const expW = n => Math.round(Number(n) || 0).toLocaleString('zh-TW');
 const EXP_BUYERS = ['Molly', 'Vic', '阿軒', '小李', 'Kevin', '其他'];
 const EXP_CAT_ICON = { '食材': '🥬', '酒材': '🍶', '資材': '📦', '設備': '🔧', '廠務': '🏭', '雜支': '🧾', '零用金補款': '💵' };
@@ -5478,9 +5487,10 @@ function renderExpensePage(mc) {
         <button class="btn btn-ghost btn-sm" onclick="expLoad()" title="重新讀取">↻</button>
         <button class="btn btn-ghost btn-sm" onclick="expShowFixedModal()">⚙ 固定成本</button>
         <button class="btn btn-primary btn-sm" onclick="expShowModal(null)">＋ 新增支出</button>
+        ${expFoldBtn('intro', '說明')}
       </div>
     </div>
-    <div style="font-size:12px;color:var(--ink3);line-height:1.6;">一筆支出一列（取代 Google 支出表，2026-09 起）。<b>實收現金</b>＝訂單頁金流總覽「當月實際收取款項」同口徑；<b>淨現金流</b>＝實收 − 本月變動支出 − 固定成本。「零用金補款」不算支出，只記 Kevin 補進 Molly 零用金的錢。固定成本未填的月份自動沿用最近一個月。</div>
+    <div id="expIntro" ${_expFold.intro ? 'hidden' : ''} style="font-size:12px;color:var(--ink3);line-height:1.6;">一筆支出一列（取代 Google 支出表，2026-09 起）。<b>實收現金</b>＝訂單頁金流總覽「當月實際收取款項」同口徑；<b>淨現金流</b>＝實收 − 本月變動支出 − 固定成本。「零用金補款」不算支出，只記 Kevin 補進 Molly 零用金的錢。固定成本未填的月份自動沿用最近一個月。</div>
   </div>
   <div id="expArea"><div class="card"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div></div>`;
   expLoad();
@@ -5504,12 +5514,15 @@ function expRender() {
   const D = _expData, s = D.summary, f = D.fixed, fin = D.finance;
   const tile = (m, n, sub, cls) => `<div class="perf-tile ${cls || ''}"><div class="m">${m}</div><div class="n">${n}</div><div class="s">${sub}</div></div>`;
   const fixedSub = f.empty ? '<span style="color:var(--red);">尚未填寫，按「⚙ 固定成本」</span>' : (f.inherited ? `沿用 ${_escf(f.from)} 的值（本月尚未另存）` : `本月已填${f.updatedBy ? '・' + _escf(f.updatedBy) : ''}`);
-  const tiles = `<div class="perf-tiles" style="margin-bottom:10px;">
+  const netTxt = (D.net < 0 ? '−' : '') + 'NT$' + expW(Math.abs(D.net));
+  const tilesSum = `變動 NT$${expW(s.total)}・固定 NT$${expW(f.total)}・實收 NT$${expW(fin.cashReceived)}・淨 <b style="color:${D.net < 0 ? 'var(--red)' : 'var(--green)'};">${netTxt}</b>`;
+  const tiles = `<div class="exp-fold-bar"><span class="exp-fold-lb">本月現金健檢</span><span class="exp-fold-sum">${_expFold.tiles ? tilesSum : ''}</span>${expFoldBtn('tiles')}</div>
+  <div ${_expFold.tiles ? 'hidden' : ''}><div class="perf-tiles" style="margin-bottom:10px;">
     ${tile('本月變動支出', 'NT$' + expW(s.total), `${s.count} 筆${s.pettyIn ? '・零用金補款 NT$' + expW(s.pettyIn) : ''}`, 'warn')}
     ${tile('固定成本', 'NT$' + expW(f.total), fixedSub, f.empty ? 'bad' : '')}
     ${tile('實收現金', 'NT$' + expW(fin.cashReceived), `依訂金／尾款實際收取日；出貨損益 NT$${expW(fin.orderRevenue)}（${fin.orderCount} 張）`, 'ok')}
-    ${tile('淨現金流', (D.net < 0 ? '−' : '') + 'NT$' + expW(Math.abs(D.net)), '實收 − 變動 − 固定', D.net < 0 ? 'bad' : 'ok')}
-  </div>`;
+    ${tile('淨現金流', netTxt, '實收 − 變動 − 固定', D.net < 0 ? 'bad' : 'ok')}
+  </div></div>`;
   // 支出結構
   const cats = (D.categories || []).filter(c => c !== '零用金補款' && s.byCat[c] > 0).sort((a, b) => s.byCat[b] - s.byCat[a]);
   const bars = cats.length ? cats.map(c => { const v = s.byCat[c], pct = s.total ? v / s.total * 100 : 0; return `
@@ -5520,11 +5533,14 @@ function expRender() {
     </div>`; }).join('') : '<div style="font-size:12px;color:var(--ink3);">本月尚無支出</div>';
   const srcChips = Object.keys(s.bySrc).sort((a, b) => s.bySrc[b] - s.bySrc[a]).map(k => `<span class="perf-chip na">${_escf(k)} NT$${expW(s.bySrc[k])}</span>`).join(' ');
   const gov = `<span class="perf-chip ${s.invoiceMissing ? 'warn' : 'ok'}">發票未歸位 ${s.invoiceMissing} 筆</span> <span class="perf-chip ${s.advanceOpen ? 'warn' : 'ok'}">代墊未結清 ${s.advanceOpen} 筆</span> <span class="perf-chip na">零用金 補 NT$${expW(s.pettyIn)}・支 NT$${expW(s.pettyOut)}・淨 ${s.pettyIn - s.pettyOut < 0 ? '−' : '+'}NT$${expW(Math.abs(s.pettyIn - s.pettyOut))}</span>`;
-  const structure = `<div class="card" style="margin-bottom:10px;">
-    <div class="sec-hd"><div class="card-title" style="margin:0;">支出結構</div><div style="font-size:11px;color:var(--ink3);">點類別可篩選明細</div></div>
+  const structSum = cats.slice(0, 3).map(c => `${c} ${(s.total ? s.byCat[c] / s.total * 100 : 0).toFixed(0)}%`).join('・') || '本月尚無支出';
+  const structure = `<div class="card" style="margin-bottom:10px;${_expFold.structure ? 'padding-bottom:10px;' : ''}">
+    <div class="sec-hd" style="${_expFold.structure ? 'margin-bottom:0;' : ''}"><div class="card-title" style="margin:0;">支出結構${_expFold.structure ? ' <span class="exp-fold-sum">' + structSum + '</span>' : ''}</div><div style="display:flex;gap:6px;align-items:center;"><span style="font-size:11px;color:var(--ink3);">${_expFold.structure ? '' : '點類別可篩選明細'}</span>${expFoldBtn('structure')}</div></div>
+    <div ${_expFold.structure ? 'hidden' : ''}>
     ${bars}
     <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;"><span style="font-size:11px;color:var(--ink3);">付款出處：</span>${srcChips || '<span style="font-size:11px;color:var(--ink3);">—</span>'}</div>
     <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;">${gov}</div>
+    </div>
   </div>`;
   // 明細
   const catCount = {}; D.rows.forEach(r => { catCount[r.category] = (catCount[r.category] || 0) + 1; });
@@ -5537,6 +5553,15 @@ function expRender() {
   </div>`;
   area.innerHTML = tiles + structure + list;
   expRenderRows();
+}
+function expToggleFold(k) {
+  _expFold[k] = !_expFold[k];
+  try { localStorage.setItem('npw-exp-fold', JSON.stringify(_expFold)); } catch (e) {}
+  if (k === 'intro') {
+    const el = document.getElementById('expIntro'), b = document.getElementById('expFoldBtn_intro');
+    if (el) el.hidden = !!_expFold.intro;
+    if (b) { b.textContent = (_expFold.intro ? '▸' : '▾') + ' 說明'; b.title = _expFold.intro ? '展開' : '收納'; }
+  } else expRender();
 }
 function expSetCat(c) { _expFilterCat = (_expFilterCat === c) ? '' : c; expRender(); const el = document.getElementById('expRows'); if (el) el.scrollIntoView({ block: 'nearest' }); }
 function expRenderRows() {
