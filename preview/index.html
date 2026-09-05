@@ -353,6 +353,21 @@ tbody tr:hover td{background:#faf3e8;}
 .perf-xscroll{overflow-x:auto;overflow-y:hidden;height:16px;margin-bottom:4px;border:1px solid var(--border);border-radius:99px;background:var(--bg);}   /* v3.39.1 主公指示：橫向捲軸搬到表格上方（與表格連動） */
 .perf-xscroll>div{height:1px;}
 .perf-wrap table{font-size:12.5px;font-variant-numeric:tabular-nums;}
+/* v3.40 廠務支出 */
+.exp-bar-row{display:grid;grid-template-columns:96px minmax(0,1fr) 128px;gap:8px;align-items:center;padding:3px 0;cursor:pointer;font-size:12.5px;}
+.exp-bar-row:hover .exp-bar-in{background:var(--gold);}
+.exp-bar-lb{color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.exp-bar{height:12px;background:var(--bg);border:1px solid var(--border);border-radius:99px;overflow:hidden;}
+.exp-bar-in{height:100%;background:var(--gold-dk);border-radius:99px;transition:width .3s;}
+.exp-bar-v{text-align:right;font-variant-numeric:tabular-nums;color:var(--ink);white-space:nowrap;}.exp-bar-v span{color:var(--ink3);font-size:11px;margin-left:3px;}
+.exp-row{display:flex;gap:8px;align-items:flex-start;padding:8px 2px;border-bottom:1px solid var(--border);}
+.exp-row:last-of-type{border-bottom:none;}.exp-row.topup{background:#f1f7f2;border-radius:6px;}
+.exp-row-main{flex:1;min-width:0;}.exp-row-l1{font-size:13.5px;line-height:1.4;word-break:break-word;}.exp-row-l2{font-size:11.5px;color:var(--ink2);margin-top:2px;line-height:1.5;word-break:break-word;}
+.exp-date{font-variant-numeric:tabular-nums;color:var(--ink3);font-size:12px;margin-right:2px;}.exp-item{margin-left:2px;}
+.exp-row-r{flex:0 0 auto;text-align:right;}.exp-amt{font-family:'Noto Serif TC',serif;font-size:15px;color:var(--gold-dk);font-variant-numeric:tabular-nums;white-space:nowrap;}.exp-amt.in{color:var(--green);}
+.exp-acts{display:flex;gap:2px;justify-content:flex-end;margin-top:2px;}.exp-acts .btn{padding:3px 7px;font-size:12px;}
+.exp-flag{display:inline-block;font-size:10.5px;padding:0 6px;border-radius:99px;border:1px solid var(--border);color:var(--ink3);}.exp-flag.ok{color:var(--green);border-color:#bfe0cb;}.exp-flag.warn{color:var(--red);border-color:#efc2c2;background:#fff5f5;}
+@media(max-width:600px){.exp-bar-row{grid-template-columns:78px minmax(0,1fr) 104px;font-size:12px;}}
 .perf-wrap th,.perf-wrap td{text-align:right;white-space:nowrap;padding:7px 8px;}
 .perf-wrap th{position:sticky;top:0;z-index:2;}
 .perf-wrap th:first-child,.perf-wrap td:first-child{text-align:left;position:sticky;left:0;background:#fff;z-index:1;}
@@ -432,6 +447,7 @@ tbody tr:hover td{background:#faf3e8;}
     <div class="nav-tab"        data-tab="stock"     onclick="switchTab('stock')">    <span class="ni">🗄️</span><span>成品庫存</span></div>
     <div class="nav-tab admin-only" data-tab="consign" onclick="switchTab('consign')"><span class="ni">🤝</span><span>經銷商寄售</span></div><!-- v3.28 -->
     <div class="nav-tab admin-only" data-tab="perf" onclick="switchTab('perf')"><span class="ni">📈</span><span>業績模型</span></div><!-- v3.39 admin-only -->
+    <div class="nav-tab admin-only" data-tab="expense" onclick="switchTab('expense')"><span class="ni">💸</span><span>廠務支出</span></div><!-- v3.40 admin-only -->
     <div class="nav-tab admin-only" data-tab="apply" onclick="switchTab('apply')">   <span class="ni">✏️</span><span>審核</span></div>
   </div>
 </div>
@@ -488,7 +504,7 @@ document.addEventListener('wheel', function (e) {
 let _sessExpiredShown = false;
 // v3.33 寫入處理中遮罩（計數器＋延遲顯示，多個寫入重疊也只有一層）
 let _busyN = 0, _busyTimer = null;
-const BUSY_READ_RE = /^(get|bootstrap|login|checkUser|consignMe|consignDealers|consignPrices|consignOverview|consignAlerts|consignLedger|consignStatements|consignDaily|consignRestockList|perfGet)/;   // v3.39 +perfGet
+const BUSY_READ_RE = /^(get|bootstrap|login|checkUser|consignMe|consignDealers|consignPrices|consignOverview|consignAlerts|consignLedger|consignStatements|consignDaily|consignRestockList|perfGet|expList|fixedGet)/;   // v3.39 +perfGet；v3.40 +expList/fixedGet
 function _busyEl() {
   let el = document.getElementById('busyOverlay');
   if (!el) { el = document.createElement('div'); el.id = 'busyOverlay'; el.innerHTML = '<div class="busy-box"><div class="busy-spin"></div><div id="busyMsg">系統處理中，請稍候…</div></div>'; document.body.appendChild(el); }
@@ -522,7 +538,7 @@ async function api(params, silent) {
   const url = API + '?' + Object.entries(send).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
   // v3.38 大 payload 走 POST（後端 doPost 同流程）：GET 網址超過 ~10KB Google 直接回 400 HTML → 前端誤判「系統忙碌」而資料沒存。
   //   經銷商設定（授權酒款 JSON＋多段長文字）固定走 POST；其餘 action 網址超過 6000 字元自動改 POST。text/plain 免 preflight。
-  const _post = /^(consignSaveDealer|perfSave)$/.test(_act) || url.length > 6000;   // v3.39 perfSave 整包 params/months 物件固定 POST
+  const _post = /^(consignSaveDealer|perfSave|expImport)$/.test(_act) || url.length > 6000;   // v3.40 +expImport   // v3.39 perfSave 整包 params/months 物件固定 POST
   let _lastErr = '';
   try {
     for (let _try = 0; ; _try++) {
@@ -749,8 +765,8 @@ async function _bootApp(username, role) {
     document.querySelectorAll('#navbar .nav-tab').forEach(el => {
       if (!el.classList.contains('admin-only')) el.style.display = '';
     });
-    const _tabsOK = ['recipe','profit','inventory','rd','batch','stock','apply','consign','perf'];   // v3.39 +perf
-    switchTab((_rt && _tabsOK.includes(_rt) && (!['apply', 'consign', 'perf'].includes(_rt) || role === 'admin')) ? _rt : 'batch'); // v3.9.2 登入預設=訂單分頁(主公指示)
+    const _tabsOK = ['recipe','profit','inventory','rd','batch','stock','apply','consign','perf','expense'];   // v3.39 +perf；v3.40 +expense
+    switchTab((_rt && _tabsOK.includes(_rt) && (!['apply', 'consign', 'perf', 'expense'].includes(_rt) || role === 'admin')) ? _rt : 'batch'); // v3.9.2 登入預設=訂單分頁(主公指示)
   }
   showStockAlerts(window._bootStockAlerts);
   showShipDateAlerts(window._bootOrders);   // v3.14.4 與訂單列表共用同一份，不再重複打 getOrders
@@ -884,7 +900,7 @@ function switchTab(tab) {
 
   document.querySelectorAll('.nav-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
   const mc = document.getElementById('mainContent'); mc.scrollTop = 0;
-  ({ recipe:renderRecipePage, profit:renderProfitPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderRuncardPage, order:renderOrderPage, stock:renderStockPage, apply:renderApplyPage, consign:renderConsignPage, perf:renderPerfPage })[tab]?.(mc);
+  ({ recipe:renderRecipePage, profit:renderProfitPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderRuncardPage, order:renderOrderPage, stock:renderStockPage, apply:renderApplyPage, consign:renderConsignPage, perf:renderPerfPage, expense:renderExpensePage })[tab]?.(mc);
   wmUpdate(); // v3.8 酒譜頁浮水印開/關
 }
 
@@ -5432,6 +5448,210 @@ async function perfCopySummary(btn) {
 }
 // 關閉／重新整理分頁前提醒未存變更（切分頁的提醒在 switchTab）
 window.addEventListener('beforeunload', function (e) { if (_perfDirty) { e.preventDefault(); e.returnValue = ''; } });
+
+// ════════════════════════════════════════════════
+// 💸 廠務支出（v3.40・2026-09-05 主公拍板／spec「Code交接_廠務支出分頁_spec_20260905」）
+// ・Molly 的 Google 支出表自 2026-09 起改在這裡登記：一筆支出一列（主表「廠務支出」19 欄）＋「固定成本表」（一月一列，未填月份自動沿用最近一月）。
+// ・四格＝本月變動支出／固定成本／實收現金（後端 _financeMonth_＝金流總覽「當月實際收取款項」同口徑）／淨現金流（實收 − 變動 − 固定）。
+// ・「零用金補款」是類別之一：不計入支出，只算零用金進帳；「Molly零用金」付款的支出＝零用金支用。
+// ・admin-only（Kevin／Molly）；新增／編輯走 makeModal locked（防團滅）。
+// ════════════════════════════════════════════════
+let expMonth = '';            // YYYY-MM
+let _expData = null;          // expList 回傳
+let _expFilterCat = '', _expFilterQ = '';
+const expW = n => Math.round(Number(n) || 0).toLocaleString('zh-TW');
+const EXP_BUYERS = ['Molly', 'Vic', '阿軒', '小李', 'Kevin', '其他'];
+const EXP_CAT_ICON = { '食材': '🥬', '酒材': '🍶', '資材': '📦', '設備': '🔧', '廠務': '🏭', '雜支': '🧾', '零用金補款': '💵' };
+const EXP_FIXED_FIELDS = [['rent', '廠租'], ['salMolly', '薪資 Molly'], ['salVic', '薪資 Vic'], ['salXuan', '薪資 阿軒'], ['salPtLi', '薪資 PT小李'], ['loan', '貸款本息'], ['insurance', '保險'], ['other', '其他固定']];
+
+function renderExpensePage(mc) {
+  if (!curUser || curUser.role !== 'admin') { mc.innerHTML = '<div class="card"><div style="color:var(--ink3);padding:14px;font-size:13px;">此分頁僅 admin 可見</div></div>'; return; }
+  if (!expMonth) expMonth = _localDate().slice(0, 7);
+  mc.innerHTML = `
+  <div class="card" style="margin-bottom:10px;">
+    <div class="sec-hd">
+      <div class="card-title" style="margin:0;">💸 廠務支出</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" onclick="expShiftMonth(-1)">◀</button>
+        <input type="month" class="inp" id="expMonthInp" value="${expMonth}" style="margin:0;width:auto;padding:6px 10px;font-size:13px;" onchange="expMonth=this.value;expLoad()">
+        <button class="btn btn-ghost btn-sm" onclick="expShiftMonth(1)">▶</button>
+        <button class="btn btn-ghost btn-sm" onclick="expLoad()" title="重新讀取">↻</button>
+        <button class="btn btn-ghost btn-sm" onclick="expShowFixedModal()">⚙ 固定成本</button>
+        <button class="btn btn-primary btn-sm" onclick="expShowModal(null)">＋ 新增支出</button>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--ink3);line-height:1.6;">一筆支出一列（取代 Google 支出表，2026-09 起）。<b>實收現金</b>＝訂單頁金流總覽「當月實際收取款項」同口徑；<b>淨現金流</b>＝實收 − 本月變動支出 − 固定成本。「零用金補款」不算支出，只記 Kevin 補進 Molly 零用金的錢。固定成本未填的月份自動沿用最近一個月。</div>
+  </div>
+  <div id="expArea"><div class="card"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div></div>`;
+  expLoad();
+}
+function expShiftMonth(d) {
+  const y = Number(expMonth.slice(0, 4)), m = Number(expMonth.slice(5, 7)) + d;
+  const dt = new Date(y, m - 1, 1);
+  expMonth = dt.getFullYear() + '-' + ('0' + (dt.getMonth() + 1)).slice(-2);
+  const el = document.getElementById('expMonthInp'); if (el) el.value = expMonth;
+  expLoad();
+}
+async function expLoad() {
+  const area = document.getElementById('expArea'); if (!area) return;
+  const res = await api({ action: 'expList', month: expMonth });
+  if (!res.ok) { area.innerHTML = `<div class="card"><div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${_escf(res.error || '')}</div></div>`; return; }
+  _expData = res; _expFilterCat = ''; _expFilterQ = '';
+  expRender();
+}
+function expRender() {
+  const area = document.getElementById('expArea'); if (!area || !_expData) return;
+  const D = _expData, s = D.summary, f = D.fixed, fin = D.finance;
+  const tile = (m, n, sub, cls) => `<div class="perf-tile ${cls || ''}"><div class="m">${m}</div><div class="n">${n}</div><div class="s">${sub}</div></div>`;
+  const fixedSub = f.empty ? '<span style="color:var(--red);">尚未填寫，按「⚙ 固定成本」</span>' : (f.inherited ? `沿用 ${_escf(f.from)} 的值（本月尚未另存）` : `本月已填${f.updatedBy ? '・' + _escf(f.updatedBy) : ''}`);
+  const tiles = `<div class="perf-tiles" style="margin-bottom:10px;">
+    ${tile('本月變動支出', 'NT$' + expW(s.total), `${s.count} 筆${s.pettyIn ? '・零用金補款 NT$' + expW(s.pettyIn) : ''}`, 'warn')}
+    ${tile('固定成本', 'NT$' + expW(f.total), fixedSub, f.empty ? 'bad' : '')}
+    ${tile('實收現金', 'NT$' + expW(fin.cashReceived), `依訂金／尾款實際收取日；出貨損益 NT$${expW(fin.orderRevenue)}（${fin.orderCount} 張）`, 'ok')}
+    ${tile('淨現金流', (D.net < 0 ? '−' : '') + 'NT$' + expW(Math.abs(D.net)), '實收 − 變動 − 固定', D.net < 0 ? 'bad' : 'ok')}
+  </div>`;
+  // 支出結構
+  const cats = (D.categories || []).filter(c => c !== '零用金補款' && s.byCat[c] > 0).sort((a, b) => s.byCat[b] - s.byCat[a]);
+  const bars = cats.length ? cats.map(c => { const v = s.byCat[c], pct = s.total ? v / s.total * 100 : 0; return `
+    <div class="exp-bar-row" onclick="expSetCat('${c}')" title="只看 ${c}">
+      <div class="exp-bar-lb">${EXP_CAT_ICON[c] || ''} ${c}</div>
+      <div class="exp-bar"><div class="exp-bar-in" style="width:${Math.max(2, pct).toFixed(1)}%"></div></div>
+      <div class="exp-bar-v">NT$${expW(v)} <span>${pct.toFixed(0)}%</span></div>
+    </div>`; }).join('') : '<div style="font-size:12px;color:var(--ink3);">本月尚無支出</div>';
+  const srcChips = Object.keys(s.bySrc).sort((a, b) => s.bySrc[b] - s.bySrc[a]).map(k => `<span class="perf-chip na">${_escf(k)} NT$${expW(s.bySrc[k])}</span>`).join(' ');
+  const gov = `<span class="perf-chip ${s.invoiceMissing ? 'warn' : 'ok'}">發票未歸位 ${s.invoiceMissing} 筆</span> <span class="perf-chip ${s.advanceOpen ? 'warn' : 'ok'}">代墊未結清 ${s.advanceOpen} 筆</span> <span class="perf-chip na">零用金 補 NT$${expW(s.pettyIn)}・支 NT$${expW(s.pettyOut)}・淨 ${s.pettyIn - s.pettyOut < 0 ? '−' : '+'}NT$${expW(Math.abs(s.pettyIn - s.pettyOut))}</span>`;
+  const structure = `<div class="card" style="margin-bottom:10px;">
+    <div class="sec-hd"><div class="card-title" style="margin:0;">支出結構</div><div style="font-size:11px;color:var(--ink3);">點類別可篩選明細</div></div>
+    ${bars}
+    <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;"><span style="font-size:11px;color:var(--ink3);">付款出處：</span>${srcChips || '<span style="font-size:11px;color:var(--ink3);">—</span>'}</div>
+    <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;">${gov}</div>
+  </div>`;
+  // 明細
+  const catCount = {}; D.rows.forEach(r => { catCount[r.category] = (catCount[r.category] || 0) + 1; });
+  const chips = ['', ...(D.categories || []).filter(c => catCount[c])].map(c => `<span class="perf-chip ${(_expFilterCat === c) ? 'ok' : 'na'}" style="cursor:pointer;" onclick="expSetCat('${c}')">${c ? (EXP_CAT_ICON[c] || '') + ' ' + c + ' ' + catCount[c] : '全部 ' + D.rows.length}</span>`).join(' ');
+  const list = `<div class="card" style="margin-bottom:0;">
+    <div class="sec-hd"><div class="card-title" style="margin:0;">明細（${_escf(D.month)}）</div>
+      <input class="inp" id="expQ" placeholder="搜明細／廠商／備註" value="${_escf(_expFilterQ)}" style="margin:0;width:200px;max-width:100%;padding:6px 10px;font-size:13px;" oninput="_expFilterQ=this.value;expRenderRows()"></div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px;">${chips}</div>
+    <div id="expRows"></div>
+  </div>`;
+  area.innerHTML = tiles + structure + list;
+  expRenderRows();
+}
+function expSetCat(c) { _expFilterCat = (_expFilterCat === c) ? '' : c; expRender(); const el = document.getElementById('expRows'); if (el) el.scrollIntoView({ block: 'nearest' }); }
+function expRenderRows() {
+  const el = document.getElementById('expRows'); if (!el || !_expData) return;
+  const q = _expFilterQ.trim().toLowerCase();
+  const rows = _expData.rows.filter(r => (!_expFilterCat || r.category === _expFilterCat) && (!q || [r.item, r.vendor, r.note, r.purpose, r.buyer, r.source].join(' ').toLowerCase().includes(q)));
+  if (!rows.length) { el.innerHTML = '<div style="font-size:12px;color:var(--ink3);padding:10px 0;">沒有符合的支出</div>'; return; }
+  const sum = rows.filter(r => r.category !== '零用金補款').reduce((a, r) => a + r.amount, 0);
+  el.innerHTML = rows.map(r => {
+    const topup = r.category === '零用金補款';
+    const flags = [topup ? '' : (r.invoice ? '<span class="exp-flag ok">發票✓</span>' : '<span class="exp-flag warn">發票未歸位</span>'), r.advance ? `<span class="exp-flag ${r.advanceSettled ? 'ok' : 'warn'}">代墊${r.advanceSettled ? '已結清 ' + r.advanceSettled : '未結清'}</span>` : ''].filter(Boolean).join(' ');
+    return `<div class="exp-row${topup ? ' topup' : ''}">
+      <div class="exp-row-main">
+        <div class="exp-row-l1"><span class="exp-date">${_escf(r.date.slice(5))}</span> <span class="perf-chip na">${EXP_CAT_ICON[r.category] || ''} ${_escf(r.category)}</span> ${r.vendor ? '<b>' + _escf(r.vendor) + '</b>' : ''} <span class="exp-item">${_escf(r.item)}</span></div>
+        <div class="exp-row-l2">${_escf(r.source)}${r.buyer ? '・' + _escf(r.buyer) : ''}${r.purpose ? '・' + _escf(r.purpose) : ''}${r.note ? '・<span style="color:var(--ink3);">' + _escf(r.note) + '</span>' : ''} ${flags}</div>
+      </div>
+      <div class="exp-row-r"><div class="exp-amt${topup ? ' in' : ''}">${topup ? '+' : ''}NT$${expW(r.amount)}</div>
+        <div class="exp-acts"><button class="btn btn-ghost btn-sm" onclick="expShowModal('${r.id}')" title="編輯">✏️</button><button class="btn btn-ghost btn-sm" style="color:var(--red);" onclick="expDeleteAsk('${r.id}')" title="刪除">🗑</button></div></div>
+    </div>`;
+  }).join('') + `<div style="text-align:right;font-size:12px;color:var(--ink2);padding:8px 2px 0;">篩選合計（不含零用金補款）NT$${expW(sum)}・${rows.length} 筆</div>`;
+}
+// ── 新增／編輯 ──
+function expShowModal(id) {
+  const D = _expData || { categories: ['食材', '酒材', '資材', '設備', '廠務', '雜支', '零用金補款'], sources: ['Molly零用金', '月結', 'Kevin轉帳', 'Kevin現金', 'Kevin信用卡', '其他'], vendors: [], purposes: [] };
+  const r = id ? (D.rows || []).find(x => x.id === id) : null;
+  if (id && !r) { toast('找不到該筆支出，請重新整理'); return; }
+  const v = r || { date: _localDate(), category: '食材', vendor: '', purpose: '', buyer: (curUser && curUser.username) || '', item: '', amount: '', source: 'Molly零用金', invoice: false, advance: false, advanceSettled: '', note: '' };
+  const opt = (arr, cur) => arr.map(x => `<option value="${_escf(x)}"${x === cur ? ' selected' : ''}>${_escf(x)}</option>`).join('');
+  const dl = (arr) => arr.map(x => `<option value="${_escf(x)}">`).join('');
+  const bg = makeModal(`
+    <div class="sec-hd"><div class="card-title" style="margin:0;">${r ? '✏️ 編輯支出' : '＋ 新增支出'}</div><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">✕ 關閉</button></div>
+    <div class="form-row">
+      <div class="fg" style="flex:1 1 130px"><label>日期 *</label><input class="inp" id="exp_date" type="date" value="${_escf(v.date)}"></div>
+      <div class="fg" style="flex:1 1 130px"><label>類別 *</label><select id="exp_category">${opt(D.categories, v.category)}</select></div>
+      <div class="fg" style="flex:1 1 130px"><label>付款出處 *</label><select id="exp_source">${opt(D.sources, v.source)}</select></div>
+    </div>
+    <div class="form-row">
+      <div class="fg" style="flex:2 1 200px"><label>明細 *</label><input class="inp" id="exp_item" value="${_escf(v.item)}" placeholder="例：全祥-四季春×1 茉莉香片×2"></div>
+      <div class="fg" style="flex:1 1 110px"><label>金額 *</label><input class="inp" id="exp_amount" type="number" min="0" step="1" inputmode="decimal" value="${_escf(v.amount)}"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg" style="flex:1 1 130px"><label>廠商</label><input class="inp" id="exp_vendor" list="expVendorDl" value="${_escf(v.vendor)}"><datalist id="expVendorDl">${dl(D.vendors || [])}</datalist></div>
+      <div class="fg" style="flex:1 1 130px"><label>採購目的</label><input class="inp" id="exp_purpose" list="expPurposeDl" value="${_escf(v.purpose)}"><datalist id="expPurposeDl">${dl(D.purposes || [])}</datalist></div>
+      <div class="fg" style="flex:1 1 110px"><label>採購人員</label><input class="inp" id="exp_buyer" list="expBuyerDl" value="${_escf(v.buyer)}"><datalist id="expBuyerDl">${dl(EXP_BUYERS)}</datalist></div>
+    </div>
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="fg" style="flex:0 0 auto;flex-direction:row;align-items:center;gap:6px;"><input type="checkbox" id="exp_invoice"${v.invoice ? ' checked' : ''}><label for="exp_invoice" style="font-size:13px;color:var(--ink);">發票已歸位</label></div>
+      <div class="fg" style="flex:0 0 auto;flex-direction:row;align-items:center;gap:6px;"><input type="checkbox" id="exp_advance"${v.advance ? ' checked' : ''} onchange="document.getElementById('exp_settledWrap').style.display=this.checked?'':'none'"><label for="exp_advance" style="font-size:13px;color:var(--ink);">員工代墊</label></div>
+      <div class="fg" id="exp_settledWrap" style="flex:1 1 140px;${v.advance ? '' : 'display:none;'}"><label>代墊結清日（留空＝未結清）</label><input class="inp" id="exp_settled" type="date" value="${_escf(v.advanceSettled)}"></div>
+    </div>
+    <div class="form-row"><div class="fg"><label>備註</label><input class="inp" id="exp_note" value="${_escf(v.note)}"></div></div>
+    <div id="expErr" style="color:var(--red);font-size:12px;min-height:16px;"></div>
+    <div class="fe" style="margin-top:6px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+      ${r ? `<button class="btn btn-ghost btn-sm" style="color:var(--red);margin-right:auto;" onclick="expDeleteAsk('${r.id}', this.closest('.modal-bg'))">🗑 刪除</button>` : ''}
+      <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button>
+      <button class="btn btn-primary btn-sm" id="expSaveBtn" onclick="expSaveClick(this, '${r ? r.id : ''}')">💾 儲存${r ? '' : '並關閉'}</button>
+    </div>`, { locked: true });
+  setTimeout(() => { const el = bg.querySelector('#exp_item'); if (el && !r) el.focus(); }, 50);
+}
+async function expSaveClick(btn, id) {
+  const g = k => document.getElementById('exp_' + k);
+  const p = { action: 'expSave', date: g('date').value, category: g('category').value, source: g('source').value, item: g('item').value.trim(), amount: g('amount').value,
+    vendor: g('vendor').value.trim(), purpose: g('purpose').value.trim(), buyer: g('buyer').value.trim(), invoice: g('invoice').checked ? 'TRUE' : 'FALSE',
+    advance: g('advance').checked ? 'TRUE' : 'FALSE', advanceSettled: g('advance').checked ? g('settled').value : '', note: g('note').value.trim() };
+  if (id) p.id = id;
+  const err = document.getElementById('expErr');
+  if (!p.date) { err.textContent = '請填日期'; return; }
+  if (!p.item) { err.textContent = '請填明細'; g('item').focus(); return; }
+  if (!(Number(p.amount) > 0)) { err.textContent = '金額須大於 0'; g('amount').focus(); return; }
+  err.textContent = ''; btn.disabled = true; const t = btn.textContent; btn.innerHTML = '<span class="btn-spin"></span>儲存中…';
+  const res = await api(p);
+  btn.disabled = false; btn.textContent = t;
+  if (!res.ok) { err.textContent = '儲存失敗：' + (res.error || ''); return; }
+  toast(id ? '✅ 已更新' : '✅ 已新增 NT$' + expW(p.amount));
+  btn.closest('.modal-bg').remove();
+  if (p.date.slice(0, 7) !== expMonth) { expMonth = p.date.slice(0, 7); const el = document.getElementById('expMonthInp'); if (el) el.value = expMonth; }
+  expLoad();
+}
+async function expDeleteAsk(id, modalBg) {
+  const r = (_expData && _expData.rows || []).find(x => x.id === id);
+  if (!confirm(`確定刪除這筆支出？\n${r ? r.date + ' ' + r.item + ' NT$' + expW(r.amount) : id}`)) return;
+  const res = await api({ action: 'expDelete', id });
+  if (!res.ok) { toast('刪除失敗：' + (res.error || '')); return; }
+  if (modalBg) modalBg.remove();
+  toast('🗑 已刪除'); expLoad();
+}
+// ── 固定成本 ──
+function expShowFixedModal() {
+  const f = (_expData && _expData.fixed) || null;
+  const month = expMonth;
+  const val = k => (f ? f[k] : 0) || '';
+  const hint = !f ? '' : f.empty ? '<span style="color:var(--red);">尚未有任何月份的固定成本，請填本月（之後月份會自動沿用）。</span>' : f.inherited ? `目前顯示的是 <b>${_escf(f.from)}</b> 的值（沿用）。按「儲存」即成為 ${_escf(month)} 自己的紀錄。` : `本月已填${f.updatedBy ? '・' + _escf(f.updatedBy) + ' ' + _escf(f.updatedAt) : ''}。`;
+  makeModal(`
+    <div class="sec-hd"><div class="card-title" style="margin:0;">⚙ 固定成本（${_escf(month)}）</div><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">✕ 關閉</button></div>
+    <div style="font-size:12px;color:var(--ink3);line-height:1.6;margin-bottom:8px;">${hint}<br>PT小李若已逐筆登在支出明細（廠務／人事），此欄填 0 免重複計算。</div>
+    <div class="form-row">${EXP_FIXED_FIELDS.map(([k, lb]) => `<div class="fg" style="flex:1 1 130px"><label>${lb}</label><input class="inp" id="fx_${k}" type="number" min="0" step="1" inputmode="decimal" value="${_escf(val(k))}" placeholder="0" oninput="expFixedSum()"></div>`).join('')}</div>
+    <div class="form-row"><div class="fg"><label>備註</label><input class="inp" id="fx_note" value="${_escf(f ? f.note : '')}"></div></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+      <div style="font-size:13px;color:var(--ink2);">合計 <b id="fxSum" style="color:var(--gold-dk);">NT$${expW(f ? f.total : 0)}</b>／月</div>
+      <div style="display:flex;gap:8px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" onclick="expFixedSave(this)">💾 儲存為 ${_escf(month)}</button></div>
+    </div>
+    <div id="fxErr" style="color:var(--red);font-size:12px;min-height:16px;margin-top:4px;"></div>`, { locked: true });
+}
+function expFixedSum() { const s = EXP_FIXED_FIELDS.reduce((a, [k]) => a + (Number(document.getElementById('fx_' + k).value) || 0), 0); const el = document.getElementById('fxSum'); if (el) el.textContent = 'NT$' + expW(s); }
+async function expFixedSave(btn) {
+  const p = { action: 'fixedSave', month: expMonth, note: document.getElementById('fx_note').value.trim() };
+  EXP_FIXED_FIELDS.forEach(([k]) => { p[k] = Number(document.getElementById('fx_' + k).value) || 0; });
+  btn.disabled = true; const t = btn.textContent; btn.innerHTML = '<span class="btn-spin"></span>儲存中…';
+  const res = await api(p);
+  btn.disabled = false; btn.textContent = t;
+  if (!res.ok) { document.getElementById('fxErr').textContent = '儲存失敗：' + (res.error || ''); return; }
+  toast('✅ 固定成本已存為 ' + expMonth);
+  btn.closest('.modal-bg').remove();
+  expLoad();
+}
 </script>
 </body>
 </html>
