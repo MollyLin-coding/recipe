@@ -127,7 +127,7 @@ function stripRecipePrefix(name) {
 
 // ── 入口 ────────────────────────────────────────────────────
 // v2.1 授權表：FB觀看 只允許這三個 action（後端為準，前端只是 UI）
-var FBVIEW_ALLOWED_ACTIONS = ['getRecipeList', 'getRecipe', 'changePassword', 'bootstrap'];
+var FBVIEW_ALLOWED_ACTIONS = ['getRecipeList', 'getRecipe', 'changePassword', 'bootstrap', 'whoami'];
 // v3.7 P0-1 角色權限矩陣（後端統一把關；補「持有效 token 即可呼叫任意寫入 action」的洞）。
 // 規則：列於此表的 action 僅限指定角色；未列者＝任何已登入者皆可（讀取與日常操作）。
 // admin 一律放行（各清單皆含 admin）。FB觀看 另有更嚴格白名單（見 FBVIEW_ALLOWED_ACTIONS）。
@@ -269,6 +269,7 @@ function doGet(e) {
         })();
         break;                        // 環境探針(確認打到哪份主表)
       case 'login':          result = login(p); break;
+      case 'whoami':         result = { ok: true, user: p._user, role: p._role }; break;   // v3.43 F5 還原專用：驗 token 零 Sheets I/O（原 probe 用 getRecipeList，冷快取要掃全部酒譜表 3~20 秒，還原停留太久＝被誤認為登出）
       case 'changePassword': result = changePassword(p); break;
       case 'checkUser':      result = checkUser(p); break;               // 帳號診斷(遮罩、不回密碼)
       case '__seedTestUsers': result = __seedTestUsers(); break;         // 沙盒限定：種驗收用測試帳號(PROD 直接拒絕)
