@@ -428,6 +428,7 @@ tbody tr:hover td{background:#faf3e8;}
       <input class="inp" id="loginPass" type="password" placeholder="密碼" inputmode="numeric">
       <button class="btn btn-primary btn-full" id="loginBtn" onclick="doLogin()">登入</button>
       <div id="loginErr"></div>
+      <div id="loginKickInfo" style="display:none;font-size:11px;color:var(--ink3);margin:4px 0 8px;word-break:break-all;text-align:center;"></div>
       <!-- APP 版本號（promote.sh 升版時自動蓋上 tag，用於確認手機拿到的是不是新版） -->
       <div id="appVer" style="text-align:center;font-size:11px;color:var(--ink3);margin-top:6px;letter-spacing:.5px;"></div>
     </div>
@@ -556,6 +557,7 @@ async function api(params, silent) {
         const j = JSON.parse(txt);
         if (j && j.error === 'SESSION_EXPIRED' && curUser && !_sessExpiredShown) {
           _sessExpiredShown = true;
+          _kickLog('操作中-後端回SESSION_EXPIRED', 'action=' + _act);   // v3.42.1 黑盒子
           toast('登入逾時，請重新登入');
           doLogout();
           setTimeout(() => { _sessExpiredShown = false; }, 2000);
@@ -785,11 +787,35 @@ async function _bootApp(username, role) {
 // session 存 sessionStorage：同分頁重新整理存活、關閉分頁即清；token 仍受後端 6h TTL 管
 function _sessSave(username, role) { try { sessionStorage.setItem('np_sess', JSON.stringify({ t: curToken, u: username, r: role, at: Date.now() })); } catch (e) {} }
 function _sessClear() { try { sessionStorage.removeItem('np_sess'); } catch (e) {} }
+// v3.42.1 登出黑盒子：記錄每次「被登出／session 被清」的確切原因（localStorage 跨 F5 存活，最近 5 筆）。
+//   背景：主公 2026-09-06 17:06 於正式站 F5 被踢，但沙盒重現不了、後端事後檢查健康——
+//   間歇性問題無法事後定罪，只能在下一次發生的當下抓現行。登入頁會顯示最近一筆。
+function _kickLog(path, detail) {
+  try {
+    const log = JSON.parse(localStorage.getItem('np_kickLog') || '[]');
+    log.unshift({ at: new Date().toLocaleString('zh-TW', { hour12: false }), path: path, detail: String(detail || '').slice(0, 180), ver: APP_VERSION });
+    localStorage.setItem('np_kickLog', JSON.stringify(log.slice(0, 5)));
+  } catch (e) {}
+}
+function _kickLogShow() {
+  try {
+    const log = JSON.parse(localStorage.getItem('np_kickLog') || '[]');
+    if (!log.length) return;
+    const k = log[0];
+    const el = document.getElementById('loginKickInfo');
+    if (el) { el.style.display = ''; el.textContent = '🔎 上次登出：' + k.at + '｜' + k.path + '｜' + k.detail; }
+  } catch (e) {}
+}
 // v3.19：切分頁即把當前分頁記進 session，F5 還原時回到原分頁（原本一律跳回訂單）
 function _sessTab(tab) { try { const s = JSON.parse(sessionStorage.getItem('np_sess') || 'null'); if (s) { s.tab = tab; sessionStorage.setItem('np_sess', JSON.stringify(s)); } } catch (e) {} }
 async function _sessRestore() {
   let s = null; try { s = JSON.parse(sessionStorage.getItem('np_sess') || 'null'); } catch (e) {}
-  if (!s || !s.t || !s.u) return false;
+  if (!s || !s.t || !s.u) {
+    // v3.42.1：區分「新分頁本來就沒 session」與「session 有殘骸但缺 token」——後者才是異常
+    if (s) _kickLog('F5還原-session殘缺', 'keys=' + Object.keys(s).join(',') + ' hasT=' + !!s.t);
+    _kickLogShow();
+    return false;
+  }
   const err = document.getElementById('loginErr');
   if (err) { err.style.color = 'var(--ink2)'; err.innerHTML = '<span class="ld-spin"></span>恢復登入中…'; }   // v3.36 轉圈取代紅字
   curToken = s.t;
@@ -799,11 +825,14 @@ async function _sessRestore() {
     curToken = null;
     // v3.19：只有 token 真的失效才清 session；網路瞬斷/限流(_offline)保留登入狀態，
     //   請使用者再重新整理一次即自動還原（原本一律清掉＝暫時斷網也被逼重新登入）
+    _kickLog(probe && probe._offline ? 'F5還原-網路瞬斷(登入保留)' : 'F5還原-probe失敗(清session)',
+      'probe=' + JSON.stringify({ ok: probe && probe.ok, error: probe && probe.error, offline: probe && probe._offline }));
     if (probe && probe._offline) {
       if (err) { err.style.color = ''; err.textContent = '⚠ 網路連線失敗，請再重新整理一次（登入狀態已保留）'; }
     } else {
       _sessClear();
       if (err) { err.style.color = ''; err.textContent = ''; }
+      _kickLogShow();
     }
     return false;
   }
