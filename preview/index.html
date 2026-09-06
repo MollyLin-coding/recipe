@@ -496,7 +496,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.43.1';
+const APP_VERSION='v3.44';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -1814,7 +1814,7 @@ function rdLoadFromDetail(id, btn) {
   let ings = r.ingredients || [];
   if (typeof ings === 'string') { try { ings = JSON.parse(ings); } catch (e) { ings = []; } }
   if (!Array.isArray(ings)) ings = [];
-  rdState = { ings, tv: r.volume || 4000, bt: r.bottle || '4L桶', title: r.name || '', client: r.client || '', matSel: {}, srcId: r.id };  // v3.16 記住來源，儲存時可更新原記錄
+  rdState = { ings, tv: r.volume || 4000, bt: r.bottle || '4L桶', title: r.name || '', client: r.client || '', matSel: {}, srcId: r.id, srcName: r.name || '' };  // v3.16 記住來源，儲存時可更新原記錄；v3.44 srcName 供改名防呆
   btn.closest('.modal-bg').remove();
   switchTab('rd');
   toast('已載入：' + (r.name || '未命名'));
@@ -2186,13 +2186,18 @@ async function rdSave() {
   // v3.16 從既有記錄載入編輯時，由使用者當下決定要覆蓋還是另存
   //   （原本永遠新增一筆，導致「刪掉的東西在詳情還看得到」＝主公 8/21 回報的問題）
   let _sid = rdState.srcId || '';
-  if (_sid && !confirm('「' + (rdState.title || '未命名') + '」是從既有記錄載入編輯的。\n\n按「確定」＝更新原記錄（覆蓋舊內容）\n按「取消」＝另存成新的一筆')) _sid = '';
+  // v3.44 改名防呆（主公 9/6 事故：載入 V2.2→改標題成 V2.3→按儲存＋確定＝V2.2 就地改名覆寫消失）：
+  //   標題與載入時不同＝十之八九要另存新版 → 預設走「另存」，要覆蓋得再明確按一次取消
+  if (_sid && rdState.srcName && (rdState.title || '') !== rdState.srcName) {
+    if (confirm('偵測到名稱已從「' + rdState.srcName + '」改為「' + (rdState.title || '未命名') + '」。\n\n按「確定」＝另存成新的一筆（原「' + rdState.srcName + '」保留不動）✅ 建議\n按「取消」＝覆蓋原記錄（舊名稱與舊內容將永久消失）')) _sid = '';
+  } else if (_sid && !confirm('「' + (rdState.title || '未命名') + '」是從既有記錄載入編輯的。\n\n按「確定」＝更新原記錄（覆蓋舊內容）\n按「取消」＝另存成新的一筆')) _sid = '';
   const sp = window._rdPctSum;
   if (sp !== undefined && Math.abs(sp - 100) >= 0.1 && !confirm(`目前占比總和 ${sp.toFixed(1)}%（與 100% 不符），確定仍要儲存？`)) return;
   const res = await api({ action:'saveRdRecord', id:_sid, creator:curUser.username, client:rdState.client||'', name:rdState.title||'未命名', volume:rdState.tv, bottle:rdState.bt, ingredients:JSON.stringify(_kept), results:JSON.stringify(window._rdRes||{}) });
   if (res.ok) {
     if (_dropped > 0) { rdState.ings = _kept; rdRender(); rdCalc(); }   // 畫面同步濾除結果
     rdState.srcId = res.id;   // 之後再按儲存，續存同一筆
+    rdState.srcName = rdState.title || '';   // v3.44 同步基準名，避免連續儲存誤觸改名防呆
     toast((res.updated ? '已更新這筆試算！' : '試算已儲存！') + (_dropped > 0 ? ('（已略過 ' + _dropped + ' 列空白原料）') : ''));
     rdRenderSavedList(true);
   } else toast('儲存失敗:'+res.error); // v3.9.1 存後刷新常駐清單
@@ -2214,6 +2219,7 @@ async function rdSaveAs() {
     if (_dropped > 0) { rdState.ings = _kept; rdRender(); rdCalc(); }
     rdState.title = nm;
     rdState.srcId = res.id;                     // 之後按「儲存」＝續存這筆新檔，不會誤蓋舊版
+    rdState.srcName = nm;                       // v3.44 同步基準名
     const _t = document.getElementById('rd_title'); if (_t) _t.value = nm;
     toast('已另存新檔：' + nm + (_dropped > 0 ? ('（已略過 ' + _dropped + ' 列空白原料）') : ''));
     rdRenderSavedList(true);
@@ -2241,7 +2247,7 @@ function rdLoadOne(i, modalBg) {
   let ings = r.ingredients || [];
   if (typeof ings === 'string') { try { ings = JSON.parse(ings); } catch(e) { ings = []; } }
   if (!Array.isArray(ings)) ings = []; // 防呆：極舊壞資料 ingredients 非陣列(如誤存結果物件)→空列載入不炸頁
-  rdState = { ings, tv:r.volume||4000, bt:r.bottle||'4L桶', title:r.name||'', client:r.client||'', srcId:r.id };  // v3.16
+  rdState = { ings, tv:r.volume||4000, bt:r.bottle||'4L桶', title:r.name||'', client:r.client||'', srcId:r.id, srcName:r.name||'' };  // v3.16；v3.44 srcName 供改名防呆
   if (!rdState.matSel) rdState.matSel = {};
   modalBg.remove();
   switchTab('rd');
