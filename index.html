@@ -45,6 +45,11 @@ select.inp{appearance:none;-webkit-appearance:none;background-image:url("data:im
 .btn-success{background:var(--green);color:#fff;}
 .btn-full{width:100%;}
 #loginErr{color:var(--red);font-size:13px;text-align:center;min-height:18px;margin-top:8px;}
+/* v3.43 F5 還原期間：整個登入表單藏起來，只留標題與「恢復登入中」——
+   否則驗證的幾秒內表單完全可見可操作，任何人都會以為被登出而重新輸入密碼（主公 9/6 的實際遭遇） */
+body.sess-restoring #loginUserGrid, body.sess-restoring .login-user-label,
+body.sess-restoring #loginPass, body.sess-restoring #loginBtn { display:none !important; }
+body.sess-restoring #loginErr { color: var(--ink2); font-size:14px; padding:18px 0; }
 
 /* APP layout */
 #app{display:none;flex-direction:column;height:100vh;height:100dvh;overflow:hidden;}
@@ -490,7 +495,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.42.1';
+const APP_VERSION='v3.43';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -817,16 +822,20 @@ async function _sessRestore() {
     return false;
   }
   const err = document.getElementById('loginErr');
+  document.body.classList.add('sess-restoring');   // v3.43：還原期間隱藏登入表單（見 CSS 註解）
   if (err) { err.style.color = 'var(--ink2)'; err.innerHTML = '<span class="ld-spin"></span>恢復登入中…'; }   // v3.36 轉圈取代紅字
   curToken = s.t;
-  // 輕量驗 token：getRecipeList 全角色可打(含FB觀看白名單)且後端有 300s 快取；SESSION_EXPIRED/失敗=token失效
-  const probe = await api({ action: 'getRecipeList' }, true);
+  // v3.43 驗 token 改打 whoami：零 Sheets I/O、1~2 秒回。原本用 getRecipeList——冷快取要掃全部
+  // 酒譜表（3~20 秒），還原停留太久＋表單可見＝被誤認為「F5 被登出」（主公 9/6 實際遭遇）。
+  // 舊註解：getRecipeList 全角色可打(含FB觀看白名單)且後端有 300s 快取；SESSION_EXPIRED/失敗=token失效
+  const probe = await api({ action: 'whoami' }, true);
   if (!probe || !probe.ok) {
     curToken = null;
     // v3.19：只有 token 真的失效才清 session；網路瞬斷/限流(_offline)保留登入狀態，
     //   請使用者再重新整理一次即自動還原（原本一律清掉＝暫時斷網也被逼重新登入）
     _kickLog(probe && probe._offline ? 'F5還原-網路瞬斷(登入保留)' : 'F5還原-probe失敗(清session)',
       'probe=' + JSON.stringify({ ok: probe && probe.ok, error: probe && probe.error, offline: probe && probe._offline }));
+    document.body.classList.remove('sess-restoring');   // v3.43：失敗（不論原因）都要把登入表單還回來
     if (probe && probe._offline) {
       if (err) { err.style.color = ''; err.textContent = '⚠ 網路連線失敗，請再重新整理一次（登入狀態已保留）'; }
     } else {
@@ -837,6 +846,7 @@ async function _sessRestore() {
     return false;
   }
   window._restoreTab = s.tab || null; // v3.19 回到重新整理前的分頁
+  document.body.classList.remove('sess-restoring');   // v3.43
   await _bootApp(s.u, s.r);
   if (err) { err.style.color = ''; err.textContent = ''; }
   return true;
