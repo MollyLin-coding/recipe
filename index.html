@@ -49,7 +49,8 @@ select.inp{appearance:none;-webkit-appearance:none;background-image:url("data:im
    否則驗證的幾秒內表單完全可見可操作，任何人都會以為被登出而重新輸入密碼（主公 9/6 的實際遭遇） */
 body.sess-restoring #loginUserGrid, body.sess-restoring .login-user-label,
 body.sess-restoring #loginPass, body.sess-restoring #loginBtn { display:none !important; }
-body.sess-restoring #loginErr { color: var(--ink2); font-size:14px; padding:18px 0; }
+body.sess-restoring #loginErr { color: var(--ink) !important; font-size:19px; font-weight:700; padding:30px 0; }   /* v3.43.1 主公指示放大 */
+body.sess-restoring #loginErr .ld-spin { width:22px; height:22px; border-width:3px; vertical-align:-4px; margin-right:10px; }
 
 /* APP layout */
 #app{display:none;flex-direction:column;height:100vh;height:100dvh;overflow:hidden;}
@@ -495,7 +496,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.43';
+const APP_VERSION='v3.43.1';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -846,8 +847,9 @@ async function _sessRestore() {
     return false;
   }
   window._restoreTab = s.tab || null; // v3.19 回到重新整理前的分頁
-  document.body.classList.remove('sess-restoring');   // v3.43
-  await _bootApp(s.u, s.r);
+  // v3.43.1：摘 class 移到 _bootApp「之後」——v3.43 在此先摘＝bootstrap 冷啟的 10~100 秒表單又現形
+  if (err) { err.innerHTML = '<span class="ld-spin"></span>登入已確認，載入資料中…'; }
+  try { await _bootApp(s.u, s.r); } finally { document.body.classList.remove('sess-restoring'); }
   if (err) { err.style.color = ''; err.textContent = ''; }
   return true;
 }
