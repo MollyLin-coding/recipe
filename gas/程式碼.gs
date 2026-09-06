@@ -466,7 +466,18 @@ function _getSession_(token) {
   var u = (o.u != null) ? o.u : o.username;
   var r = (o.r != null) ? o.r : o.role;
   if (!u) return null;
-  return { username: u, role: r, dealer: (o.d != null ? String(o.d) : '') };
+  var sess = { username: u, role: r, dealer: (o.d != null ? String(o.d) : '') };
+  // v3.42 滑動續期（修「F5 被強制登出」）：原本 token 是登入起算 6h 的固定死線，
+  //   活躍使用者到點照樣被踢（F5 還原 probe 失敗＝主公看到的強制登出）。
+  //   改為：剩餘壽命 < 一半（3h）就地雙寫續 6h → 有在用就不斷線；閒置超過 6h 才需重登（安全底線不變）。
+  //   舊格式（無 exp）項目也會在此一併升級為含 exp 的新格式。
+  try {
+    var _now = (new Date()).getTime();
+    if (!o.exp || (o.exp - _now) < SESSION_TTL_SEC * 500) {   // *500 = *1000/2 → 剩餘 < 3h
+      _sessPut_(token, sess);
+    }
+  } catch (e) {}
+  return sess;
 }
 // 清掉 Properties 裡已過期的 session（login 時呼叫；Properties 總量上限 500KB，不清會累積）
 function _sessSweep_() {
