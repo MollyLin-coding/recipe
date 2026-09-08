@@ -3249,8 +3249,8 @@ function showOrderDetail(orderNo) {
       <span class="badge ${it.status === '完成' ? 'bg-green' : 'bg-yellow'}" style="font-size:9px;">${it.status || '待製作'}</span>
       <button class="btn btn-ghost btn-sm" style="padding:3px 7px;font-size:11px;" onclick="rcShowHistory(${idx},${i})">📋 Run Card</button>
       ${canAct && it.status !== '完成' && it.sheet ? `<button class="btn btn-success btn-sm" style="padding:3px 7px;font-size:11px;" onclick="this.closest('.modal-bg').remove();showCompleteModal(${idx},${i})">完成回報</button>` : ''}
-      ${canAct && isConsignOrder(o) && ((it.remainStock == null ? it.qty : it.remainStock) > 0) ? `<button class="btn btn-sm" style="padding:3px 7px;font-size:11px;background:var(--gold-dk);color:#fff;font-weight:700;" onclick="consignShipItem(${idx},${i})">📦 寄出給經銷商</button>` : ''}
-    </div>`).join('');
+      ${canAct && isConsignOrder(o) && ((it.remainStock == null ? it.qty : it.remainStock) > 0) ? `<label title="勾選後可用下方「一次寄出勾選款」" style="display:flex;align-items:center;cursor:pointer;margin:0;"><input type="checkbox" class="cs_pick" data-ii="${i}" onchange="consignPickSum()" style="width:17px;height:17px;margin:0;"></label><button class="btn btn-sm" style="padding:3px 7px;font-size:11px;background:var(--gold-dk);color:#fff;font-weight:700;" onclick="consignShipItem(${idx},${i})">📦 寄出給經銷商</button>` : ''}
+    </div>`).join('') + consignBatchBarHtml(o, idx, canAct);   // v3.46 勾選多款一次寄出
   const row = (k, val) => `<div style="display:flex;gap:8px;font-size:12px;margin-top:3px;"><span style="flex:0 0 92px;color:var(--ink3);">${k}</span><span style="flex:1;">${val}</span></div>`;
   const finShown = o.finalAdjusted && o.finalAdjustedAmount !== '' && o.finalAdjustedAmount != null
     ? `<s style="opacity:.6;">NT$${o.finalAmount !== '' ? o.finalAmount : (o.balance || 0)}</s> → NT$${o.finalAdjustedAmount}（特殊調整）`
@@ -3737,6 +3737,82 @@ function showOrderModal(edit) {
 
 // 完成回報（admin+倉管）：接 completeOrderItem，沿用隱藏頁 doCompleteTask 的代工費/寫製作記錄邏輯
 // v3.32 主公指示：寄售訂單每款一鍵「寄出給經銷商」＝該款寄倉餘量全出（走 addShipment：扣南坡萬成品庫存＋自動進經銷商門市在庫＋叫貨單狀態→已出貨）
+// v3.46 主公指示（2026-09-08）：一款一款按「寄出給經銷商」每次都要等 GAS 幾秒 → 每款加勾選框，勾好後一次送 addShipment（一個出貨批次、整批先驗庫存、任一款不足整批不寫入）
+function consignBatchBarHtml(o, idx, canAct) {
+  if (!canAct || !isConsignOrder(o)) return '';
+  const n = (o.items || []).filter(it => ((it.remainStock == null ? it.qty : it.remainStock) || 0) > 0).length;
+  if (n < 2) return '';
+  return `<div id="csBatchBar" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;padding:8px 10px;border:1px dashed var(--gold);border-radius:8px;background:var(--gold-lt);font-size:12px;">
+    <label style="display:flex;gap:6px;align-items:center;cursor:pointer;margin:0;font-weight:600;"><input type="checkbox" id="csPickAll" onchange="consignPickAll(this)" style="width:17px;height:17px;margin:0;"> 全選可寄款（${n}）</label>
+    <span id="csPickSum" style="color:var(--ink3);">尚未勾選</span>
+    <button class="btn btn-sm" id="csBatchBtn" disabled style="margin-left:auto;background:var(--gold-dk);color:#fff;font-weight:700;" onclick="consignShipBatch(${idx})">📦 一次寄出勾選款</button>
+  </div>`;
+}
+function consignPickAll(cb) { document.querySelectorAll('.cs_pick').forEach(c => { c.checked = cb.checked; }); consignPickSum(); }
+function consignPickSum() {
+  const all = [...document.querySelectorAll('.cs_pick')], on = all.filter(c => c.checked);
+  const el = document.getElementById('csPickSum'); if (el) el.textContent = on.length ? `已勾 ${on.length} 款` : '尚未勾選';
+  const b = document.getElementById('csBatchBtn'); if (b) { b.disabled = !on.length; b.textContent = on.length ? `📦 一次寄出勾選款（${on.length}）` : '📦 一次寄出勾選款'; }
+  const a = document.getElementById('csPickAll'); if (a) a.checked = all.length > 0 && on.length === all.length;
+}
+async function consignShipBatch(oi) {
+  const o = (window._mgmtOrders || [])[oi]; if (!o) return;
+  const picks = [...document.querySelectorAll('.cs_pick:checked')].map(c => Number(c.dataset.ii)).filter(ii => o.items && o.items[ii]);
+  if (!picks.length) { toast('請先勾選要寄出的酒款'); return; }
+  toast('查詢南坡萬成品庫存…', 1500);
+  const pre = await api({ action: 'getShipments', orderNo: o.orderNo }, true);
+  const info = (pre && pre.ok && pre.stockInfo) || {};
+  const rows = picks.map(ii => {
+    const it = o.items[ii], remain = (it.remainStock == null ? it.qty : it.remainStock) || 0;
+    const si = info[it.product], tracked = !!(si && si.tracked), stock = tracked ? (Math.floor(Number(si.stock)) || 0) : null;
+    return { ii, it, remain, tracked, stock, maxQ: tracked ? Math.min(remain, stock) : remain };
+  });
+  const date = _localDate();
+  const m = makeModal(`<div class="modal-title">📦 一次寄出給 ${_escf(clientLabel(o.client))}</div>
+    <div style="font-size:12px;color:var(--ink3);margin-bottom:6px;">${o.orderNo}・寄出日 ${date}・共 ${rows.length} 款。每款預設＝可寄最大量（寄倉餘量與南坡萬成品庫存取小）；改成 0 即略過該款。</div>
+    <div class="tbl-wrap"><table><thead><tr><th>酒款</th><th class="tr">寄倉餘量</th><th class="tr">南坡萬庫存</th><th class="tr">本次寄出</th></tr></thead><tbody>
+    ${rows.map((r, k) => `<tr><td>${_escf(r.it.product)}<div style="font-size:11px;color:var(--ink3);">${_escf(r.it.volume || '')}${r.it.bottleType ? '・' + _escf(r.it.bottleType) : ''}</div></td><td class="tr">${r.remain}</td><td class="tr"${r.tracked && r.stock <= 0 ? ' style="color:var(--red);font-weight:700;"' : ''}>${r.tracked ? r.stock : '不追蹤'}</td><td class="tr"><input type="number" inputmode="numeric" min="0" max="${r.maxQ}" id="csb_q_${k}" value="${r.maxQ}" oninput="consignBatchSum()" style="width:70px;padding:5px;text-align:right;border:1px solid var(--border);border-radius:6px;font-size:13px;"${r.maxQ <= 0 ? ' disabled' : ''}></td></tr>`).join('')}
+    </tbody></table></div>
+    ${rows.some(r => r.tracked && r.stock <= 0) ? '<div style="font-size:12px;color:var(--red);margin-top:6px;">⚠ 紅字款南坡萬成品庫存 0，本次自動略過；請先到「成品庫存」入庫再寄。</div>' : ''}
+    <div id="csbSum" style="font-size:13px;margin-top:8px;"></div>
+    <div style="font-size:12px;color:var(--ink3);margin-top:6px;line-height:1.6;">送出＝一個出貨批次：扣南坡萬成品庫存、自動加入經銷商門市在庫、叫貨單標為已出貨／部分出貨。整批先驗庫存，任一款不足整批不寫入。</div>
+    <div class="fe" style="margin-top:10px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-sm" id="csb_sub" style="background:var(--gold-dk);color:#fff;font-weight:700;">📦 確認寄出</button></div>`, { locked: true });
+  m._rows = rows; window._csbModal = m; consignBatchSum();
+  const b = m.querySelector('#csb_sub');
+  b.onclick = () => lockRun(b, async () => {
+    const lines = [], errs = [];
+    rows.forEach((r, k) => {
+      const el = m.querySelector('#csb_q_' + k), q = Math.floor(Number(el && el.value)) || 0;
+      if (q <= 0) return;
+      if (q > r.remain) errs.push(r.it.product + ' 超過寄倉餘量 ' + r.remain);
+      else if (r.tracked && q > r.stock) errs.push(r.it.product + ' 超過南坡萬庫存 ' + r.stock);
+      else lines.push({ product: r.it.product, bottleType: r.it.bottleType || '', qty: q });
+    });
+    if (errs.length) { toast(errs[0], 4500); return; }
+    if (!lines.length) { toast('沒有要寄出的數量'); return; }
+    const res = await api({ action: 'addShipment', orderNo: o.orderNo, date, lines: JSON.stringify(lines), note: '寄出給經銷商（勾選 ' + lines.length + ' 款一次寄出）', operator: (curUser && curUser.username) || '' });
+    if (!res.ok) {
+      makeModal('<div class="modal-title" style="color:var(--red);">✕ 寄出失敗，未寫入任何資料</div>'
+        + '<div style="font-size:13px;line-height:1.7;">' + _escf(res.error || '') + '</div>'
+        + '<div style="font-size:12px;color:var(--ink3);margin-top:10px;">整批先驗庫存、任一款不足整批不寫入。若是「成品庫存不足」：請先到「成品庫存」分頁入庫，或把該款本次寄出改小／改 0。</div>'
+        + '<div class="fe" style="margin-top:12px;"><button class="btn btn-primary btn-sm" onclick="this.closest(\'.modal-bg\').remove()">知道了</button></div>');
+      return;
+    }
+    const sd = res.stockDeducted || [], total = lines.reduce((a, l) => a + l.qty, 0);
+    toast(`已寄出 ${lines.length} 款共 ${total} 瓶（一個出貨批次）${res.consignIn ? '・門市在庫已更新' : ''}${res.restockUpdated ? '・叫貨單→' + (res.allShipped ? '已出貨' : '部分出貨') : ''}${sd.length ? '｜扣成品庫存 ' + sd.map(d => d.product + '−' + d.qty).join('、') : ''}`, 6000);
+    document.querySelectorAll('.modal-bg').forEach(x => x.remove());
+    await loadOrderMgmt(); if (typeof showShipDateAlerts === 'function') showShipDateAlerts();
+    if (typeof renderStockPage === 'function' && curTab === 'stock') renderStockPage();
+    showOrderDetail(o.orderNo);
+  });
+}
+function consignBatchSum() {
+  const m = window._csbModal; if (!m || !m._rows) return;
+  let n = 0, q = 0;
+  m._rows.forEach((r, k) => { const el = m.querySelector('#csb_q_' + k); const v = Math.floor(Number(el && el.value)) || 0; if (v > 0) { n++; q += v; } });
+  const el = m.querySelector('#csbSum'); if (el) el.innerHTML = n ? `本次寄出 <b>${n}</b> 款・共 <b>${q}</b> 瓶` : '<span style="color:var(--red);">沒有要寄出的數量</span>';
+  const b = m.querySelector('#csb_sub'); if (b) b.disabled = !n;
+}
 async function consignShipItem(oi, ii) {
   const o = (window._mgmtOrders || [])[oi]; if (!o) return;
   const it = (o.items || [])[ii]; if (!it) return;
