@@ -135,7 +135,7 @@ var FBVIEW_ALLOWED_ACTIONS = ['getRecipeList', 'getRecipe', 'changePassword', 'b
 var ROLE_MATRIX = {
   // 訂單建立/編輯 → admin + PM(v3.9 主公拍板：Vic/阿軒可自建單；金流/配送編輯/刪除仍僅 admin)
   createOrder: ['admin', 'PM'], updateOrder: ['admin', 'PM'], updateOrderFinance: ['admin'],
-  updateOrderDelivery: ['admin'], deleteOrder: ['admin'],
+  updateOrderDelivery: ['admin'], deleteOrder: ['admin'], removeOrderItem: ['admin'],   // v3.51
   reviewApply: ['admin'], reviewRdApply: ['admin'],
   migrateOrderNos: ['admin'], migrateOrderTypes: ['admin'], backfillOrderCreators: ['admin'],
   deleteBatchRecord: ['admin'], deleteRunCard: ['admin'], deleteRdRecord: ['admin'],
@@ -331,6 +331,7 @@ function doGet(e) {
       case 'fixedSave':              result = fixedSave(p); break;              // v3.40 固定成本：寫該月列(admin)
       case 'perfReset':              result = perfReset(p); break;              // v3.39 業績模型：恢復種子預設(admin；confirm=業績模型)
       case 'deleteShipment':         result = deleteShipment(p); break;          // 實際出貨紀錄：刪除某一次出貨(v3.26, admin 限定)
+      case 'removeOrderItem':        result = removeOrderItem(p); break;         // v3.51 刪除訂單單一酒款列（admin；無出貨紀錄／未完成才可）
       case 'getBottleOverview':      result = getBottleOverview(); break;        // 玻璃瓶庫存
       case 'bottleIn':               result = bottleIn(p); break;                // 玻璃瓶庫存
       case 'bottleOut':              result = bottleOut(p); break;               // 玻璃瓶庫存
@@ -381,7 +382,7 @@ function doGet(e) {
 // 記「寫入動作」＋「敏感讀取(開酒譜)」到主表「操作紀錄」分頁：時間/帳號/角色/動作/摘要/結果。
 // 摘要只收白名單參數(絕不記 password/token/data 大 JSON)；appendRow 失敗不阻斷業務。
 var AUDIT_ACTIONS = {
-  createOrder:1, updateOrder:1, updateOrderFinance:1, updateOrderDelivery:1, deleteOrder:1,
+  createOrder:1, updateOrder:1, updateOrderFinance:1, updateOrderDelivery:1, deleteOrder:1, removeOrderItem:1,
   completeOrderItem:1, confirmShipDate:1, shipOrder:1,
   stockIn:1, stockOut:1, bottleIn:1, bottleOut:1, addBottleItem:1, setSafetyLevel:1,
   addShipment:1, deleteShipment:1,
@@ -1426,6 +1427,51 @@ function updateOrder(p) {
 }
 
 // ── v2.5 刪除訂單（admin 限定，不可復原；刪前記異動紀錄）──
+// v3.51 主公指示：訂單多 key 的酒款可直接在詳情刪除，不必進「編輯訂單」重填整張
+//   防線：admin 限定／該款在「出貨紀錄」分頁有任何列即拒（請先刪批）／狀態完成或已有 RunCard(batchId) 即拒／至少保留一款（整張要刪走 deleteOrder）
+function removeOrderItem(p) {
+  if (p._role !== 'admin') return { ok: false, error: '僅管理員可刪除酒款' };
+  const orderNo = String((p && p.orderNo) || '').trim();
+  const idx = Math.floor(Number(p && p.itemIndex));
+  if (!orderNo) return { ok: false, error: '缺少 orderNo' };
+  if (!(idx >= 0)) return { ok: false, error: '缺少 itemIndex' };
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('訂單主表');
+  if (!ws) return { ok: false, error: '找不到訂單主表分頁' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const data = ws.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) !== orderNo) continue;
+      let items = [];
+      try { items = data[i][4] ? JSON.parse(data[i][4]) : []; } catch (e) { return { ok: false, error: '訂單酒款明細 JSON 解析失敗' }; }
+      if (idx >= items.length) return { ok: false, error: '找不到第 ' + (idx + 1) + ' 款' };
+      if (items.length <= 1) return { ok: false, error: '訂單至少要保留一款；整張不要請用「刪除訂單」' };
+      const it = items[idx] || {};
+      if (String(it.status || '') === '完成') return { ok: false, error: '「' + it.product + '」已完成回報，不可刪除' };
+      if (it.batchId) return { ok: false, error: '「' + it.product + '」已有 Run Card，不可刪除' };
+      // 出貨紀錄有這款就擋（同款重複列以「該款總出貨」判斷：只要出過就要先刪批，避免刪錯列）
+      let shipped = 0;
+      try {
+        _shipRows_().forEach(function (r) { if (String(r[SHP.orderNo]) === orderNo && String(r[SHP.product]) === String(it.product || '')) shipped += Math.floor(Number(r[SHP.qty])) || 0; });
+      } catch (e) {}
+      const sameProd = items.filter(function (x) { return String(x.product || '') === String(it.product || ''); }).length;
+      if (shipped > 0 && sameProd === 1) return { ok: false, error: '「' + it.product + '」已有出貨紀錄 ' + shipped + ' 瓶，請先到「實際出貨紀錄」刪除該批再刪此款' };
+      // 同款重複列：只要總出貨量 ≤ 其他列訂購量之和，就允許刪這一列（＝刪的是多 key 的那列）
+      if (shipped > 0 && sameProd > 1) {
+        const otherQty = items.reduce(function (a, x, k) { return a + ((k !== idx && String(x.product || '') === String(it.product || '')) ? (Math.floor(Number(x.qty)) || 0) : 0); }, 0);
+        if (shipped > otherQty) return { ok: false, error: '「' + it.product + '」總出貨 ' + shipped + ' 瓶超過其他同款列訂購量 ' + otherQty + '，請先刪除多出的出貨批次' };
+      }
+      const removed = items.splice(idx, 1)[0];
+      ws.getRange(i + 1, 5).setValue(JSON.stringify(items));
+      _logOrderChange_(orderNo, p._user || '', '刪除酒款',
+        '第 ' + (idx + 1) + ' 款「' + (removed.product || '') + '」×' + (removed.qty || 0) + '（' + (removed.bottleType || '') + '）移除，餘 ' + items.length + ' 款');
+      return { ok: true, orderNo: orderNo, removed: removed, itemsLeft: items.length };
+    }
+    return { ok: false, error: '找不到訂單：' + orderNo };
+  } finally { lock.releaseLock(); }
+}
 function deleteOrder(p) {
   if (p._role !== 'admin') return { ok: false, error: '僅管理員可刪除訂單' };
   const orderNo = p && p.orderNo;
@@ -3545,7 +3591,7 @@ var ORDERS_CACHE_KEYS = ['orders_v1_full_std', 'orders_v1_full_PM',
 // 任何會改動「訂單主表」的 action 成功後，立即清掉四把訂單快取。
 // 放在 doGet 派發層＝單一出口，日後新增寫入函式也不會忘記清（只要列進本表）。
 var ORDER_MUTATING_ACTIONS = {
-  createOrder:1, updateOrder:1, updateOrderFinance:1, updateOrderDelivery:1, deleteOrder:1,
+  createOrder:1, updateOrder:1, updateOrderFinance:1, updateOrderDelivery:1, deleteOrder:1, removeOrderItem:1,
   completeOrderItem:1, confirmShipDate:1, shipOrder:1,
   migrateOrderNos:1, migrateOrderTypes:1, backfillOrderCreators:1,
   addShipment:1, deleteShipment:1,
