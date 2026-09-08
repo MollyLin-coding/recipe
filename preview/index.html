@@ -3255,6 +3255,7 @@ function showOrderDetail(orderNo) {
       <span class="badge ${it.status === '完成' ? 'bg-green' : 'bg-yellow'}" style="font-size:9px;">${it.status || '待製作'}</span>
       ${_isOwnStockOutType(o.orderType) ? '' : `<button class="btn btn-ghost btn-sm" style="padding:3px 7px;font-size:11px;" onclick="rcShowHistory(${idx},${i})">📋 Run Card</button>`}
       ${canAct && it.status !== '完成' && it.sheet ? `<button class="btn btn-success btn-sm" style="padding:3px 7px;font-size:11px;" onclick="this.closest('.modal-bg').remove();showCompleteModal(${idx},${i})">完成回報</button>` : ''}
+      ${isAdmin && (o.items || []).length > 1 && !(it.shipped > 0) && it.status !== '完成' && !it.batchId ? `<button class="btn btn-ghost btn-sm" title="刪除此款（僅限尚未出貨、未完成、無 Run Card 的款）" style="padding:3px 7px;font-size:11px;color:var(--red);border-color:var(--red);" onclick="removeOrderItemUi(${idx},${i})">🗑 刪除此款</button>` : ''}
       ${canAct && isConsignOrder(o) && ((it.remainStock == null ? it.qty : it.remainStock) > 0) ? `<label title="勾選後可用下方「一次寄出勾選款」" style="display:flex;align-items:center;cursor:pointer;margin:0;"><input type="checkbox" class="cs_pick" data-ii="${i}" onchange="consignPickSum()" style="width:17px;height:17px;margin:0;"></label><button class="btn btn-sm" style="padding:3px 7px;font-size:11px;background:var(--gold-dk);color:#fff;font-weight:700;" onclick="consignShipItem(${idx},${i})">📦 寄出給經銷商</button>` : ''}
     </div>`).join('') + consignBatchBarHtml(o, idx, canAct);   // v3.46 勾選多款一次寄出
   const row = (k, val) => `<div style="display:flex;gap:8px;font-size:12px;margin-top:3px;"><span style="flex:0 0 92px;color:var(--ink3);">${k}</span><span style="flex:1;">${val}</span></div>`;
@@ -3744,6 +3745,26 @@ function showOrderModal(edit) {
 
 // 完成回報（admin+倉管）：接 completeOrderItem，沿用隱藏頁 doCompleteTask 的代工費/寫製作記錄邏輯
 // v3.32 主公指示：寄售訂單每款一鍵「寄出給經銷商」＝該款寄倉餘量全出（走 addShipment：扣南坡萬成品庫存＋自動進經銷商門市在庫＋叫貨單狀態→已出貨）
+// v3.51 主公指示（2026-09-08）：多 key 的酒款可在詳情直接刪，不必進編輯訂單（後端 removeOrderItem：admin、無出貨紀錄、未完成、無 RunCard、至少保留一款）
+function removeOrderItemUi(oi, ii) {
+  const o = (window._mgmtOrders || [])[oi]; if (!o) return;
+  const it = (o.items || [])[ii]; if (!it) return;
+  const m = makeModal(`<div class="modal-title" style="color:var(--red);">🗑 刪除此款？</div>
+    <div style="font-size:13px;line-height:1.8;">${o.orderNo}　第 ${ii + 1} 款<br><b>${_escf(it.product || '')}</b> · ${_escf(it.volume || '')} × ${it.qty} 瓶${it.bottleType ? ' · ' + _escf(it.bottleType) : ''}</div>
+    <div style="font-size:12px;color:var(--ink3);margin-top:8px;line-height:1.6;">只會從這張訂單的明細移除這一列（不動出貨紀錄、成品庫存、門市在庫）。已出過貨、已完成回報或已有 Run Card 的款不能刪；整張訂單要刪請用「刪除訂單」。此動作會記入訂單修改紀錄。</div>
+    <div class="fe" style="margin-top:12px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-sm" id="roi_go" style="background:var(--red);color:#fff;font-weight:700;">🗑 確認刪除此款</button></div>`, { locked: true });
+  const b = m.querySelector('#roi_go');
+  b.onclick = () => lockRun(b, async () => {
+    const res = await api({ action: 'removeOrderItem', orderNo: o.orderNo, itemIndex: ii });
+    if (!res.ok) {
+      makeModal('<div class="modal-title" style="color:var(--red);">✕ 無法刪除</div><div style="font-size:13px;line-height:1.7;padding:8px 10px;background:#fbeaea;border:1px solid #f0c0c0;border-radius:8px;">' + _escf(res.error || '') + '</div><div class="fe" style="margin-top:10px;"><button class="btn btn-primary btn-sm" onclick="this.closest(\'.modal-bg\').remove()">知道了</button></div>');
+      return;
+    }
+    toast(`已刪除「${it.product}」，餘 ${res.itemsLeft} 款`, 4000);
+    document.querySelectorAll('.modal-bg').forEach(x => x.remove());
+    await loadOrderMgmt(); showOrderDetail(o.orderNo);
+  });
+}
 // v3.46 主公指示（2026-09-08）：一款一款按「寄出給經銷商」每次都要等 GAS 幾秒 → 每款加勾選框，勾好後一次送 addShipment（一個出貨批次、整批先驗庫存、任一款不足整批不寫入）
 function consignBatchBarHtml(o, idx, canAct) {
   if (!canAct || !isConsignOrder(o)) return '';
