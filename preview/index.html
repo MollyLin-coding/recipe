@@ -3339,7 +3339,7 @@ async function toggleOrderHistory(orderNo) {
 // 訂單修改歷史（詳情最下緣備查；v1.8 起記錄，舊訂單此前的操作無紀錄）
 async function loadOrderHistory(orderNo) {
   const area = document.getElementById('orderHistArea'); if (!area) return;
-  const res = await api({ action: 'getOrderHistory', orderNo }, true);
+  const res = await apiBusy({ action: 'getOrderHistory', orderNo }, '讀取修改紀錄…');   // v3.50.1
   if (!res || !res.ok) { area.textContent = '（歷史載入失敗）'; return; }
   const h = res.history || [];
   if (!h.length) { area.textContent = '（尚無紀錄；2026-07-04 前的操作未留存）'; return; }
@@ -3360,9 +3360,11 @@ function _shipToday() {
   const d = new Date(), p = n => String(n).padStart(2, "0");
   return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate());
 }
+// v3.50.1 主公指示：詳情內的小轉圈太小 → 使用者觸發的靜默讀取改走畫面正中大遮罩（背景暖機／快取預抓仍靜默）
+async function apiBusy(params, msg) { busyStart(msg || '資料讀取中，請稍候…'); try { return await api(params, true); } finally { busyEnd(); } }
 async function loadShipments(orderNo) {
   const area = document.getElementById("shipRecArea"); if (!area) return;
-  const res = await api({ action: "getShipments", orderNo }, true);
+  const res = await apiBusy({ action: "getShipments", orderNo }, '讀取出貨紀錄…');
   if (!res || !res.ok) { area.innerHTML = `<span style="color:var(--red);">（出貨紀錄載入失敗，請關閉重開）</span>`; return; }
   const isAdmin = curUser && curUser.role === "admin";
   const list = res.shipments || [];
@@ -3402,8 +3404,7 @@ async function delShipment(orderNo, seq) {
 //   成品庫存只有「南坡萬v.2」一本帳 → 後端只扣該帳本裡有帳的酒款；代工品項只記錄不扣。
 async function showShipModal(oi) {
   const o = (window._mgmtOrders || [])[oi]; if (!o) return;
-  toast("讀取寄倉餘量…", 1500);
-  const pre = await api({ action: "getShipments", orderNo: o.orderNo }, true);
+  const pre = await apiBusy({ action: "getShipments", orderNo: o.orderNo }, '讀取寄倉餘量…');   // v3.50.1
   const stkInfo = (pre && pre.ok) ? (pre.stockInfo || {}) : {};
   const remMap = {};
   if (pre && pre.ok) (pre.remain || []).forEach(x => { remMap[x.product + "|" + x.bottleType] = x.remain; });
