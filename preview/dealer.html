@@ -72,7 +72,7 @@ tr:last-child td{border-bottom:none;}
 .toast.show{opacity:1;}
 .btn-spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:btnspin .7s linear infinite;vertical-align:-2px;margin-right:7px;}
 /* v3.33 寫入處理中遮罩：寫入類 API 進行時全頁半透明＋轉圈，擋住重複點擊；300ms 內完成不閃現 */
-#busyOverlay{position:fixed;inset:0;background:rgba(30,23,16,.38);z-index:9500;display:none;align-items:center;justify-content:center;}
+#busyOverlay{position:fixed;inset:0;background:rgba(30,23,16,.38);z-index:20000;display:none;align-items:center;justify-content:center;}
 #busyOverlay.on{display:flex;}
 .busy-box{background:#fff;border-radius:14px;padding:16px 24px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 30px rgba(0,0,0,.25);font-size:14px;color:#1e1710;max-width:80vw;}
 .busy-spin{width:26px;height:26px;flex-shrink:0;border:3px solid #e4ddd0;border-top-color:#7a5420;border-radius:50%;animation:btnspin .8s linear infinite;}
@@ -169,8 +169,8 @@ function _busyEl() {
 }
 function busyStart(msg) {
   _busyN++;
-  if (msg) { const m = document.getElementById('busyMsg'); if (m) m.textContent = msg; }
-  if (!_busyTimer) _busyTimer = setTimeout(() => { _busyTimer = null; if (_busyN > 0) _busyEl().classList.add('on'); }, 300);
+  { const m = _busyEl().querySelector('#busyMsg'); if (m) m.textContent = msg || '資料處理中，請稍候…'; }   // v3.48 先建元素再套文案（首次呼叫時元素尚不存在）
+  if (!_busyTimer) _busyTimer = setTimeout(() => { _busyTimer = null; if (_busyN > 0) _busyEl().classList.add('on'); }, 150);   // v3.48
 }
 function busyEnd() {
   _busyN = Math.max(0, _busyN - 1);
@@ -180,8 +180,8 @@ async function api(params, silent) {
   const send = { ...params };
   if (curToken && send.token == null) send.token = curToken;
   if (!silent) { _apiN++; _bar().classList.add('on'); }
-  const _busy = !silent && !BUSY_READ_RE.test(String(send.action || ''));   // v3.33 寫入類 → 轉圈遮罩
-  if (_busy) busyStart();
+  const _busy = !silent;   // v3.48 讀寫皆顯示畫面正中轉圈（背景 silent 呼叫除外）
+  if (_busy) busyStart(BUSY_READ_RE.test(String(send.action || '')) ? '資料讀取中，請稍候…' : '資料寫入中，請稍候…');
   const _isRead = /^(get|consignMe|consignLedger|consignStatements)/.test(String(send.action || ''));
   const _delays = _isRead ? [400, 1200, 2500] : [];
   const url = API + '?' + Object.entries(send).map(([k, v]) => k + '=' + encodeURIComponent(v)).join('&');
