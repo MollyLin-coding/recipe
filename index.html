@@ -496,7 +496,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.48';
+const APP_VERSION='v3.49';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -3161,7 +3161,8 @@ function renderMonthOrders(orders) {
         : `<div style="font-size:11px;margin-top:3px;color:var(--ink3);">🚚 尚未出貨　📦 寄倉 ${_ordTot} 瓶</div>`);
     const itemsTxt = (o.items || []).map(it => `${it.product}×${it.qty}` + (it.bottleType ? `(${it.bottleType})` : '') + (it.sample && it.sample.qty ? `〔🧪試飲${it.sample.bottleType || ''}×${it.sample.qty}〕` : '')).join('、');
     // v3.6 Run Card 鈕三態（主公指示）：無卡=虛線半透明「尚待PM建立」／進行中=黃底／已完成(狀態=完成或第11站done)=綠底
-    const rcBtns = (window._rcIdx && o.orderType !== TYPE_CONSIGN_SETTLE) ? (o.items || []).map((it, i) => {   // v3.28 認列單不是製作單，不掛 Run Card 鈕
+    // v3.49 主公指示：出貨型（自有酒款出貨(有金流)／樣品(無金流)／經銷商寄售）＝架上成品直接打包出貨、無製程 → 列表不掛 Run Card 鈕；認列單同（v3.28）
+    const rcBtns = (window._rcIdx && o.orderType !== TYPE_CONSIGN_SETTLE && !_isOwnStockOutType(o.orderType)) ? (o.items || []).map((it, i) => {
       const nm = it.product || ('酒款' + (i + 1));
       const rcSt = window._rcIdx.get(o.orderNo + '||' + (it.product || ''));
       const common = 'padding:3px 8px;font-size:11px;border-radius:6px;cursor:pointer;';
@@ -3248,7 +3249,7 @@ function showOrderDetail(orderNo) {
       <span style="color:var(--gold-dk);font-weight:700;">${i + 1}.</span>
       <span style="flex:1;">${it.product || '（未綁酒譜）'} · ${it.volume || ''} × ${it.qty} 瓶${it.bottleType ? (' · ' + it.bottleType) : ''}${it.sample && it.sample.qty ? `<div style="font-size:11px;color:var(--gold-dk);">🧪 試飲：${it.sample.bottleType || '—'} × ${it.sample.qty}${it.sample.note ? ('（' + it.sample.note + '）') : ''}</div>` : ''}${it.shipped != null ? `<div style="font-size:11px;font-weight:600;color:${(+it.remainStock || 0) > 0 ? 'var(--gold-dk)' : 'var(--green)'};">🚚 已出 ${+it.shipped || 0} / ${+it.qty || 0} 瓶${(+it.remainStock || 0) > 0 ? ('・寄倉 ' + (+it.remainStock || 0) + ' 瓶') : '・已出清'}</div>` : ''}</span>
       <span class="badge ${it.status === '完成' ? 'bg-green' : 'bg-yellow'}" style="font-size:9px;">${it.status || '待製作'}</span>
-      <button class="btn btn-ghost btn-sm" style="padding:3px 7px;font-size:11px;" onclick="rcShowHistory(${idx},${i})">📋 Run Card</button>
+      ${_isOwnStockOutType(o.orderType) ? '' : `<button class="btn btn-ghost btn-sm" style="padding:3px 7px;font-size:11px;" onclick="rcShowHistory(${idx},${i})">📋 Run Card</button>`}
       ${canAct && it.status !== '完成' && it.sheet ? `<button class="btn btn-success btn-sm" style="padding:3px 7px;font-size:11px;" onclick="this.closest('.modal-bg').remove();showCompleteModal(${idx},${i})">完成回報</button>` : ''}
       ${canAct && isConsignOrder(o) && ((it.remainStock == null ? it.qty : it.remainStock) > 0) ? `<label title="勾選後可用下方「一次寄出勾選款」" style="display:flex;align-items:center;cursor:pointer;margin:0;"><input type="checkbox" class="cs_pick" data-ii="${i}" onchange="consignPickSum()" style="width:17px;height:17px;margin:0;"></label><button class="btn btn-sm" style="padding:3px 7px;font-size:11px;background:var(--gold-dk);color:#fff;font-weight:700;" onclick="consignShipItem(${idx},${i})">📦 寄出給經銷商</button>` : ''}
     </div>`).join('') + consignBatchBarHtml(o, idx, canAct);   // v3.46 勾選多款一次寄出
