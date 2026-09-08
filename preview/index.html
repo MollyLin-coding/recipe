@@ -283,7 +283,7 @@ tbody tr:hover td{background:#faf3e8;}
 /* ── 登入轉圈提示（v2.6.2）── */
 .btn-spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:btnspin .7s linear infinite;vertical-align:-2px;margin-right:7px;}
 /* v3.33 寫入處理中遮罩：寫入類 API 進行時全頁半透明＋轉圈，擋住重複點擊；300ms 內完成不閃現 */
-#busyOverlay{position:fixed;inset:0;background:rgba(30,23,16,.38);z-index:9500;display:none;align-items:center;justify-content:center;}
+#busyOverlay{position:fixed;inset:0;background:rgba(30,23,16,.38);z-index:20000;display:none;align-items:center;justify-content:center;}
 #busyOverlay.on{display:flex;}
 .busy-box{background:#fff;border-radius:14px;padding:16px 24px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 30px rgba(0,0,0,.25);font-size:14px;color:#1e1710;max-width:80vw;}
 .ld-spin{display:inline-block;width:14px;height:14px;border:2px solid #e4ddd0;border-top-color:var(--gold-dk);border-radius:50%;animation:btnspin .8s linear infinite;vertical-align:-3px;margin-right:6px;}
@@ -526,8 +526,8 @@ function _busyEl() {
 }
 function busyStart(msg) {
   _busyN++;
-  if (msg) { const m = document.getElementById('busyMsg'); if (m) m.textContent = msg; }
-  if (!_busyTimer) _busyTimer = setTimeout(() => { _busyTimer = null; if (_busyN > 0) _busyEl().classList.add('on'); }, 300);
+  { const m = _busyEl().querySelector('#busyMsg'); if (m) m.textContent = msg || '資料處理中，請稍候…'; }   // v3.48 先建元素再套文案（首次呼叫時元素尚不存在）
+  if (!_busyTimer) _busyTimer = setTimeout(() => { _busyTimer = null; if (_busyN > 0) _busyEl().classList.add('on'); }, 150);   // v3.48 300→150ms（主公：按下去就要看到）
 }
 function busyEnd() {
   _busyN = Math.max(0, _busyN - 1);
@@ -544,8 +544,9 @@ async function api(params, silent) {
   // ⚠️ 只重試「讀取型」：寫入型重試有冪等風險（重複建單/重複入庫），維持單次不重試。
   const _act = String(send.action || '');
   const _isRead = /^get/i.test(_act) || _act === 'bootstrap';
-  const _busy = !silent && !BUSY_READ_RE.test(_act);   // v3.33 寫入類 → 轉圈遮罩
-  if (_busy) busyStart();
+  // v3.48 主公指示：全站任何按鈕按下去都要有畫面正中的轉圈——讀取、寫入一律顯示遮罩（silent 的背景呼叫除外）；文案分「資料寫入中」／「資料讀取中」
+  const _busy = !silent;
+  if (_busy) busyStart(BUSY_READ_RE.test(_act) ? '資料讀取中，請稍候…' : '資料寫入中，請稍候…');
   // v3.14.4 使用者按 ↻ 後的 8 秒內，讀取一律帶 fresh=1 繞過後端快取（強制刷新逃生口）
   if (_isRead && window._apiFreshUntil && Date.now() < window._apiFreshUntil && send.fresh == null) send.fresh = '1';
   const _delays = _isRead ? [400, 1200, 2500] : [];
@@ -3759,8 +3760,7 @@ async function consignShipBatch(oi) {
   const o = (window._mgmtOrders || [])[oi]; if (!o) return;
   const picks = [...document.querySelectorAll('.cs_pick:checked')].map(c => Number(c.dataset.ii)).filter(ii => o.items && o.items[ii]);
   if (!picks.length) { toast('請先勾選要寄出的酒款'); return; }
-  toast('查詢南坡萬成品庫存…', 1500);
-  const pre = await api({ action: 'getShipments', orderNo: o.orderNo }, true);
+  busyStart('查詢南坡萬成品庫存…'); let pre; try { pre = await api({ action: 'getShipments', orderNo: o.orderNo }, true); } finally { busyEnd(); }   // v3.48 寄出前查庫存也轉圈
   const info = (pre && pre.ok && pre.stockInfo) || {};
   const rows = picks.map(ii => {
     const it = o.items[ii], remain = (it.remainStock == null ? it.qty : it.remainStock) || 0;
@@ -3840,8 +3840,7 @@ async function consignShipItem(oi, ii) {
   const remain = (it.remainStock == null ? it.qty : it.remainStock) || 0;
   if (remain <= 0) { toast('此款已全部寄出'); return; }
   // v3.33 先查南坡萬成品庫存（主公 9/3 反映：被擋下卻沒說明）：對話框直接顯示庫存、預設可寄數量；庫存 0 直接告知不能寄
-  toast('查詢南坡萬成品庫存…', 1500);
-  const pre = await api({ action: 'getShipments', orderNo: o.orderNo }, true);
+  busyStart('查詢南坡萬成品庫存…'); let pre; try { pre = await api({ action: 'getShipments', orderNo: o.orderNo }, true); } finally { busyEnd(); }   // v3.48 寄出前查庫存也轉圈
   const si = (pre && pre.ok && pre.stockInfo) ? pre.stockInfo[it.product] : null;
   const tracked = !!(si && si.tracked), stock = tracked ? (Math.floor(Number(si.stock)) || 0) : null;
   // v3.47 主公指示：寄售單不再被成品庫存卡檔（允許負庫存），只保留警告；上限＝寄倉餘量
