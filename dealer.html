@@ -24,6 +24,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--ink);font
 .login-card{background:var(--card);border-radius:16px;box-shadow:var(--sh);padding:28px 24px;border:1px solid var(--border);}
 .inp{width:100%;padding:11px 14px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:15px;font-family:'DM Sans',sans-serif;outline:none;background:#fff;color:var(--ink);transition:border-color .2s;margin-bottom:12px;}
 .inp:focus{border-color:var(--gold);}
+/* v3.50 必填未填：紅框＋紅色粗體 placeholder */
+.inp.inp-req{border-color:var(--red);}
+.inp.inp-req::placeholder{color:var(--red);font-weight:700;opacity:1;}
+.inp.inp-req:focus{border-color:var(--red);}
 .inp:disabled{background:var(--bg);color:var(--ink3);}
 .inp[type=number]{-moz-appearance:textfield;}
 .inp[type=number]::-webkit-outer-spin-button,.inp[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;}
@@ -148,7 +152,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
     document.body.appendChild(b);
   });
 }
-const APP_VERSION='v3.49';
+const APP_VERSION='v3.50';
 window.addEventListener('DOMContentLoaded', function () { const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION; });
 // 開頁暖機：趁使用者打密碼時吃掉 GAS 冷啟動
 window.addEventListener('DOMContentLoaded', function () { api({ action: 'getEnvInfo' }, true); });
@@ -507,24 +511,32 @@ function showAdjust() {
     <div class="tbl-wrap"><table><thead><tr><th>酒款</th><th class="tr">在庫</th><th class="tr" id="adjColHd">實際盤點數</th></tr></thead><tbody>
       ${stock.map((s, i) => `<tr><td>${esc(s.pubName || s.product)}<div class="muted">${esc(s.volume)}</div></td><td class="tr">${s.qty}</td><td class="tr"><input type="number" inputmode="numeric" min="0" id="aq_${i}" value="${s.qty}" style="width:70px;padding:6px;text-align:right;border:1.5px solid var(--border);border-radius:6px;font-size:14px;"></td></tr>`).join('')}
     </tbody></table></div>
-    <input class="inp" id="adjNote" placeholder="原因（必填，例：月底盤點／破損 1 瓶／退回南坡萬）" style="margin:10px 0 4px;">
+    <input class="inp inp-req" id="adjNote" placeholder="★ 必填：原因（例：月底盤點／破損 1 瓶／退回南坡萬）" style="margin:10px 0 4px;" oninput="this.classList.toggle('inp-req', !this.value.trim())">
     <div class="fe" style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="adjSub">送出</button></div>`, { locked: true });
   const b = m.querySelector('#adjSub');
   b.onclick = () => lockRun(b, async () => {
     const type = m.querySelector('#adjType').value, date = m.querySelector('#adjDate').value || ME.today, note = m.querySelector('#adjNote').value.trim();
-    if (!note) { toast('請填原因'); return; }
+    if (!note) { reqWarn('尚未送出：請填寫原因', '「' + type + '」必須填寫原因（例：月底盤點／破損 1 瓶／退回南坡萬），南坡萬才會受理。原因欄已標紅，補填後再按一次「送出」。', m.querySelector('#adjNote')); return; }   // v3.50
     const lines = [];
     stock.forEach((s, i) => {
       const el = m.querySelector('#aq_' + i); const v = parseInt(el.value, 10);
       if (type === '盤點修正') { if (!isNaN(v) && v !== s.qty) lines.push({ product: s.product, volume: s.volume, qty: v }); }
       else if (v > 0) lines.push({ product: s.product, volume: s.volume, qty: v });
     });
-    if (!lines.length) { toast(type === '盤點修正' ? '盤點數與在庫相同，無需修正' : '請填瓶數'); return; }
+    if (!lines.length) { reqWarn('尚未送出：沒有要登記的數量', type === '盤點修正' ? '每款「實際盤點數」都與目前在庫相同，沒有差異需要修正。' : '請至少在一款填入大於 0 的瓶數。', null); return; }   // v3.50
     const p = { action: 'consignAdjust', type, date, note, lines: JSON.stringify(lines) };
     if (curUser.role !== '經銷商') p.dealer = curUser.dealer;
     const res = await api(p);
     if (res.ok) { toast('已登記 ' + type); m.remove(); await reload(false); } else toast(res.error || '登記失敗', 4500);
   });
+}
+// v3.50 必填未填 → 紅色阻斷視窗（原 toast 2 秒易漏看＝主公 9/8 反映「按送出沒反應」）＋欄位反紅加粗，關閉後聚焦該欄
+function reqWarn(title, text, focusEl) {
+  if (focusEl) { focusEl.classList.add('inp-req'); }
+  const m = makeModal('<div class="modal-title" style="color:var(--red);">❌ ' + title + '</div>'
+    + '<div style="font-size:13px;line-height:1.7;padding:8px 10px;background:#fbeaea;border:1px solid #f0c0c0;border-radius:8px;">' + text + '</div>'
+    + '<div class="fe" style="margin-top:10px;"><button class="btn btn-primary btn-sm" id="rq_ok">知道了，回去補填</button></div>', { locked: true });
+  m.querySelector('#rq_ok').onclick = () => { m.remove(); if (focusEl) { try { focusEl.focus(); } catch (e) {} } };
 }
 function adjTypeChange() {
   const t = document.getElementById('adjType').value;
