@@ -2767,9 +2767,13 @@ function isFinanceUser() { return !!(curUser && FINANCE_USERS.includes(curUser.u
 const TYPE_SHIP = '自有酒款出貨訂單(有金流)';   // 原「自有酒款庫存出貨訂單」改名（舊單字串以 _isShipType 相容、編輯即懶遷移）
 const TYPE_SHIP_OLD = '自有酒款庫存出貨訂單';
 const TYPE_SAMPLE = '自有酒款樣品(無金流)';     // 樣品：隱藏金流、保留配送（要寄給客戶）；出貨照扣成品庫存；不觸發完工自動入庫
-const ORDER_TYPES = ['代工訂單(全客製/換前標)', '南坡萬自有酒款投產單，無金流', TYPE_SHIP, TYPE_SAMPLE, '自行keyin'];
+// v3.39 主公指示：下拉多一項「經銷商寄售訂單」（自行keyin 上方）＝南坡萬主動替經銷商建寄售單（電話訂貨等），格式與叫貨放行建的單完全相同：
+//   存檔類型仍是 TYPE_SHIP、客戶＝啟用中經銷商鍵、金額 0、訂金狀態「寄售」、金流空白 → isConsignOrder 自動成立（列表「🤝 寄售訂單」、詳情「📦 寄出給經銷商」）。
+//   TYPE_CONSIGN_UI 只活在表單：getOrderTypeValue 轉 TYPE_SHIP；編輯既有寄售單時下拉自動顯示此項。
+const TYPE_CONSIGN_UI = '經銷商寄售訂單';
+const ORDER_TYPES = ['代工訂單(全客製/換前標)', '南坡萬自有酒款投產單，無金流', TYPE_SHIP, TYPE_SAMPLE, TYPE_CONSIGN_UI, '自行keyin'];
 const TYPE_NO_FINANCE = '南坡萬自有酒款投產單，無金流'; // 投產單：建單隱藏金流＋配送區塊
-function _isShipType(t) { return t === TYPE_SHIP || t === TYPE_SHIP_OLD; }
+function _isShipType(t) { return t === TYPE_SHIP || t === TYPE_SHIP_OLD || t === TYPE_CONSIGN_UI; }   // v3.39 表單偽類型視同出貨單
 function _isOwnStockOutType(t) { return _isShipType(t) || t === TYPE_SAMPLE; } // 出貨/樣品：皆出自有成品庫存（比對庫存、帶自有全酒款、不佔玻璃瓶）
 function _isNoFinanceType(t) { return t === TYPE_NO_FINANCE || t === TYPE_SAMPLE; } // 無金流型：投產單＋樣品
 // 各類型的客戶名稱選單：[資料鍵(存訂單B欄), 顯示文字]；未列類型＝沿用完整客戶清單（樣品未列＝全客戶＋可自行輸入新試飲對象）
@@ -2789,7 +2793,19 @@ function orderTypeSelectHtml(selected) {
     + '<input class="inp" id="om_type_custom" placeholder="輸入此訂單的類型/生產目的（如：中秋禮盒限定）" style="margin:6px 0 0;display:none;font-size:13px;">';
 }
 function omClientFieldHtml(type, selected) {
-  const spec = TYPE_CLIENTS[type];
+  const consignUi = type === TYPE_CONSIGN_UI;
+  let spec = consignUi ? (window._consignDealers || []).filter(d => d.enabled).map(d => [d.key, d.label + '（' + d.key + '）']) : TYPE_CLIENTS[type];
+  if (consignUi && !spec.length) {
+    // bootstrap 的 consignDealers 還沒回來（登入後數十秒內開建單會遇到）：先用建單客戶表的「經銷商－*」頂著，同時背景抓一次回來重建清單
+    spec = (TYPE_CLIENTS[TYPE_SHIP] || []).filter(p => String(p[0]).startsWith('經銷商－'));
+    api({ action: 'consignDealers' }, true).then(r => {
+      if (!r || !r.ok) return;
+      window._consignDealers = r.dealers || [];
+      const t = document.getElementById('om_type'), w = document.getElementById('omClientWrap');
+      if (t && w && t.value === TYPE_CONSIGN_UI) { const cur = (document.getElementById('om_client') || {}).value || ''; w.innerHTML = omClientFieldHtml(TYPE_CONSIGN_UI, cur); }
+    });
+  }
+  if (consignUi && !spec.length) return '<select class="inp" id="om_client" style="margin:0;" disabled><option value="">尚無啟用中的經銷商，請先至「經銷商寄售」新增</option></select>';
   let opts;
   if (spec) {
     opts = spec.map(pair => `<option value="${pair[0]}"${pair[0] === selected ? ' selected' : ''}>${pair[1]}</option>`).join('');
@@ -2802,7 +2818,7 @@ function omClientFieldHtml(type, selected) {
   }
   return `<div style="display:flex;gap:4px;">
     <select class="inp" id="om_client" style="margin:0;flex:1;min-width:0;" onchange="orderModalClientChange()">${opts}</select>
-    <button class="btn btn-ghost btn-sm" style="flex:0 0 auto;white-space:nowrap;" onclick="addOrderClient()">✎ 自行輸入</button></div>`;
+    ${consignUi ? '' : '<button class="btn btn-ghost btn-sm" style="flex:0 0 auto;white-space:nowrap;" onclick="addOrderClient()">✎ 自行輸入</button>'}</div>`;
 }
 // 類型改變：自行keyin展開＋重建客戶下拉＋金流/配送顯隱＋酒款建議清單重整
 function omTypeChange() {
@@ -2835,12 +2851,14 @@ function _syncFinanceVis() {
 // v3.28 建單表單目前是否為「寄售出貨單」（類型＝自有酒款出貨訂單(有金流) 且 客戶＝啟用中的寄售經銷商）
 function _isConsignForm() {
   const t = document.getElementById('om_type'); const c = document.getElementById('om_client');
+  if (t && t.value === TYPE_CONSIGN_UI) return true;   // v3.39
   return !!(t && c && _isShipType(t.value) && isConsignDealer(c.value));
 }
 // 取訂單類型送出值：自行keyin＋有輸入 → 存輸入的類型/生產目的文字
 function getOrderTypeValue() {
   const el = document.getElementById('om_type');
   if (!el) return '';
+  if (el.value === TYPE_CONSIGN_UI) return TYPE_SHIP;   // v3.39 存檔仍是「自有酒款出貨訂單(有金流)」，與叫貨放行建的單同格式
   if (el.value === '自行keyin') {
     const c = document.getElementById('om_type_custom');
     const t = c ? c.value.trim() : '';
@@ -3569,7 +3587,7 @@ function showOrderModal(edit) {
   if (isEdit && edit.client && !clients.includes(edit.client)) clients = [edit.client, ...clients];
   const c0 = isEdit ? edit.client : (clients[0] || '');
   const _etRaw = isEdit ? (edit.orderType === TYPE_SHIP_OLD ? TYPE_SHIP : edit.orderType) : ''; // v3.13 舊單「自有酒款庫存出貨訂單」編輯時正規化為新抬頭（存檔即懶遷移）
-  const t0 = isEdit ? (ORDER_TYPES.includes(_etRaw) ? _etRaw : (edit.orderType ? '自行keyin' : '')) : '';
+  const t0 = isEdit ? ((_isShipType(_etRaw) && isConsignDealer(edit.client)) ? TYPE_CONSIGN_UI : (ORDER_TYPES.includes(_etRaw) ? _etRaw : (edit.orderType ? '自行keyin' : ''))) : '';   // v3.39 寄售單編輯時顯示偽類型
   // v3.2 建單人員：預設=登入者（在名單內），編輯帶舊值（不在名單自動補列；舊單無值給空白）
   const CREATORS = ['Kevin', 'Molly', 'Vic', '阿軒'];
   const creator0 = isEdit ? (edit.orderCreator || '') : ((curUser && CREATORS.includes(curUser.username)) ? curUser.username : 'Kevin');
@@ -3694,6 +3712,7 @@ function showOrderModal(edit) {
     }
     const lot = (document.getElementById('om_lot').value || '').trim();
     if (lot && !/^\d+$/.test(lot)) { toast('Lot批號需為純數字（可留空）'); return; }
+    if ((document.getElementById('om_type') || {}).value === TYPE_CONSIGN_UI && !isConsignDealer(client)) { toast('「' + client + '」不是啟用中的寄售經銷商，請先至「經銷商寄售」新增或啟用', 4500); return; }   // v3.39
     // v3.3.1 主公拍板：庫存出貨建單不再硬擋超量（保留 checkShipStockWarn 紅字警示；實際出貨前會補庫存，shipOrder 確認出貨仍擋負）
     const res = await api({
       action: isEdit ? 'updateOrder' : 'createOrder',
@@ -4939,7 +4958,7 @@ function consignDealerCard(d, i) {
     ${d.missingPrices.length ? `<div style="margin-top:6px;padding:7px 10px;background:#fbeaea;border:1px solid #f0c0c0;border-radius:8px;font-size:12px;color:var(--red);">⚠ 牌價表缺：${d.missingPrices.map(_escf).join('、')} —— 經銷商登記這些品項的售出會被擋下，請至主表「牌價表」分頁補上</div>` : ''}
     <div class="fe" style="margin-top:10px;gap:6px;">
       <button class="btn btn-ghost btn-sm" onclick="consignToggleDetail(${i})">📋 明細</button>
-      <button class="btn btn-ghost btn-sm" onclick="showConsignEntryModal(${i})">✍ 代登異動</button>
+      ${(d.stockItems || []).length ? `<button class="btn btn-ghost btn-sm" onclick="showConsignEntryModal(${i})">✍ 代登異動</button>` : `<span title="尚無門市在庫：請先在訂單詳情按「📦 寄出給經銷商」，出貨後才能代登售出／退貨／損耗／盤點" style="display:inline-block;"><button class="btn btn-ghost btn-sm" disabled style="opacity:.45;cursor:not-allowed;">✍ 代登異動（尚無在庫）</button></span>`}
       ${settled ? '' : `<button class="btn btn-ghost btn-sm" onclick="consignCreateStatement(${i})">${s ? '🔄 重算對帳單' : '🧾 產生對帳單'}</button>`}
       ${(s && !settled) ? `<button class="btn btn-ghost btn-sm" style="color:var(--red);" onclick="consignDeleteStatement(${i})">↩ 撤銷</button>` : ''}
       ${(s && !settled) ? `<button class="btn btn-sm" style="background:var(--green);color:#fff;font-weight:700;" onclick="showConsignSettleModal(${i})">✅ 登記本期帳款已結清</button>` : ''}
