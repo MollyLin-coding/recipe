@@ -2783,12 +2783,15 @@ function addShipment(p) {
       if (_stkMap[u.product] == null) return;   // 代工酒款沒有成品庫存帳 → 只記錄
       _needBy[u.product] = (_needBy[u.product] || 0) + u.qty;
     });
+    // v3.47 主公指示：寄售訂單（客戶＝啟用中經銷商）且前端帶 allowShort=1 → 不卡檔、照扣成負庫存，回傳 stockShort 給前端警告；其他訂單維持 all-or-nothing
+    var _cd = _consignDealerMap_()[client];
+    const _allowShort = String((p && p.allowShort) || '') === '1' && !!(_cd && _cd.enabled);
     Object.keys(_needBy).forEach(function (prod) {
       const have = _stkMap[prod] || 0;
-      if (_needBy[prod] > have) _short.push('「' + prod + '」需 ' + _needBy[prod] + '、現有 ' + have);
+      if (_needBy[prod] > have) { _short.push('「' + prod + '」需 ' + _needBy[prod] + '、現有 ' + have + (_allowShort ? '、寄出後 ' + (have - _needBy[prod]) : '')); if (_allowShort) _deduct.push({ product: prod, qty: _needBy[prod], before: have, short: true }); }
       else _deduct.push({ product: prod, qty: _needBy[prod], before: have });
     });
-    if (_short.length) {
+    if (_short.length && !_allowShort) {
       return { ok: false, error: '成品庫存不足，本次出貨未登記：' + _short.join('；'), shortages: _short };
     }
     const out = use.map(function (u, i) {
@@ -2833,7 +2836,7 @@ function addShipment(p) {
       (allShipped ? '（本單已全部出清）' : '（尚有寄倉未出）') +
       (_deduct.length ? ('｜扣成品庫存 ' + _deduct.map(function (d) { return d.product + '−' + d.qty; }).join('、')) : '') +
       (note ? ('｜' + note) : ''));
-    return { ok: true, orderNo: orderNo, seq: seq, date: date, lines: use, allShipped: allShipped,
+    return { ok: true, orderNo: orderNo, seq: seq, date: date, lines: use, allShipped: allShipped, stockShort: _allowShort ? _short : [],   // v3.47 負庫存警告
       stockDeducted: _deduct, consignIn: _consignIn, consignError: _consignErr, restockUpdated: _rqUpd };
   } finally { lock.releaseLock(); }
 }
