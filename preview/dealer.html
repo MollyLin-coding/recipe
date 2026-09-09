@@ -262,7 +262,7 @@ tr:last-child td{border-bottom:none;}
       <p>一句話：<b>賣掉的用「登記售出」；沒賣掉但數量變了，才用這三個。</b>這三個都<b>不算錢</b>。</p>
       <table class="htab"><tr><th>類型</th><th>什麼情況</th></tr>
         <tr><td><b>盤點修正</b></td><td>實際清點與畫面不一樣（且已與南坡萬確認過）。填<b>實際有幾瓶</b>，不是填差幾瓶</td></tr>
-        <tr><td><b>退貨</b></td><td>整批退回南坡萬</td></tr>
+        <tr><td><b>退貨</b></td><td>把酒退回南坡萬。<b>以「瓶」為單位</b>，退幾瓶就填幾瓶，不必整批退</td></tr>
         <tr><td><b>損耗</b></td><td>破損、過期、開瓶試飲</td></tr></table>
       <div class="hnote"><b>原因是必填的。</b>沒填會跳紅色視窗、欄位變紅框，補填後再送出即可。紀錄雙方都看得到，對帳有疑問時就是依據。</div>
     </div></details>
@@ -338,7 +338,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
     document.body.appendChild(b);
   });
 }
-const APP_VERSION='v3.53';
+const APP_VERSION='v3.54';
 window.addEventListener('DOMContentLoaded', function () { const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION; });
 // 開頁暖機：趁使用者打密碼時吃掉 GAS 冷啟動
 window.addEventListener('DOMContentLoaded', function () { api({ action: 'getEnvInfo' }, true); });
