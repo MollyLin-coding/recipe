@@ -500,7 +500,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.51';
+const APP_VERSION='v3.52';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2760,6 +2760,9 @@ const HIDDEN_CLIENTS = ['Feeling Bar Cafe', '南坡萬公版'];
 // v2.8：OEM-Babyface 已轉正式客戶（後端 CLIENTS 供應 5 款 BF_ 真酒譜），自此清單移除
 const EXTRA_CLIENT_RECIPES = {
   'OEM-Lane72': ['茉莉香片琴酒(利口酒)', '焙火烏龍威士忌(利口酒)', '玫瑰烏龍威士忌', '桂花烏龍威士忌'],
+  // v3.52 全客製-日富一日（2026-09-09 主公指示建單）：後台尚無專屬酒譜書，配方目前只在「研發試算記錄」
+  //   （最終定版 2026-09-08：蘋果威士忌 V3.3／芭樂琴酒 V2.4 16% 版，皆 500ml 伏特加瓶）。待 Molly 建酒譜書後比照酒肉朋友轉正式客戶。
+  '全客製-日富一日': ['日富一日-蘋果威士忌', '日富一日-芭樂琴酒'],
 };
 // v3.10：全客製-酒肉朋友 已轉正式客戶（後端 CLIENTS 供真酒譜「梨香蜜桃紅烏龍調酒」），自 EXTRA 清單移除
 const EXTRA_CLIENTS = Object.keys(EXTRA_CLIENT_RECIPES);
@@ -2786,7 +2789,7 @@ const TYPE_CLIENTS = {
   '代工訂單(全客製/換前標)': [
     ['OEM-Babyface', '全客製-Babyface'], ['OEM-Lane72', '全客製-Lane72'], ['OEM-好野吧', '全客製-好野吧'],
     ['全客製-雋荖&拾山', '全客製-雋荖&拾山'], ['全客製-酒肉朋友', '全客製-酒肉朋友'],
-    ['全客製-昭和浪漫冰室', '全客製-昭和浪漫冰室'],
+    ['全客製-昭和浪漫冰室', '全客製-昭和浪漫冰室'], ['全客製-日富一日', '全客製-日富一日'],
     ['Feeling Bar', '全客製-Feeling Bar'], ['換前標-滿枝枒', '換前標-滿枝枒']
   ],
   '南坡萬自有酒款投產單，無金流': [['南坡萬v.2', '補充自廠酒款水位']],
@@ -2889,6 +2892,7 @@ function _defaultBottleFor(client) {
   if (client === '全客製-酒肉朋友') return '500ml大香水瓶'; // v3.9.4 主公指定預設瓶型
   if (client === '全客製-昭和浪漫冰室') return '波士頓';   // v3.15 主公指定 500ml 波士頓瓶（下拉字串為「波士頓」）
   if (client === 'OEM-好野吧') return '500ml伏特加瓶';   // v3.23 主公指定，其他瓶型手動選
+  if (client === '全客製-日富一日') return '500ml伏特加瓶'; // v3.52 依研發試算定版（500ml 伏特加瓶）
   if (String(client || '').startsWith('換前標-')) return '100ml山形香水瓶';
   const t = document.getElementById('om_type');
   if (t && (_isOwnStockOutType(t.value) || t.value === TYPE_NO_FINANCE)) return '100ml山形香水瓶'; // v3.13 樣品亦預設 100ml山形香水瓶
