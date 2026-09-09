@@ -176,7 +176,15 @@ function doGet(e) {
     // v3.40 匯入腳本免 token：expImport 帶 key＝Script Property CRM_CASH_KEY 時視為 admin（操作人「匯入腳本」；一次性搬 Google 支出表用）
     var _expKeyOk = (action === 'expImport' && !!_crmCashKey_() && String(p.key || '') === _crmCashKey_());
     if (_expKeyOk) { p._user = '匯入腳本'; p._role = 'admin'; }
-    if (!_expKeyOk && action !== 'login' && action !== 'getEnvInfo' && action !== 'crmCashRead' && action !== 'crmCashKeySetup') {
+    // v3.45 報價系統連結（QS_LINK）：ext* action 帶 key＝Script Property QS_LINK_KEY 即視為 admin（操作人「報價系統」）。
+    //   金鑰錯誤直接擋在這裡（不進 session 流程、不回 SESSION_EXPIRED，避免被誤判成登入問題）。
+    var _qsKeyOk = (QS_LINK_ACTIONS.indexOf(action) >= 0 && _qsLinkOk_(p));
+    if (QS_LINK_ACTIONS.indexOf(action) >= 0 && !_qsKeyOk) {
+      return ContentService.createTextOutput(JSON.stringify({ ok: false, error: 'QS_LINK 金鑰錯誤或未設定' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    if (_qsKeyOk) { p._user = '報價系統'; p._role = 'admin'; }
+    if (!_expKeyOk && !_qsKeyOk && action !== 'login' && action !== 'getEnvInfo' && action !== 'crmCashRead' && action !== 'crmCashKeySetup' && action !== 'qsLinkKeySetup') {
       const sess = _getSession_(p.token);
       if (!sess) {
         return ContentService.createTextOutput(JSON.stringify({ ok: false, error: 'SESSION_EXPIRED' }))
@@ -326,7 +334,13 @@ function doGet(e) {
       case 'expList':                result = expList(p); break;                // v3.40 廠務支出：該月列＋摘要＋固定成本＋金流四格(admin)
       case 'expSave':                result = expSave(p); break;                // v3.40 廠務支出：新增/覆寫一筆(admin)
       case 'expDelete':              result = expDelete(p); break;              // v3.40 廠務支出：刪一筆(admin)
-      case 'expImport':              result = expImport(p); break;              // v3.40 廠務支出：批次匯入(admin 或 CRM_CASH_KEY；來源鍵去重)
+      case 'expImport':              result = expImport(p); break;
+      // v3.45 報價系統連結（QS_LINK_KEY 金鑰限定；報價系統 GAS 以 UrlFetchApp 呼叫）
+      case 'qsLinkKeySetup':         result = qsLinkKeySetup(p); break;          // 一次性設定金鑰（屬性已存在即拒絕）
+      case 'extPing':                result = extPing(p); break;                 // 連線測試
+      case 'extCreateOrder':         result = extCreateOrder(p); break;          // 報價單→訂單（同報價單號＝更新，冪等）
+      case 'extGetOrders':           result = extGetOrders(p); break;            // 訂單全表＋出貨紀錄（同步用）
+      case 'extMarkImported':        result = extMarkImported(p); break;         // 反向匯入後回填對應報價單號              // v3.40 廠務支出：批次匯入(admin 或 CRM_CASH_KEY；來源鍵去重)
       case 'fixedGet':               result = fixedGet(p); break;               // v3.40 固定成本：該月(含沿用)(admin)
       case 'fixedSave':              result = fixedSave(p); break;              // v3.40 固定成本：寫該月列(admin)
       case 'perfReset':              result = perfReset(p); break;              // v3.39 業績模型：恢復種子預設(admin；confirm=業績模型)
@@ -989,6 +1003,12 @@ function _ensureOrderFinanceHeaders_(ws) {
   if (String(ws.getRange(1, 34).getValue() || '') === '') {
     ws.getRange(1, 34).setValue('訂單備註');
   }
+  // v3.45 對應報價單號（AI=35 欄）：報價系統轉單寫入／廠務建單反向匯入後回填；同仁只看不用填
+  if (String(ws.getRange(1, QS_SRC_COL).getValue() || '') === '') {
+    ws.getRange(1, QS_SRC_COL).setValue('對應報價單號');
+    var mrQ = ws.getMaxRows() - 1;
+    if (mrQ > 0) ws.getRange(2, QS_SRC_COL, mrQ, 1).setNumberFormat('@');
+  }
 }
 // 金額欄：空=未填(保留空字串)，有值才轉數字
 function _numOrBlank_(v) { return (v == null || v === '') ? '' : (Number(v) || 0); }
@@ -1259,7 +1279,8 @@ function getOrders(p) {
       lot: String(r[30] == null ? '' : r[30]),
       orderCreator: String(r[31] == null ? '' : r[31]), // v3.2 建單人員（兩種 view 皆回，非金額）
       shipFeePayer: String(r[32] == null ? '' : r[32]), // v3.4 運費支付方
-      orderNote: String(r[33] == null ? '' : r[33]) // v3.31 訂單備註（經銷商叫貨備註）
+      orderNote: String(r[33] == null ? '' : r[33]), // v3.31 訂單備註（經銷商叫貨備註）
+      qsQuoteNo: String(r[34] == null ? '' : r[34])  // v3.45 對應報價單號（報價系統連結）
     };
     // v3.26 注入出貨進度：單層 shipBatches/lastShipDate，每款 shipped(已出)/remainStock(寄倉餘量)
     const _sa = _shipAgg[base.orderNo] || null;
@@ -1577,6 +1598,121 @@ function crmCashKeySetup(p) {
   if (k.length < 20) return { ok: false, error: '金鑰長度不足' };
   props.setProperty('CRM_CASH_KEY', k);
   return { ok: true, set: true };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ## v3.45 報價系統連結（QS_LINK）
+// ##  報價系統（quote-system，Molly 專用）以 UrlFetchApp 呼叫本專案，金鑰＝Script Property `QS_LINK_KEY`（比照 CRM_CASH_KEY）。
+// ##  設計：**廠務不回呼報價系統**（同仁流程零風險）；全部由報價系統主動拉／推。
+// ##   - extCreateOrder：報價單「轉廠務訂單」→ 建單；同一報價單號再推＝更新（冪等，靠 AI 欄「對應報價單號」）。
+// ##   - extGetOrders：訂單全表（full view，含金流）＋出貨紀錄原始列 → 報價系統每小時同步狀態／出貨／金流比對／反向匯入。
+// ##   - extMarkImported：廠務同仁建的單被報價系統匯成草稿報價單後，回填 AI 欄，避免重複匯入。
+// ##  ⚠ 這段跟其他程式一樣必須留在 程式碼.gs（Actions 只推這一檔）。
+// ═══════════════════════════════════════════════════════════════════
+var QS_SRC_COL = 35;   // AI 欄：對應報價單號
+var QS_LINK_ACTIONS = ['extPing', 'extCreateOrder', 'extGetOrders', 'extMarkImported'];
+function _qsLinkKey_() { try { return PropertiesService.getScriptProperties().getProperty('QS_LINK_KEY') || ''; } catch (e) { return ''; } }
+function _qsLinkOk_(p) { var k = _qsLinkKey_(); return !!k && k.length >= 20 && String((p && p.key) || '') === k; }
+// 一次性設定：只在 QS_LINK_KEY 尚未存在時可寫；已設定後拒絕（換鑰匙請至 GAS 編輯器改 Script Property）
+function qsLinkKeySetup(p) {
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('QS_LINK_KEY')) return { ok: false, error: '金鑰已設定，拒絕覆寫' };
+  const k = String((p && p.key) || '').trim();
+  if (k.length < 20) return { ok: false, error: '金鑰長度不足' };
+  props.setProperty('QS_LINK_KEY', k);
+  return { ok: true, set: true };
+}
+function extPing(p) {
+  var env = 'PROD';
+  try { env = (typeof getEnvInfo === 'function' && getEnvInfo().env) || env; } catch (e) {}
+  return { ok: true, pong: true, env: env, version: (typeof APP_VERSION !== 'undefined' ? APP_VERSION : ''), time: new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) };
+}
+// 找 AI 欄＝quoteNo 的列（回 0-based data index；找不到 -1）
+function _qsFindRowByQuote_(data, quoteNo) {
+  var q = String(quoteNo || '').trim();
+  if (!q) return -1;
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] && String(data[i][QS_SRC_COL - 1] == null ? '' : data[i][QS_SRC_COL - 1]).trim() === q) return i;
+  }
+  return -1;
+}
+function _qsSetQuoteNo_(ws, rowIdx1, quoteNo) {
+  ws.getRange(rowIdx1, QS_SRC_COL).setNumberFormat('@').setValue(String(quoteNo || '').trim());
+}
+// 報價單 → 訂單。payload 與 createOrder 相同（client/orderType/deliveryDate/items/total/balance/depositStatus/pm/lot/orderCreator/orderNote/金流9欄/配送8欄），另加 quoteNo（必填）。
+//   已有同 quoteNo 的訂單 → 走 updateOrder（保留訂單編號、製作狀態、已完成款的 batchId）；沒有 → createOrder。
+//   ⚠ 更新時金流九欄由報價系統整組覆寫（決議：金流以報價系統為主；廠務端也能填，差異由報價系統提示）。
+function extCreateOrder(p) {
+  const quoteNo = String((p && p.quoteNo) || '').trim();
+  if (!quoteNo) return { ok: false, error: '缺少 quoteNo' };
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('訂單主表');
+  if (!ws) return { ok: false, error: '找不到訂單主表分頁' };
+  _ensureOrderFinanceHeaders_(ws);
+  const data = ws.getDataRange().getValues();
+  const idx = _qsFindRowByQuote_(data, quoteNo);
+  p.orderCreator = String(p.orderCreator || '').trim() || ('報價系統(' + quoteNo + ')');
+  p.user = '報價系統';
+  var r;
+  if (idx >= 0) {
+    p.orderNo = String(data[idx][0]);
+    r = updateOrder(p);
+    if (r && r.ok) { _qsSetQuoteNo_(ws, idx + 1, quoteNo); r.updated = true; }
+    return r;
+  }
+  r = createOrder(p);
+  if (r && r.ok && r.orderNo) {
+    // createOrder 用 appendRow，新列＝目前最後一列有訂單編號者；保險起見重讀找 orderNo
+    const d2 = ws.getDataRange().getValues();
+    for (var i = d2.length - 1; i >= 1; i--) {
+      if (String(d2[i][0]) === String(r.orderNo)) { _qsSetQuoteNo_(ws, i + 1, quoteNo); break; }
+    }
+    r.updated = false;
+  }
+  return r;
+}
+// 訂單全表（full view＝含金流、含 qsQuoteNo）＋出貨紀錄原始列。可帶 types（JSON 陣列或逗號字串）只回指定訂單類型。
+function extGetOrders(p) {
+  const res = getOrders({ view: '', _role: 'admin' });
+  var orders = (res && res.orders) || [];
+  var types = null;
+  try { if (p && p.types) types = (typeof p.types === 'string' && p.types.charAt(0) === '[') ? JSON.parse(p.types) : String(p.types).split(','); } catch (e) { types = null; }
+  if (types && types.length) orders = orders.filter(function (o) { return types.indexOf(o.orderType) >= 0; });
+  var shipments = [];
+  try {
+    const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+    const sws = ss.getSheetByName(SHIP_SHEET_NAME);
+    if (sws && sws.getLastRow() > 1) {
+      sws.getRange(2, 1, sws.getLastRow() - 1, SHIP_HEADERS.length).getValues().forEach(function (r) {
+        if (!r[SHP.orderNo]) return;
+        shipments.push({ id: String(r[SHP.id] || ''), orderNo: String(r[SHP.orderNo]), seq: Number(r[SHP.seq]) || 0,
+          date: _fmtDate_(r[SHP.date]), client: String(r[SHP.client] || ''), product: String(r[SHP.product] || ''),
+          bottleType: String(r[SHP.bottleType] || ''), qty: Math.floor(Number(r[SHP.qty])) || 0,
+          operator: String(r[SHP.operator] || ''), createdAt: String(r[SHP.createdAt] || ''), note: String(r[SHP.note] || '') });
+      });
+    }
+  } catch (e) { shipments = []; }
+  return { ok: true, orders: orders, shipments: shipments, count: orders.length };
+}
+// 反向匯入回填：orderNo 的 AI 欄寫入報價系統建好的 quoteNo（已有值且不同時拒絕，防蓋掉）
+function extMarkImported(p) {
+  const orderNo = String((p && p.orderNo) || '').trim();
+  const quoteNo = String((p && p.quoteNo) || '').trim();
+  if (!orderNo || !quoteNo) return { ok: false, error: '缺少 orderNo 或 quoteNo' };
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('訂單主表');
+  if (!ws) return { ok: false, error: '找不到訂單主表分頁' };
+  _ensureOrderFinanceHeaders_(ws);
+  const data = ws.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]) !== orderNo) continue;
+    var cur = String(data[i][QS_SRC_COL - 1] == null ? '' : data[i][QS_SRC_COL - 1]).trim();
+    if (cur && cur !== quoteNo) return { ok: false, error: '此訂單已對應報價單 ' + cur };
+    _qsSetQuoteNo_(ws, i + 1, quoteNo);
+    _logOrderChange_(orderNo, '報價系統', '對應報價單', quoteNo);
+    return { ok: true, orderNo: orderNo, quoteNo: quoteNo };
+  }
+  return { ok: false, error: '找不到訂單：' + orderNo };
 }
 
 function crmCashRead(p) {
@@ -3597,7 +3733,8 @@ var ORDER_MUTATING_ACTIONS = {
   addShipment:1, deleteShipment:1,
   consignStatementSettle:1,  // v3.28 結清自動建認列單
   consignRestockApprove:1,   // v3.29 叫貨放行自動建出貨單
-  consignResetDealer:1       // v3.35 重置經銷商測試資料（刪訂單）
+  consignResetDealer:1,      // v3.35 重置經銷商測試資料（刪訂單）
+  extCreateOrder:1, extMarkImported:1   // v3.45 報價系統連結
 };
 // 其餘讀取快取的失效對應（action → 要清掉的 key）。
 // 新增寫入函式時只要在這裡登記一行，就不會出現「改了資料卻還看到舊值」。
@@ -3613,6 +3750,7 @@ var CACHE_BUST_MAP = {
 // ↻ 強制刷新對應表：action → 該清掉的讀取快取
 var FRESH_BUST_MAP = {
   getOrders: ORDERS_CACHE_KEYS,
+  extGetOrders: ORDERS_CACHE_KEYS,   // v3.45 報價系統同步一律讀最新（帶 fresh=1）
   getBottleOverview: ['bottleOv_v1'], getRunCardIndex: ['rcIdx_v1'], getStockAlerts: ['stockAlerts_v1'],
   getRecipeList: ['recipeList_v1'], getInventory: ['inventory_v2'],
   bootstrap: ORDERS_CACHE_KEYS.concat(['bottleOv_v1', 'rcIdx_v1', 'stockAlerts_v1'])
