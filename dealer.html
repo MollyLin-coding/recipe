@@ -76,6 +76,88 @@ tr:last-child td{border-bottom:none;}
 .toast.show{opacity:1;}
 .btn-spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:btnspin .7s linear infinite;vertical-align:-2px;margin-right:7px;}
 /* v3.33 寫入處理中遮罩：寫入類 API 進行時全頁半透明＋轉圈，擋住重複點擊；300ms 內完成不閃現 */
+/* v3.53 手機友善（主公 2026-09-09 指示：店長多用手機處理庫存與叫貨）
+   ① 輸入框一律 ≥16px——iOS Safari 在 <16px 時點擊會自動放大整頁，畫面亂跳
+   ② 觸控目標 ≥44px（Apple HIG）：＋ − 數量框、日期、頂欄鈕
+   ③ 表格可橫向滑動時給視覺提示　④ 可經銷品項改條列　⑤ 底部快捷送出條 */
+.prod-chip{display:inline;}
+.tbl-wrap{position:relative;}
+.tbl-scroll-hint{display:none;font-size:11px;color:var(--gold-dk);background:var(--gold-lt);border:1px solid #e8dcc8;border-radius:6px;padding:3px 8px;margin-bottom:5px;text-align:center;}
+.tbl-scroll-hint.on{display:block;}
+#saleBar{position:fixed;left:0;right:0;bottom:0;z-index:9000;background:#fff;border-top:1px solid var(--border);box-shadow:0 -3px 14px rgba(0,0,0,.12);
+  padding:9px 12px calc(9px + var(--safe-b));display:none;align-items:center;gap:10px;}
+#saleBar.on{display:flex;}
+#saleBar .sum{flex:1;min-width:0;font-size:12.5px;line-height:1.45;color:var(--ink2);}
+#saleBar .sum b{color:var(--gold-dk);font-size:14px;}
+#saleBar button{flex:0 0 auto;min-height:46px;padding:0 18px;font-size:15px;font-weight:700;}
+@media (max-width:600px){
+  body{font-size:15px;}
+  /* ① iOS 防自動縮放 */
+  .inp,input,select,textarea{font-size:16px !important;}
+  .inp{padding:12px 14px;}
+  /* ② 觸控目標 */
+  .qty-ctl button{width:46px !important;height:46px !important;font-size:22px !important;}
+  .qty-ctl input{height:46px !important;width:60px !important;}
+  .sale-row{padding:11px 4px !important;}
+  .sale-name .nm{font-size:15px;}
+  .sale-name .sub{font-size:12px;}
+  .stock-n{font-size:13px;}
+  input[type=date]{min-height:46px;}
+  .btn{min-height:46px;padding:12px 18px;}
+  .btn-sm{min-height:40px;padding:9px 14px;font-size:14px;}
+  /* 叫貨目錄與盤點視窗的數量框是行內樣式，需個別放大 */
+  input[id^="rq_"]{min-height:46px !important;width:66px !important;padding:8px 6px !important;}
+  input[id^="aq_"]{min-height:46px !important;width:76px !important;padding:8px 8px !important;}
+  /* 卡片與視窗內所有輸入欄（含帶行內 padding 者）一律撐到可點擊高度 */
+  input.inp,select.inp,textarea.inp{min-height:46px !important;}
+  #topbar .btn-sm{min-height:38px;padding:8px 11px;}
+  .hsec>summary{padding:16px 14px;}
+  /* ③ 表格與字級 */
+  .tbl-wrap table{font-size:13px;}
+  .tbl-wrap th,.tbl-wrap td{padding:9px 8px;}
+  .muted{font-size:12px;}
+  .stat .lb{font-size:11px;}
+  .stat .vl{font-size:17px;}
+  .stat-row{gap:6px;}
+  .stat{padding:8px 9px;}
+  .chip{font-size:12.5px;padding:5px 12px;}
+  .card{padding:13px 12px;}
+  .card-title{font-size:16px;}
+  .hint,.warn{font-size:12.5px;}
+  /* ④ 可經銷品項：一款一行才讀得懂 */
+  .prod-chip{display:block;padding:3px 0;border-bottom:1px dashed var(--border);}
+  .prod-chip:last-child{border-bottom:none;}
+  /* ⑤ 有底部快捷條時，內容留出空間 */
+  body.has-salebar #app{padding-bottom:78px;}
+}
+/* v3.53 內建使用說明：全螢幕面板＋手風琴，手機優先（觸控目標 ≥44px、單欄、可捲動、留安全區） */
+#helpPanel{position:fixed;inset:0;background:var(--bg);z-index:15000;display:none;flex-direction:column;}
+#helpPanel.on{display:flex;}
+.help-hd{background:var(--gold-dk);color:#fff;padding:0 10px 0 14px;min-height:52px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;}
+.help-hd .t{font-family:'Noto Serif TC',serif;font-size:16px;font-weight:600;}
+.help-hd button{background:rgba(255,255,255,.18);border:none;color:#fff;font-size:14px;font-weight:600;padding:9px 14px;border-radius:8px;cursor:pointer;}
+.help-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 12px calc(28px + var(--safe-b));}
+.help-lead{background:var(--gold-lt);border:1px solid #e8dcc8;border-radius:10px;padding:11px 13px;font-size:14px;line-height:1.7;color:var(--ink2);margin-bottom:10px;}
+.hsec{background:#fff;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.04);}
+.hsec>summary{padding:14px;font-weight:600;font-size:15px;color:var(--gold-dk);cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;}
+.hsec>summary::-webkit-details-marker{display:none;}
+.hsec>summary::after{content:'▾';margin-left:auto;color:var(--ink3);font-size:13px;transition:transform .2s;}
+.hsec[open]>summary::after{transform:rotate(180deg);}
+.hsec[open]>summary{border-bottom:1px solid var(--border);}
+.hc{padding:12px 14px 14px;font-size:14px;line-height:1.75;color:var(--ink2);}
+.hc p{margin:0 0 8px;} .hc p:last-child{margin-bottom:0;}
+.hc b{color:var(--gold-dk);}
+.hstep{display:flex;gap:9px;margin-bottom:10px;}
+.hstep .n{flex:0 0 23px;height:23px;border-radius:50%;background:var(--gold-dk);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:2px;}
+.hnote{background:#f2f8f2;border:1px solid #cfe3d4;border-radius:8px;padding:9px 11px;font-size:13px;line-height:1.65;margin-top:9px;}
+.hwarn{background:#fdf6ee;border:1px solid #ecd9bb;border-radius:8px;padding:9px 11px;font-size:13px;line-height:1.65;margin-top:9px;}
+.hstop{background:#fbeaea;border:1px solid #f0c0c0;border-radius:8px;padding:9px 11px;font-size:13px;line-height:1.65;margin-top:9px;color:var(--red);}
+.htab{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
+.htab th{background:var(--gold-lt);text-align:left;padding:7px 8px;border:1px solid var(--border);font-size:12px;color:var(--gold-dk);}
+.htab td{padding:7px 8px;border:1px solid var(--border);vertical-align:top;}
+.hq{font-weight:600;color:var(--ink);margin:10px 0 2px;font-size:13.5px;}
+.hq:first-child{margin-top:0;}
+.ha{font-size:13.5px;color:var(--ink2);margin-bottom:2px;}
 #busyOverlay{position:fixed;inset:0;background:rgba(30,23,16,.38);z-index:20000;display:none;align-items:center;justify-content:center;}
 #busyOverlay.on{display:flex;}
 .busy-box{background:#fff;border-radius:14px;padding:16px 24px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 30px rgba(0,0,0,.25);font-size:14px;color:#1e1710;max-width:80vw;}
@@ -133,6 +215,7 @@ tr:last-child td{border-bottom:none;}
   <div id="topbar">
     <span class="topbar-title"><span style="width:26px;height:26px;border-radius:50%;overflow:hidden;background:#fff;display:inline-flex;flex-shrink:0;"><img src="/recipe/knb_head.png" alt="" style="width:26px;height:26px;object-fit:cover;"></span><span id="topTitle">寄售夥伴</span></span>
     <div id="topBtns">
+      <button class="btn btn-sm" onclick="showHelp()" title="使用說明">📖</button>
       <button class="btn btn-sm" onclick="showChangePw()" title="修改密碼">🔑</button>
       <button class="btn btn-sm" onclick="reload(true)" title="重新整理">↻</button>
       <button class="btn btn-sm" onclick="doLogout()">登出</button>
@@ -140,6 +223,109 @@ tr:last-child td{border-bottom:none;}
   </div>
   <div id="mainContent"></div>
 </div>
+
+<!-- v3.53 手機：填了售出數量就浮出底部快捷條，不必捲到卡片底部才能送出 -->
+<div id="saleBar"><div class="sum" id="saleBarSum"></div><button class="btn btn-success" onclick="lockRun(this, submitSale)">💾 送出</button></div>
+
+<!-- v3.53 內建使用說明（手機優先）：內容濃縮自《寄售夥伴專區 使用手冊 v2.0》，完整版 PDF 由南坡萬提供 -->
+<div id="helpPanel">
+  <div class="help-hd"><span class="t">📖 使用說明</span><button onclick="closeHelp()">✕ 關閉</button></div>
+  <div class="help-body">
+    <div class="help-lead"><b>這套系統只要求您做一件事：</b>每天打烊前，把今天賣掉幾瓶填進去。其他（進貨、月結金額、對帳單）系統會自動算好。<br>點下面任一項目展開說明。</div>
+
+    <details class="hsec" open><summary>⚡ 每天打烊，三步驟</summary><div class="hc">
+      <div class="hstep"><span class="n">1</span><div><b>確認售出日期</b><br>預設今天。忘記填的那天，把日期往回選即可補登。</div></div>
+      <div class="hstep"><span class="n">2</span><div><b>對著 POS 填各款賣掉幾瓶</b><br>用 ＋ － 或直接打數字，沒賣的留 0。</div></div>
+      <div class="hstep"><span class="n">3</span><div><b>按「💾 送出售出登記」</b><br>會跳出今日合計，看到就代表存好了。</div></div>
+      <div class="hnote">填的數字超過在庫會變紅字、送不出去。架上沒賣掉的酒不會算您的錢。</div>
+      <div class="hstop">當天填錯請聯絡南坡萬更正，<b>不要用盤點修正硬改</b>——在庫會對，但當月請款金額會錯。</div>
+    </div></details>
+
+    <details class="hsec"><summary>💡 一分鐘搞懂寄售怎麼算錢</summary><div class="hc">
+      <p>酒有三個階段，<b>只有賣掉才算錢</b>：</p>
+      <table class="htab"><tr><th>階段</th><th>要付錢嗎</th></tr>
+        <tr><td>還在南坡萬倉庫</td><td>不用</td></tr>
+        <tr><td>已寄到您店裡、放在架上</td><td><b>不用</b></td></tr>
+        <tr><td>客人買走了</td><td><b>要</b>，進入這個月請款</td></tr></table>
+      <p style="margin-top:9px;"><b>應付南坡萬 ＝ 賣掉瓶數 × 合作單價</b>（合作單價＝建議零售價 × 您的折扣）。單價在賣出當下就固定，之後調價不會回頭改舊紀錄。</p>
+      <div class="hwarn"><b>兩個金額別搞混：</b>「牌價營業額」是用建議零售價估的參考值；<b>「應付南坡萬」才是要付的錢</b>。兩者的差額就是您的毛利空間。</div>
+    </div></details>
+
+    <details class="hsec"><summary>🍶 門市在庫是怎麼來的</summary><div class="hc">
+      <p>您<b>不用手動登記進貨</b>。南坡萬按「寄出」後，您的在庫會自動增加。</p>
+      <p>畫面上的在庫是「南坡萬已寄出」的數量，<b>收到貨請務必實際清點</b>，這是抓出貨誤差的唯一時機。</p>
+      <div class="hwarn">數量不對、破損：<b>先聯絡南坡萬</b>由他們更正出貨紀錄，這樣兩邊帳才會一致。自己改只會改到您這邊。</div>
+      <p style="margin-top:9px;">顯示「尚未進貨・在庫 0」＝這款您店裡還沒進過貨，想賣請用「叫貨補貨」。</p>
+    </div></details>
+
+    <details class="hsec"><summary>🧾 盤點／退貨／損耗 怎麼分</summary><div class="hc">
+      <p>一句話：<b>賣掉的用「登記售出」；沒賣掉但數量變了，才用這三個。</b>這三個都<b>不算錢</b>。</p>
+      <table class="htab"><tr><th>類型</th><th>什麼情況</th></tr>
+        <tr><td><b>盤點修正</b></td><td>實際清點與畫面不一樣（且已與南坡萬確認過）。填<b>實際有幾瓶</b>，不是填差幾瓶</td></tr>
+        <tr><td><b>退貨</b></td><td>整批退回南坡萬</td></tr>
+        <tr><td><b>損耗</b></td><td>破損、過期、開瓶試飲</td></tr></table>
+      <div class="hnote"><b>原因是必填的。</b>沒填會跳紅色視窗、欄位變紅框，補填後再送出即可。紀錄雙方都看得到，對帳有疑問時就是依據。</div>
+    </div></details>
+
+    <details class="hsec"><summary>📅 每日銷售紀錄怎麼看</summary><div class="hc">
+      <p>這是給您自己看的經營報表。上方三格是本月合計：<b>售出瓶數</b>、<b>牌價營業額（參考）</b>、<b>應付南坡萬</b>。</p>
+      <p>用 ◀ ▶ 換月份；點任一天可展開當天明細（哪幾款、幾瓶、單價、小計）。今天那列會標綠色。</p>
+      <div class="hnote">月底可以拿它對照店內 POS，檢查有沒有哪天忘記登記。發現漏填，回上面把日期選到那天補填即可。</div>
+    </div></details>
+
+    <details class="hsec"><summary>📦 叫貨補貨</summary><div class="hc">
+      <div class="hstep"><span class="n">1</span><div>在目錄表填瓶數。每格下方顯示<b>您的單價</b>與<b>最低叫貨量</b>（例如 NT$140・≥10）。</div></div>
+      <div class="hstep"><span class="n">2</span><div>填希望到貨日與備註（例如「週末有活動」）。</div></div>
+      <div class="hstep"><span class="n">3</span><div>按「📦 送出叫貨申請」，南坡萬會收到通知。</div></div>
+      <p style="margin-top:4px;">在「我的叫貨紀錄」看進度：<b>待放行</b>（確認中）→ <b>已放行</b>（排入出貨）→ <b>已出貨</b>（到店請核對在庫）；<b>已駁回</b>會顯示原因。</p>
+      <div class="hwarn">低於最低叫貨量、或叫了不在您可經銷品項內的酒款，送出會被擋下並說明原因。要新增品項請聯絡南坡萬。</div>
+      <div class="hnote">建議抓「上個月銷量 × 1.5 倍」當補貨量。放太多會卡資金，也容易接近保存期限。</div>
+    </div></details>
+
+    <details class="hsec"><summary>💰 每月對帳與付款</summary><div class="hc">
+      <p>您每天填的資料，月底自動變成一張對帳單，<b>不需要您做額外動作</b>。</p>
+      <p>流程：整月登記售出 → 結帳日產生對帳單 → 南坡萬請款 → 您付款 → 顯示「已結清」。</p>
+      <p>核對時按「📋 查看本期明細」逐款對。<b>只有「售出」會被請款</b>，退貨、損耗、盤點修正、架上未售出都不算。</p>
+      <div class="hwarn">標記「已結清」後該月會鎖帳，不能再補登。<b>結帳日之前請確認整個月都填完了。</b></div>
+    </div></details>
+
+    <details class="hsec"><summary>🤝 合作條件在哪裡看</summary><div class="hc">
+      <p>畫面上方的「🤝 合作條件」卡，寫著我們談好的：折扣、結帳日、每次最低叫貨量、可經銷品項、試飲品與特殊約定。</p>
+      <p>這些條件會<b>真的生效</b>：折扣決定您每瓶付多少、最低量決定叫貨能不能送出、可經銷品項決定目錄出現哪幾款。</p>
+      <div class="hwarn">條件與您記憶中不同，或想新增可經銷品項，請聯絡南坡萬修改（此卡唯讀）。</div>
+    </div></details>
+
+    <details class="hsec"><summary>❓ 常見問題</summary><div class="hc">
+      <div class="hq">按了按鈕好像沒反應？</div>
+      <div class="ha">畫面中央會出現轉圈提示，代表正在處理，請等它跑完。若跳紅色視窗，那是在告訴您沒送出的原因。</div>
+      <div class="hq">忘記填某一天？</div>
+      <div class="ha">把售出日期往回選到那天再填。只要該月尚未結清都補得回來。</div>
+      <div class="hq">架上有貨但畫面顯示在庫 0？</div>
+      <div class="ha">先按右上 ↻ 重新讀取；還是不對就聯絡南坡萬。</div>
+      <div class="hq">想賣的酒在叫貨目錄找不到？</div>
+      <div class="ha">代表不在您的可經銷品項內，請聯絡南坡萬洽談新增。</div>
+      <div class="hq">試飲用掉的要登記嗎？</div>
+      <div class="ha">要，用「損耗」並註明試飲。損耗不列入請款。</div>
+      <div class="hq">手機和電腦看到的一樣嗎？</div>
+      <div class="ha">一樣，資料都在雲端。換裝置後按 ↻ 即可。</div>
+      <div class="hq">關掉網頁資料會不見嗎？</div>
+      <div class="ha">按過送出的都已存進系統。<b>還沒送出的會消失</b>，填完記得按送出。</div>
+    </div></details>
+
+    <details class="hsec"><summary>📞 聯絡我們</summary><div class="hc">
+      <table class="htab"><tr><th>窗口</th><th>什麼事找他</th></tr>
+        <tr><td><b>Molly</b><br><span style="font-size:12px;color:var(--ink3);">molly_lin@kevinnumber1-cocktail.com</span></td><td>出貨、到貨數量、系統操作</td></tr>
+        <tr><td><b>Kevin</b><br><span style="font-size:12px;color:var(--ink3);">kevin_huang@kevinnumber1-cocktail.com</span></td><td>合作條件、價格、對帳付款</td></tr></table>
+      <div class="hnote">聯絡時請一併提供：<b>店名／發生日期／酒款名稱</b>，有紅色視窗請一起截圖。帶著這些通常一次就能處理完。</div>
+    </div></details>
+
+    <div style="text-align:center;color:var(--ink3);font-size:12px;line-height:1.8;margin-top:14px;">
+      以上為常用重點。完整版《寄售夥伴專區 使用手冊》請向南坡萬索取。<br>
+      <span id="helpVer"></span>
+    </div>
+  </div>
+</div>
+
 
 <script>
 // ── API（預覽環境指測試 /exec；promote.sh 升正式時 sed 換回正式 /exec）──
@@ -152,7 +338,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
     document.body.appendChild(b);
   });
 }
-const APP_VERSION='v3.52';
+const APP_VERSION='v3.53';
 window.addEventListener('DOMContentLoaded', function () { const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION; });
 // 開頁暖機：趁使用者打密碼時吃掉 GAS 冷啟動
 window.addEventListener('DOMContentLoaded', function () { api({ action: 'getEnvInfo' }, true); });
@@ -297,6 +483,24 @@ function doLogout() {
   document.getElementById('loginPass').value = '';
   document.getElementById('loginErr').textContent = '';
 }
+// v3.53 內建使用說明面板：開啟時鎖背景捲動；ESC／返回鍵關閉
+function showHelp() {
+  const p = document.getElementById('helpPanel'); if (!p) return;
+  p.classList.add('on'); document.body.style.overflow = 'hidden';
+  const v = document.getElementById('helpVer'); if (v) v.textContent = '系統版本 ' + APP_VERSION;
+  p.querySelector('.help-body').scrollTop = 0;
+  history.pushState({ help: 1 }, '');   // 手機返回鍵＝關閉說明，不會直接離開系統
+}
+function closeHelp() {
+  const p = document.getElementById('helpPanel'); if (!p || !p.classList.contains('on')) return;
+  p.classList.remove('on'); document.body.style.overflow = '';
+  if (history.state && history.state.help) history.back();
+}
+window.addEventListener('popstate', function () {
+  const p = document.getElementById('helpPanel');
+  if (p && p.classList.contains('on')) { p.classList.remove('on'); document.body.style.overflow = ''; }
+});
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeHelp(); });
 function showChangePw() {
   if (!curUser) return;
   const m = makeModal(`
@@ -404,7 +608,21 @@ function render() {
     <div id="recentArea" style="display:none;">${recentHtml(me.recent || [])}</div>
   </div>`;
   updateSaleSum();
+  setTimeout(markScrollableTables, 60);   // v3.53
 }
+// v3.53 表格在手機放不下時，於表格上方標示可左右滑動（避免店長以為欄位被截掉）
+function markScrollableTables() {
+  document.querySelectorAll('.tbl-wrap').forEach(w => {
+    if (w.previousElementSibling && w.previousElementSibling.classList.contains('tbl-scroll-hint')) w.previousElementSibling.remove();
+    if (w.scrollWidth > w.clientWidth + 4) {
+      const h = document.createElement('div');
+      h.className = 'tbl-scroll-hint on';
+      h.textContent = '← 表格可左右滑動看更多欄位 →';
+      w.parentNode.insertBefore(h, w);
+    }
+  });
+}
+window.addEventListener('resize', () => { markScrollableTables(); updateSaleSum(); });
 function saleRowHtml(s, i) {
   const can = s.qty > 0 && s.unitPrice !== '';
   return `<div class="sale-row">
@@ -435,6 +653,19 @@ function updateSaleSum() {
   const el = document.getElementById('saleSum');
   if (el) el.innerHTML = over ? '<span style="color:var(--red);font-weight:700;">有品項超過在庫數</span>' : (n ? `本次登記 <b>${n}</b> 瓶・牌價營業額 ${nt(retail)}・應付南坡萬 <b>${nt(amt)}</b>` : '本次登記 0 瓶');
   const b = document.getElementById('saleBtn'); if (b) b.disabled = !n || over;
+  _syncSaleBar(n, amt, over);   // v3.53 底部快捷條
+}
+// v3.53 底部快捷送出條：只在「手機寬度＋有填數量」時出現；超量時變紅並鎖住
+function _syncSaleBar(n, amt, over) {
+  const bar = document.getElementById('saleBar'); if (!bar) return;
+  const show = n > 0 && window.innerWidth <= 600;
+  bar.classList.toggle('on', show);
+  document.body.classList.toggle('has-salebar', show);
+  if (!show) return;
+  const sum = document.getElementById('saleBarSum');
+  if (sum) sum.innerHTML = over ? '<span style="color:var(--red);font-weight:700;">有品項超過在庫數</span>'
+    : `本次登記 <b>${n}</b> 瓶<br><span class="muted">應付南坡萬 ${nt(amt)}</span>`;
+  const btn = bar.querySelector('button'); if (btn) btn.disabled = !!over;
 }
 async function submitSale() {
   const date = document.getElementById('saleDate').value || ME.today;
@@ -583,7 +814,7 @@ function termsCardHtml(d, me) {
   const cat = me.catalog || [];
   const byProd = {};
   cat.forEach(c => { (byProd[c.product] = byProd[c.product] || { pubName: c.pubName, vols: [] }).vols.push(c.volume); });
-  const names = Object.keys(byProd).sort().map(p => `${esc(byProd[p].pubName)}<span class="muted">（${byProd[p].vols.join('/')}）</span>`);
+  const names = Object.keys(byProd).sort().map(p => `<span class="prod-chip">${esc(byProd[p].pubName)}<span class="muted">（${byProd[p].vols.join('/')}）</span></span>`);
   const limited = (d.products || []).length > 0;
   return `<div class="card">
     <div class="sec-hd"><div class="card-title" style="margin:0;">🤝 合作條件</div><button class="btn btn-ghost btn-sm" onclick="toggleDetail('termsBody')">展開／收合</button></div>
@@ -594,7 +825,7 @@ function termsCardHtml(d, me) {
         <div><div class="tlb">每次最低叫貨量</div>${VOLS.map(v => `${v} ≥ ${(d.moq && d.moq[v]) || MOQ_DEFAULT[v]} 瓶`).join('<br>')}</div>
         ${d.contractStart ? `<div><div class="tlb">合作起日</div>${esc(d.contractStart)}</div>` : ''}
       </div>
-      <div style="margin-top:10px;"><div class="tlb">可經銷品項${limited ? `（限定 ${Object.keys(byProd).length} 款）` : `（全部 ${Object.keys(byProd).length} 款）`}</div><div style="font-size:13px;line-height:1.8;">${names.join('、') || '<span class="muted">尚未建立，請聯絡南坡萬</span>'}</div></div>
+      <div style="margin-top:10px;"><div class="tlb">可經銷品項${limited ? `（限定 ${Object.keys(byProd).length} 款）` : `（全部 ${Object.keys(byProd).length} 款）`}</div><div style="font-size:13px;line-height:1.8;">${names.join('') || '<span class="muted">尚未建立，請聯絡南坡萬</span>'}</div></div>
       ${d.sampleTerms ? `<div style="margin-top:8px;"><div class="tlb">試飲品</div><div style="font-size:13px;">${esc(d.sampleTerms)}</div></div>` : ''}
       ${d.specialTerms ? `<div style="margin-top:8px;"><div class="tlb">特殊約定</div><div style="font-size:13px;white-space:pre-line;">${esc(d.specialTerms)}</div></div>` : ''}
       <div class="hint">以上為貴店與南坡萬談定的合作條件；如有異動或想新增經銷品項，請聯絡南坡萬更新。</div>
