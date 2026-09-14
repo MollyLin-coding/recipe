@@ -500,7 +500,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.54';
+const APP_VERSION='v3.55';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2760,9 +2760,7 @@ const HIDDEN_CLIENTS = ['Feeling Bar Cafe', '南坡萬公版'];
 // v2.8：OEM-Babyface 已轉正式客戶（後端 CLIENTS 供應 5 款 BF_ 真酒譜），自此清單移除
 const EXTRA_CLIENT_RECIPES = {
   'OEM-Lane72': ['茉莉香片琴酒(利口酒)', '焙火烏龍威士忌(利口酒)', '玫瑰烏龍威士忌', '桂花烏龍威士忌'],
-  // v3.52 全客製-日富一日（2026-09-09 主公指示建單）：後台尚無專屬酒譜書，配方目前只在「研發試算記錄」
-  //   （最終定版 2026-09-08：蘋果威士忌 V3.3／芭樂琴酒 V2.4 16% 版，皆 500ml 伏特加瓶）。待 Molly 建酒譜書後比照酒肉朋友轉正式客戶。
-  '全客製-日富一日': ['日富一日-蘋果威士忌', '日富一日-芭樂琴酒'],
+  // v3.55：全客製-日富一日 已轉正式客戶（後端 CLIENTS 供 FUJI- 真酒譜 2 款），自此清單移除
 };
 // v3.10：全客製-酒肉朋友 已轉正式客戶（後端 CLIENTS 供真酒譜「梨香蜜桃紅烏龍調酒」），自 EXTRA 清單移除
 const EXTRA_CLIENTS = Object.keys(EXTRA_CLIENT_RECIPES);
