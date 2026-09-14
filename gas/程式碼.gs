@@ -64,6 +64,16 @@ const CLIENTS = {
     profitSheet: '好野吧-報價毛利分析', profitFmt: 'hyb-1row',
     capMap: { 100: '100ml江小白', 500: '500ml伏特加瓶', 1800: '1800ml玻璃瓶', 20000: '20公升有水龍頭桶' },
   },
+  // v3.55 全客製-日富一日 轉正式客戶（主公提供「日富一日_酒譜資料庫」20260914）
+  // 客戶鍵沿用 v3.52 建單用的 '全客製-日富一日'。前綴 FUJI-；舊打版分頁（芭樂琴酒調酒_V2.3 等）主公未加前綴，故不會出現。
+  // 酒名以 Row2 E 欄為準（芭樂紫蘇／蘋果蜂蜜威士忌，不帶「調酒」），符合主公指示；strip 只去 FUJI- 前綴。
+  // ⚠️ strip 不可寫成 /^FUJI-|調酒$/g：① 帶 /g 的 regex 用 .test() 會因 lastIndex 殘留而時真時假
+  //    ② stripRecipePrefix 依 CLIENTS 順序「先命中先回傳」，酒肉朋友的 /調酒$/ 排在前面會先吃掉，導致 FUJI- 沒被去掉。
+  '全客製-日富一日': {
+    id: '1hsava4Cq-Pu3ywS6ixlRQcQJDFRrD63leGJoeJ6pJKI',
+    prefix: /^FUJI-/i, strip: /^FUJI-/i,
+    profitSheet: 'FUJI-報價毛利分析', profitFmt: 'fuji-1row',
+  },
 };
 // 主表 ID：優先讀 Script Property 'SHEET_ID'（測試部署指向沙盒副本用），
 // 找不到時 fallback 正式硬編碼 ID（向後相容：正式部署不設此屬性，行為與改版前完全一致）。
@@ -90,6 +100,9 @@ const PROFIT_COLS = {
   // 好野吧：A品名 B容量 C含稅單價 D扣除後標費 E客製瓶身LOGO印刷費 F報價 G成本 H毛利 I毛利率，單列式、無瓶型欄
   // ⚠️ 售價讀 F 報價(5) 而非 C 含稅單價(2)：C 未含印刷費、與成本基準不同，讀 C 會讓 100ml 出現負毛利（主公 20260827 拍板讀 F）
   'hyb-1row':   { price: 5, cost: 6, capCol: 1 },
+  // 日富一日：A品名 B容量 C含稅單價 D未稅單價 E含稅成本 F未稅成本 G未稅毛利 H未稅毛利率 I使用瓶型
+  // ⚠️ 主公指定走未稅：售價讀 D 未稅單價(3)、成本讀 F 未稅成本(5)，與表上 G/H 欄一致（500-171=329/65.7%）
+  'fuji-1row':  { price: 3, cost: 5, capCol: 1, bottleCol: 8 },
 };
 
 // 取得客戶設定（唯一入口，未知客戶直接擋下）
