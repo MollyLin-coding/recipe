@@ -775,14 +775,13 @@ function getRecipe(p) {
   if (data.length > 1) {
     const r2 = data[1];
     recipeName = String(r2[4] || '').trim();
-    // I欄(index 8)是 ABV 值，格式可能是 "8%" 或 8
-    const abvRaw = String(r2[8] || '').replace('%','').trim();
-    abv = parseFloat(abvRaw) || 0;
+    // I欄(index 8)是 ABV 值，格式可能是 "8%"、8 或百分比格式的 0.08（v3.62 一律經 _normAbv_）
+    abv = _normAbv_(r2[8]);
     // v3.61 欄位容錯：部分酒譜書把 ABV 填在 H 欄（標頭在 G），I 欄空白 → ABV 讀成 0、酒稅算錯。
     //   實例：72Lane 全部、雋荖 夏染/春吟。標準版面 H 欄是「酒精濃度」標頭（字串，parseFloat=NaN），
     //   故只在 I 空、且 H 能解析成 0~100 的數字時才退回讀 H，不會誤傷標準版面。
     if (!abv) {
-      const abvH = parseFloat(String(r2[7] || '').replace('%','').trim());
+      const abvH = _normAbv_(r2[7]);
       if (abvH > 0 && abvH <= 100) abv = abvH;
     }
   }
@@ -947,6 +946,29 @@ function parseCompoundFormula(formula, subMap) {
 //   #9 整單用量照原值等比放大，耗損 /0.8 不自動加（hasLoss 僅作旗標顯示）
 function _round(n, d) { const m = Math.pow(10, d || 0); return Math.round((Number(n) || 0) * m) / m; }
 
+// v3.62 規格字串 → ml。訂單「規格」欄是自由輸入（100ml／500ml／1L／1公升…），
+//   舊寫法 parseFloat(str.replace(/[^\d.]/g,'')) 會把 "1L" 讀成 1ml → 整單放量少 1000 倍
+//   （2026-09-15 實例：72Lane 260705-001 的 1L×55 瓶算成 55ml）。
+//   規則：帶 L／l／公升／公斤 的單位 ×1000；ml／cc／毫升 或純數字＝原值。
+function _volumeToMl_(v) {
+  const s = String(v == null ? '' : v).trim();
+  if (!s) return 0;
+  const n = parseFloat(s.replace(/[^\d.]/g, ''));
+  if (!(n > 0)) return 0;
+  // 先判 ml/cc/毫升（"1000ml" 也含 l，必須先比對，否則會被當成公升）
+  if (/(ml|cc|毫升|c\.c)/i.test(s)) return n;
+  if (/(公升|公斤|升|l\b|l$|ℓ)/i.test(s)) return n * 1000;
+  return n;   // 純數字＝視為 ml（沿用舊行為）
+}
+
+// v3.62 ABV 正規化：Sheet 若把欄位設成百分比格式，getValues() 讀回的是小數（17% → 0.17）；
+//   有些書存字串 "17%"／數字 17。酒款 ABV 不可能 ≤1%，故 0<值≤1 一律視為小數 ×100。
+function _normAbv_(v) {
+  const n = parseFloat(String(v == null ? '' : v).replace('%', '').trim());
+  if (!(n > 0)) return 0;
+  return n <= 1 ? _round(n * 100, 2) : n;
+}
+
 // 決議 #2：選客戶後，酒款下拉只列該客戶 Sheet 既有酒譜分頁
 function getClientRecipeList(p) {
   const client = p.client;
@@ -961,7 +983,7 @@ function getClientRecipeList(p) {
 //   參數：client(客戶) sheet(酒譜分頁名) volume(規格 ml，如 "100ml") qty(訂單瓶數)
 function getRecipeForProduction(p) {
   const client = p.client, sheet = p.sheet;
-  const volume = parseFloat(String(p.volume || '').replace(/[^\d.]/g, '')) || 0;
+  const volume = _volumeToMl_(p.volume);   // v3.62 支援 1L／1公升（舊寫法會讀成 1ml）
   const qty = parseInt(p.qty, 10) || 0;
   if (!client || !sheet) return { ok: false, error: '缺少 client 或 sheet' };
   if (volume <= 0 || qty <= 0) return { ok: false, error: '規格或瓶數無效' };
