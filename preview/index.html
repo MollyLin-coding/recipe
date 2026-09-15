@@ -500,7 +500,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.56';
+const APP_VERSION='v3.57';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2535,7 +2535,7 @@ async function loadOrderTasks(){
 async function openTaskRecipe(oi,ii){
   const o = window._orderTasks[oi]; if(!o) return;
   const it = o.items[ii]; if(!it) return;
-  if(!it.sheet){ toast('此酒款尚未綁定酒譜，請洽管理員'); return; }
+  if(!it.sheet){ const okB=await rcResolveItemSheet(o, it, ii); if(!okB){ toast('此酒款尚未綁定酒譜，請洽管理員'); return; } } // v3.57 補綁酒譜（自動／PM 手選，寫回訂單）
   const area = document.getElementById('orderTaskArea');
   area.innerHTML = `<div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">載入酒譜中…</div>`;
   const r = await api({ action:'getRecipeForProduction', client:(it.srcClient || o.client), sheet:it.sheet, volume:it.volume, qty:it.qty });
@@ -4415,19 +4415,82 @@ async function rcOpenCard(id){
     st.stations.push({no:st.stations.length+1,name:'統計此酒款之最終產出瓶數',type:'final',count:'',note:'',operator:'',done:false});
   rcOpenEditor(st);
 }
-// v3.56 過渡假酒名 → 真酒譜分頁（只影響 Run Card 帶譜；訂單存值不動）。日富一日 v3.52 過渡期兩款假名對應 v3.55 FUJI- 真酒譜。
+// v3.56 過渡假酒名 → 真酒譜分頁（日富一日 v3.52 過渡期兩款假名對應 v3.55 FUJI- 真酒譜）。v3.57 起由 rcResolveItemSheet 統一使用。
 const RC_LEGACY_SHEET_ALIAS = { '日富一日-蘋果威士忌': 'FUJI-蘋果蜂蜜威士忌調酒', '日富一日-芭樂琴酒': 'FUJI-芭樂紫蘇' };
+// ── v3.57 舊單酒款補綁酒譜（根治 2026-09-15「除公版 v2 外 Run Card 全空卡」）──
+// 空 sheet 的成因：① 先建單、後轉正式客戶（日富一日／早期 Babyface、好野吧、昭和）② 報價系統 extCreateOrder 推單（客戶名＝報價系統名，
+//   如「日富一日」「昭和浪漫」，不是 CLIENTS 鍵）③ 自行 keyin 客戶。v3.56 只在記憶體改值且要求客戶鍵完全相同 → ①②都對不上，且重整就消失。
+// 流程：rcResolveItemSheet → 先自動比對（同客戶或「同名客戶別名」下的同酒名／過渡假名）→ 對不到就開「🔗 綁定酒譜」選單由 PM 選
+//   → 都呼叫後端 bindOrderItemSheet 寫回訂單 E 欄（sheet＋配方來源 srcClient），之後 Run Card／製作任務永久有譜。
+// 客戶別名：去掉 全客製-／OEM-／經銷商－ 前綴後互相包含即視為同一客戶（'日富一日'↔'全客製-日富一日'、'昭和浪漫'↔'全客製-昭和浪漫冰室'）。
+function _rcNormClient(c){ return String(c||'').replace(/^(全客製-|OEM-|經銷商－|經銷商-|換前標-)/,'').replace(/\s+/g,'').toLowerCase(); }
+function _rcClientCandidates(client){
+  const all=[...new Set((recipeList||[]).map(r=>r.client))];
+  const n=_rcNormClient(client), lbl=_rcNormClient(clientLabel(client));
+  const exact=all.filter(c=>c===client);
+  const alias=all.filter(c=>{ if(c===client) return false; const m=_rcNormClient(c), ml=_rcNormClient(clientLabel(c)); return !!n && (m.includes(n)||n.includes(m)||ml.includes(n)||(lbl&&(m.includes(lbl)||lbl.includes(m)))); });
+  return { exact, alias, rest: all.filter(c=>!exact.includes(c)&&!alias.includes(c)) };
+}
+// 自動比對：同客戶（含別名客戶）下 同酒名／同分頁名／去前綴分頁名 → 過渡假名對應表；回傳 recipeList 那筆或 null
+//   實例（2026-09-15 線上資料）：好野吧單存「好野吧-玫開二度」＝分頁名；Babyface 單存「鳳梨冰茶」＝分頁 BF_鳳梨冰茶 去前綴；
+//   昭和浪漫（報價系統名）單存「蜜香紅茶荔枝琴酒」＝別名客戶 全客製-昭和浪漫冰室 的同酒名。
+function _rcSheetBare(s){ return String(s||'').replace(/^[^_\-]{1,12}[_\-]/,''); }
+function _rcAutoMatch(o, it){
+  const cands=_rcClientCandidates(o.client); const cl=[...cands.exact, ...cands.alias];
+  const pn=String(it.product||'').trim(); if(!pn) return null;
+  const legacy=RC_LEGACY_SHEET_ALIAS[pn];
+  for(const c of cl){
+    const rs=(recipeList||[]).filter(i=>i.client===c);
+    const rr=rs.find(i=>i.recipeName===pn) || rs.find(i=>i.sheet===pn) || rs.find(i=>_rcSheetBare(i.sheet)===pn)
+          || (legacy ? rs.find(i=>i.sheet===legacy) : null);
+    if(rr) return rr;
+  }
+  return null;
+}
+// 手選視窗：回傳 {client, sheet, recipeName} 或 null（取消）
+function rcPickSheet(o, it){
+  return new Promise(resolve=>{
+    const cands=_rcClientCandidates(o.client);
+    const grp=(title, cl)=>cl.map(c=>{ const rs=(recipeList||[]).filter(r=>r.client===c); if(!rs.length) return ''; return `<optgroup label="${rcEsc(title?title+'：':'')}${rcEsc(clientLabel(c))}">${rs.map(r=>`<option value="${rcEsc(c+'||'+r.sheet)}">${rcEsc(r.recipeName)}</option>`).join('')}</optgroup>`; }).join('');
+    const opts=grp('',cands.exact)+grp('可能同一客戶',cands.alias)+grp('其他客戶',cands.rest);
+    const modal=makeModal(`
+      <div class="modal-title">🔗 綁定酒譜</div>
+      <div style="font-size:12px;color:var(--ink3);margin-bottom:8px;line-height:1.6;">${rcEsc(o.orderNo)} · ${rcEsc(clientLabel(o.client))} · <b>${rcEsc(it.product||'')}</b> × ${rcEsc(it.qty)}<br>
+        此酒款建單時沒有綁到酒譜分頁（客戶後來才建酒譜書，或由報價系統推單），請選對應的酒譜；選定後會寫回訂單，之後 Run Card／製作任務都會自動帶配方。</div>
+      <div class="fg"><label>酒譜分頁</label><select class="inp" id="rcBindSel" style="margin:0;"><option value="">—請選擇—</option>${opts}</select></div>
+      <div class="fe" style="margin-top:12px;gap:6px;">
+        <button class="btn btn-primary btn-sm" id="rcBindOk">🔗 綁定並開卡</button>
+        <button class="btn btn-ghost btn-sm" id="rcBindSkip">先不綁，手動填原料</button>
+      </div>`, { locked:true });
+    modal.querySelector('#rcBindOk').onclick=()=>{ const v=modal.querySelector('#rcBindSel').value; if(!v){ toast('請先選酒譜'); return; } const k=v.indexOf('||'); const client=v.slice(0,k), sheet=v.slice(k+2); const rr=(recipeList||[]).find(r=>r.client===client&&r.sheet===sheet); modal.remove(); resolve({ client, sheet, recipeName: rr?rr.recipeName:'' }); };
+    modal.querySelector('#rcBindSkip').onclick=()=>{ modal.remove(); resolve(null); };
+  });
+}
+// 主入口：確保 it.sheet 有值（自動或手選 → 後端寫回）。回傳 true=已有譜可帶；false=使用者選擇手動填／綁定失敗
+async function rcResolveItemSheet(o, it, ii){
+  if(it.sheet) return true;
+  if(!(curUser&&(curUser.role==='admin'||curUser.role==='PM'))){ toast('此酒款未綁酒譜，請 PM 或管理員先綁定'); return false; }
+  let pick=null;
+  const auto=_rcAutoMatch(o, it);
+  if(auto) pick={ client:auto.client, sheet:auto.sheet, recipeName:auto.recipeName };
+  else pick=await rcPickSheet(o, it);
+  if(!pick) return false;
+  if(ii==null) ii=(o.items||[]).indexOf(it);
+  const q={ action:'bindOrderItemSheet', orderNo:o.orderNo, itemIndex:ii, product:it.product||'', sheet:pick.sheet };
+  if(pick.client!==o.client) q.srcClient=pick.client;
+  const res=await api(q);
+  if(!res.ok){ toast('綁定酒譜失敗：'+(res.error||'')); return false; }
+  it.sheet=pick.sheet; if(q.srcClient) it.srcClient=q.srcClient; else delete it.srcClient;
+  toast((auto?'✅ 已自動綁定酒譜：':'✅ 已綁定酒譜：')+(pick.recipeName||pick.sheet));
+  return true;
+}
 // 由訂單酒款帶入（配方走 getRecipeForProduction：成本已剝除、整單放量）
-async function rcFillFromOrderItem(st, o, it){
+async function rcFillFromOrderItem(st, o, it, ii){
   st.orderNo=o.orderNo; st.client=o.client; st.product=it.product||''; st.sheet=it.sheet||'';
   st.bottleType=it.bottleType||''; st.pm=o.pm||st.pm; st.lot=o.lot||''; st.bottles=it.qty||'';
-  // v3.56 舊單懶綁譜：客戶在建單後才轉正式客戶（如日富一日 v3.52→v3.55），舊單酒款 sheet 空白 →
-  //   先以「同客戶同酒名」或「過渡假酒名對應表」找回真酒譜分頁，找到才帶譜；仍找不到才請手動填（訂單存值不動）。
-  if(!it.sheet){
-    const rr=recipeList.find(i=>i.client===o.client && i.recipeName===it.product)
-           || recipeList.find(i=>i.client===o.client && RC_LEGACY_SHEET_ALIAS[it.product] && i.sheet===RC_LEGACY_SHEET_ALIAS[it.product]);
-    if(rr){ it.sheet=rr.sheet; st.sheet=rr.sheet; }
-  }
+  // v3.57 空 sheet → 自動比對或請 PM 選（寫回訂單）；仍無 → 手動填
+  if(!it.sheet) await rcResolveItemSheet(o, it, ii);
+  st.sheet=it.sheet||'';
   if(!it.sheet){ toast('此酒款未綁酒譜，原料請手動填'); return st; }
   const res=await api({ action:'getRecipeForProduction', client:(it.srcClient||o.client), sheet:it.sheet, volume:it.volume||'', qty:it.qty||0 });
   if(res.ok){
@@ -4444,7 +4507,7 @@ async function rcFillFromOrderItem(st, o, it){
 async function rcNewFromOrder(oi, ii){
   const o=(window._mgmtOrders||[])[oi]; if(!o) return;
   const it=(o.items||[])[ii]; if(!it) return;
-  const st=await rcFillFromOrderItem(rcNewState(), o, it);
+  const st=await rcFillFromOrderItem(rcNewState(), o, it, ii);
   rcOpenEditor(st);
 }
 // ── 自動暫存（v2.7.3）：每 4 秒把未儲存的卡寫進 localStorage，當機/斷線不掉資料 ──
