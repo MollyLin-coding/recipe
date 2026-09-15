@@ -74,6 +74,16 @@ const CLIENTS = {
     prefix: /^FUJI-/i, strip: /^FUJI-/i,
     profitSheet: 'FUJI-報價毛利分析', profitFmt: 'fuji-1row',
   },
+  // v3.59 全客製-雋荖&拾山 轉正式客戶（主公提供「雋荖拾山_酒譜資料庫」20260915；酒譜 Row1 抬頭寫「雋荖廚房」）
+  // 客戶鍵沿用建單下拉／既有訂單 260722-002 存的 '全客製-雋荖&拾山'（含 &），別改成「雋荖拾山」否則舊單對不上。
+  // 分頁前綴 JL_（主公已加好）：JL_報價毛利分析 ＋ 9 款（秋默／辦桌／穀雨／山哼歌／春醒／夏染／森泥E版／春吟／冬跡）。
+  // 毛利表單列式 A酒款名稱 B售價 C容量 D成本 E毛利 F毛利率，無瓶型欄 → capMap 100→100ml江小白（訂單實際瓶型）。冬跡成本空白 → warn 屬預期。
+  '全客製-雋荖&拾山': {
+    id: '1U-glkwgsCyYzzCbUdrHrxaYpsybe1ww5WD9dLr3nGqc',
+    prefix: /^JL_/i, strip: /^JL_/i,
+    profitSheet: 'JL_報價毛利分析', profitFmt: 'jl-1row',
+    capMap: { 100: '100ml江小白' },
+  },
 };
 // 主表 ID：優先讀 Script Property 'SHEET_ID'（測試部署指向沙盒副本用），
 // 找不到時 fallback 正式硬編碼 ID（向後相容：正式部署不設此屬性，行為與改版前完全一致）。
@@ -103,6 +113,8 @@ const PROFIT_COLS = {
   // 日富一日：A品名 B容量 C含稅單價 D未稅單價 E含稅成本 F未稅成本 G未稅毛利 H未稅毛利率 I使用瓶型
   // ⚠️ 主公指定走未稅：售價讀 D 未稅單價(3)、成本讀 F 未稅成本(5)，與表上 G/H 欄一致（500-171=329/65.7%）
   'fuji-1row':  { price: 3, cost: 5, capCol: 1, bottleCol: 8 },
+  // 雋荖&拾山：A酒款名稱 B售價 C容量 D成本 E毛利 F毛利率，單列式、無瓶型欄（瓶型走 capMap）
+  'jl-1row':    { price: 1, cost: 3, capCol: 2 },
 };
 
 // 取得客戶設定（唯一入口，未知客戶直接擋下）
@@ -1535,6 +1547,7 @@ function bindOrderItemSheet(p) {
   const sheet = String((p && p.sheet) || '').trim();
   const srcClient = String((p && p.srcClient) || '').trim();
   const product = String((p && p.product) || '').trim();
+  const newProduct = String((p && p.newProduct) || '').trim();   // v3.59 選填：同時把酒款名統一成酒譜名（主公 2026-09-15 指示 Babyface 統一名稱）
   if (!orderNo) return { ok: false, error: '缺少 orderNo' };
   if (!(idx >= 0)) return { ok: false, error: '缺少 itemIndex' };
   if (!sheet) return { ok: false, error: '缺少 sheet（酒譜分頁名）' };
@@ -1561,13 +1574,20 @@ function bindOrderItemSheet(p) {
       if (!isRecipeSheet(sheet)) return { ok: false, error: '「' + sheet + '」不是酒譜分頁（毛利／報價分頁不可綁）' };
       const cws = SpreadsheetApp.openById(cfg.id).getSheetByName(sheet);
       if (!cws) return { ok: false, error: '「' + recipeClient + '」的酒譜書找不到分頁「' + sheet + '」' };
-      const before = { sheet: String(it.sheet || ''), srcClient: String(it.srcClient || '') };
+      const before = { sheet: String(it.sheet || ''), srcClient: String(it.srcClient || ''), product: String(it.product || '') };
+      // v3.59 改名防線：出貨紀錄／Run Card 索引都以 product 字串關聯，已有出貨列就不准改名（先刪批再改）
+      if (newProduct && newProduct !== before.product) {
+        let shipped = 0;
+        try { _shipRows_().forEach(function (r) { if (String(r[SHP.orderNo]) === orderNo && String(r[SHP.product]) === before.product) shipped += Math.floor(Number(r[SHP.qty])) || 0; }); } catch (e) {}
+        if (shipped > 0) return { ok: false, error: '「' + before.product + '」已有出貨紀錄 ' + shipped + ' 瓶，不可改名（請先處理出貨紀錄）' };
+        it.product = newProduct;
+      }
       it.sheet = sheet;
       if (srcClient && srcClient !== orderClient) it.srcClient = srcClient; else delete it.srcClient;
       items[idx] = it;
       ws.getRange(i + 1, 5).setValue(JSON.stringify(items));
       _logOrderChange_(orderNo, p._user || '', '補綁酒譜',
-        '第 ' + (idx + 1) + ' 款「' + (it.product || '') + '」→ ' + (it.srcClient ? (it.srcClient + ' / ') : '') + sheet
+        '第 ' + (idx + 1) + ' 款「' + (it.product || '') + '」' + (it.product !== before.product ? ('（原名「' + before.product + '」）') : '') + '→ ' + (it.srcClient ? (it.srcClient + ' / ') : '') + sheet
         + (before.sheet ? ('（原 ' + (before.srcClient ? before.srcClient + ' / ' : '') + before.sheet + '）') : '（原未綁）'));
       return { ok: true, orderNo: orderNo, itemIndex: idx, item: { product: it.product, sheet: it.sheet, srcClient: it.srcClient || '' } };
     }
