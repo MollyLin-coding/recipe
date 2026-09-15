@@ -149,6 +149,7 @@ var ROLE_MATRIX = {
   // 訂單建立/編輯 → admin + PM(v3.9 主公拍板：Vic/阿軒可自建單；金流/配送編輯/刪除仍僅 admin)
   createOrder: ['admin', 'PM'], updateOrder: ['admin', 'PM'], updateOrderFinance: ['admin'],
   updateOrderDelivery: ['admin'], deleteOrder: ['admin'], removeOrderItem: ['admin'],   // v3.51
+  bindOrderItemSheet: ['admin', 'PM'],   // v3.57 舊單酒款補綁酒譜（Run Card 帶譜用；admin + PM）
   reviewApply: ['admin'], reviewRdApply: ['admin'],
   migrateOrderNos: ['admin'], migrateOrderTypes: ['admin'], backfillOrderCreators: ['admin'],
   deleteBatchRecord: ['admin'], deleteRunCard: ['admin'], deleteRdRecord: ['admin'],
@@ -359,6 +360,7 @@ function doGet(e) {
       case 'perfReset':              result = perfReset(p); break;              // v3.39 業績模型：恢復種子預設(admin；confirm=業績模型)
       case 'deleteShipment':         result = deleteShipment(p); break;          // 實際出貨紀錄：刪除某一次出貨(v3.26, admin 限定)
       case 'removeOrderItem':        result = removeOrderItem(p); break;         // v3.51 刪除訂單單一酒款列（admin；無出貨紀錄／未完成才可）
+      case 'bindOrderItemSheet':     result = bindOrderItemSheet(p); break;      // v3.57 舊單酒款補綁酒譜分頁（sheet + srcClient 寫回 E 欄 JSON）
       case 'getBottleOverview':      result = getBottleOverview(); break;        // 玻璃瓶庫存
       case 'bottleIn':               result = bottleIn(p); break;                // 玻璃瓶庫存
       case 'bottleOut':              result = bottleOut(p); break;               // 玻璃瓶庫存
@@ -409,7 +411,7 @@ function doGet(e) {
 // 記「寫入動作」＋「敏感讀取(開酒譜)」到主表「操作紀錄」分頁：時間/帳號/角色/動作/摘要/結果。
 // 摘要只收白名單參數(絕不記 password/token/data 大 JSON)；appendRow 失敗不阻斷業務。
 var AUDIT_ACTIONS = {
-  createOrder:1, updateOrder:1, updateOrderFinance:1, updateOrderDelivery:1, deleteOrder:1, removeOrderItem:1,
+  createOrder:1, updateOrder:1, updateOrderFinance:1, updateOrderDelivery:1, deleteOrder:1, removeOrderItem:1, bindOrderItemSheet:1,   // v3.57
   completeOrderItem:1, confirmShipDate:1, shipOrder:1,
   stockIn:1, stockOut:1, bottleIn:1, bottleOut:1, addBottleItem:1, setSafetyLevel:1,
   addShipment:1, deleteShipment:1,
@@ -1502,6 +1504,61 @@ function removeOrderItem(p) {
       _logOrderChange_(orderNo, p._user || '', '刪除酒款',
         '第 ' + (idx + 1) + ' 款「' + (removed.product || '') + '」×' + (removed.qty || 0) + '（' + (removed.bottleType || '') + '）移除，餘 ' + items.length + ' 款');
       return { ok: true, orderNo: orderNo, removed: removed, itemsLeft: items.length };
+    }
+    return { ok: false, error: '找不到訂單：' + orderNo };
+  } finally { lock.releaseLock(); }
+}
+// ── v3.57 舊單酒款補綁酒譜分頁 ─────────────────────────────
+// 背景（2026-09-15 主公回報：訂單列表→PM 建 Run Card 除公版 v2 外全空卡）：
+//   客戶「先建單、後轉正式客戶」（日富一日 v3.52→v3.55；早期 Babyface／好野吧／昭和 亦同）或
+//   由報價系統 extCreateOrder 推過來的單（客戶名＝報價系統名，如「日富一日」「昭和浪漫」，非 CLIENTS 鍵），
+//   E 欄 JSON 內 items[].sheet 皆為空 → rcFillFromOrderItem 直接回空卡。
+//   v3.56 前端「同客戶同酒名」懶綁只在記憶體改值且要求 o.client === recipeList.client，上述兩種情況都對不上。
+// 做法：前端（自動比對或 PM 手選）→ 本端點把 sheet（＋配方來源客戶 srcClient）寫回 E 欄，訂單其他欄位不動。
+//   srcClient 沿用既有欄位語意（公版酒綁南坡萬v.2 配方來源）；getRecipeForProduction 前端已用 it.srcClient||o.client。
+//   防呆：itemIndex 對應列的 product 必須等於 p.product（防列表過期索引錯位）；已有 batchId（Run Card）不可改綁；
+//        srcClient||client 必須是 CLIENTS 鍵且該分頁真的存在（唯讀開一次客戶酒譜表確認）。
+function bindOrderItemSheet(p) {
+  const orderNo = String((p && p.orderNo) || '').trim();
+  const idx = Math.floor(Number(p && p.itemIndex));
+  const sheet = String((p && p.sheet) || '').trim();
+  const srcClient = String((p && p.srcClient) || '').trim();
+  const product = String((p && p.product) || '').trim();
+  if (!orderNo) return { ok: false, error: '缺少 orderNo' };
+  if (!(idx >= 0)) return { ok: false, error: '缺少 itemIndex' };
+  if (!sheet) return { ok: false, error: '缺少 sheet（酒譜分頁名）' };
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName('訂單主表');
+  if (!ws) return { ok: false, error: '找不到訂單主表分頁' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const data = ws.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) !== orderNo) continue;
+      const orderClient = String(data[i][1] || '');
+      let items = [];
+      try { items = data[i][4] ? JSON.parse(data[i][4]) : []; } catch (e) { return { ok: false, error: '訂單酒款明細 JSON 解析失敗' }; }
+      if (idx >= items.length) return { ok: false, error: '找不到第 ' + (idx + 1) + ' 款' };
+      const it = items[idx] || {};
+      if (product && String(it.product || '') !== product) return { ok: false, error: '酒款順序已變動（第 ' + (idx + 1) + ' 款現為「' + (it.product || '') + '」），請重新整理訂單列表再試' };
+      if (it.batchId) return { ok: false, error: '「' + it.product + '」已有 Run Card，不可改綁酒譜' };
+      // 配方來源客戶：指定 srcClient 優先，否則用訂單客戶；兩者都必須是 CLIENTS 鍵
+      const recipeClient = srcClient || orderClient;
+      let cfg;
+      try { cfg = getClientCfg(recipeClient); } catch (e) { return { ok: false, error: '「' + recipeClient + '」不是酒譜系統客戶，請改選有酒譜書的客戶來源' }; }
+      if (!isRecipeSheet(sheet)) return { ok: false, error: '「' + sheet + '」不是酒譜分頁（毛利／報價分頁不可綁）' };
+      const cws = SpreadsheetApp.openById(cfg.id).getSheetByName(sheet);
+      if (!cws) return { ok: false, error: '「' + recipeClient + '」的酒譜書找不到分頁「' + sheet + '」' };
+      const before = { sheet: String(it.sheet || ''), srcClient: String(it.srcClient || '') };
+      it.sheet = sheet;
+      if (srcClient && srcClient !== orderClient) it.srcClient = srcClient; else delete it.srcClient;
+      items[idx] = it;
+      ws.getRange(i + 1, 5).setValue(JSON.stringify(items));
+      _logOrderChange_(orderNo, p._user || '', '補綁酒譜',
+        '第 ' + (idx + 1) + ' 款「' + (it.product || '') + '」→ ' + (it.srcClient ? (it.srcClient + ' / ') : '') + sheet
+        + (before.sheet ? ('（原 ' + (before.srcClient ? before.srcClient + ' / ' : '') + before.sheet + '）') : '（原未綁）'));
+      return { ok: true, orderNo: orderNo, itemIndex: idx, item: { product: it.product, sheet: it.sheet, srcClient: it.srcClient || '' } };
     }
     return { ok: false, error: '找不到訂單：' + orderNo };
   } finally { lock.releaseLock(); }
@@ -3740,7 +3797,7 @@ var ORDERS_CACHE_KEYS = ['orders_v1_full_std', 'orders_v1_full_PM',
 // 任何會改動「訂單主表」的 action 成功後，立即清掉四把訂單快取。
 // 放在 doGet 派發層＝單一出口，日後新增寫入函式也不會忘記清（只要列進本表）。
 var ORDER_MUTATING_ACTIONS = {
-  createOrder:1, updateOrder:1, updateOrderFinance:1, updateOrderDelivery:1, deleteOrder:1, removeOrderItem:1,
+  createOrder:1, updateOrder:1, updateOrderFinance:1, updateOrderDelivery:1, deleteOrder:1, removeOrderItem:1, bindOrderItemSheet:1,   // v3.57
   completeOrderItem:1, confirmShipDate:1, shipOrder:1,
   migrateOrderNos:1, migrateOrderTypes:1, backfillOrderCreators:1,
   addShipment:1, deleteShipment:1,
