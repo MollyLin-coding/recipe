@@ -500,7 +500,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.55';
+const APP_VERSION='v3.56';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -4415,10 +4415,19 @@ async function rcOpenCard(id){
     st.stations.push({no:st.stations.length+1,name:'統計此酒款之最終產出瓶數',type:'final',count:'',note:'',operator:'',done:false});
   rcOpenEditor(st);
 }
+// v3.56 過渡假酒名 → 真酒譜分頁（只影響 Run Card 帶譜；訂單存值不動）。日富一日 v3.52 過渡期兩款假名對應 v3.55 FUJI- 真酒譜。
+const RC_LEGACY_SHEET_ALIAS = { '日富一日-蘋果威士忌': 'FUJI-蘋果蜂蜜威士忌調酒', '日富一日-芭樂琴酒': 'FUJI-芭樂紫蘇' };
 // 由訂單酒款帶入（配方走 getRecipeForProduction：成本已剝除、整單放量）
 async function rcFillFromOrderItem(st, o, it){
   st.orderNo=o.orderNo; st.client=o.client; st.product=it.product||''; st.sheet=it.sheet||'';
   st.bottleType=it.bottleType||''; st.pm=o.pm||st.pm; st.lot=o.lot||''; st.bottles=it.qty||'';
+  // v3.56 舊單懶綁譜：客戶在建單後才轉正式客戶（如日富一日 v3.52→v3.55），舊單酒款 sheet 空白 →
+  //   先以「同客戶同酒名」或「過渡假酒名對應表」找回真酒譜分頁，找到才帶譜；仍找不到才請手動填（訂單存值不動）。
+  if(!it.sheet){
+    const rr=recipeList.find(i=>i.client===o.client && i.recipeName===it.product)
+           || recipeList.find(i=>i.client===o.client && RC_LEGACY_SHEET_ALIAS[it.product] && i.sheet===RC_LEGACY_SHEET_ALIAS[it.product]);
+    if(rr){ it.sheet=rr.sheet; st.sheet=rr.sheet; }
+  }
   if(!it.sheet){ toast('此酒款未綁酒譜，原料請手動填'); return st; }
   const res=await api({ action:'getRecipeForProduction', client:(it.srcClient||o.client), sheet:it.sheet, volume:it.volume||'', qty:it.qty||0 });
   if(res.ok){
