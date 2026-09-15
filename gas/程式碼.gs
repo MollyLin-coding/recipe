@@ -475,9 +475,11 @@ function _logAction_(action, p, result) {
       var k = AUDIT_PARAM_KEYS[i];
       if (p[k] != null && p[k] !== '') parts.push(k + '=' + String(p[k]).slice(0, 60));
     }
-    ws.appendRow([Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss'),
+    var _nowA = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss');
+    ws.appendRow([_nowA,
       String(p._user || ''), String(p._role || ''), action, parts.join(' '),
       (result && result.ok) ? '成功' : ('失敗:' + String((result && result.error) || '').slice(0, 80))]);
+    _forceTextCell_(ws, ws.getLastRow(), 1, _nowA);   // v3.64 同 _logOrderChange_
   } catch (e) { /* 紀錄失敗不阻斷 */ }
 }
 
@@ -569,8 +571,9 @@ function _logLogin_(username, role, result) {
       ws = ss.insertSheet(LOGIN_LOG_SHEET);
       ws.getRange(1, 1, 1, 4).setValues([['時間', '帳號', '角色', '結果']]);
     }
-    ws.appendRow([Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss'),
-      String(username || ''), String(role || ''), String(result || '')]);
+    var _nowL = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss');
+    ws.appendRow([_nowL, String(username || ''), String(role || ''), String(result || '')]);
+    _forceTextCell_(ws, ws.getLastRow(), 1, _nowL);   // v3.64 同 _logOrderChange_
   } catch (e) { /* 紀錄失敗不阻斷登入 */ }
 }
 // v3.28 使用者資料「綁定經銷商」欄位定位：表頭列有「綁定經銷商」就用它，否則預設第 6 欄(F)。
@@ -1095,6 +1098,22 @@ function _numOrBlank_(v) { return (v == null || v === '') ? '' : (Number(v) || 0
 // ── v1.8 訂單異動紀錄（不可變流水帳；每張訂單的修改歷史備查）──
 var ORDER_LOG_SHEET = '訂單異動紀錄';
 var ORDER_LOG_HEADERS = ['時間', '訂單編號', '操作人', '動作', '內容摘要'];
+// ── v3.64 時間戳記時區修正（BUG-20260915）──────────────────────────
+// 現象：訂單修改紀錄顯示比實際「+15 小時」（11:13 寫入 → 顯示 09-16 02:13）。
+// 根因：這些紀錄把台北時間格式化成**字串**再 appendRow，Google Sheets 會把「2026-09-15 11:13:17」
+//   當日期**用試算表本身的時區**（本表＝美西 UTC-7）解析成 Date；讀回時 _fmtDateTime_ 又用
+//   Asia/Taipei 格式化 → 平白多了 8-(-7)=15 小時。
+// 兩段一起修：
+//   ① 寫入端：appendRow 後把時間欄改成純文字格式並重寫一次 → 之後永遠是字串，不再被解析（與試算表時區脫鉤）。
+//   ② 讀取端：既有的舊列已經是 Date，改用「試算表時區」格式化，就會還原成當初寫入的台北時鐘字串。
+function _sheetTz_() {
+  try { return SpreadsheetApp.openById(MAIN_SHEET_ID).getSpreadsheetTimeZone() || 'Asia/Taipei'; }
+  catch (e) { return 'Asia/Taipei'; }
+}
+// 把剛 appendRow 的那一列某欄改存純文字（防 Sheets 把時間字串吃成日期）
+function _forceTextCell_(ws, row, col, text) {
+  try { ws.getRange(row, col).setNumberFormat('@').setValue(String(text)); } catch (e) {}
+}
 function _logOrderChange_(orderNo, user, action, summary) {
   try {
     const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
@@ -1105,10 +1124,12 @@ function _logOrderChange_(orderNo, user, action, summary) {
     }
     const now = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss');
     ws.appendRow([now, String(orderNo), String(user || ''), String(action || ''), String(summary || '')]);
+    _forceTextCell_(ws, ws.getLastRow(), 1, now);   // v3.64 時間欄存純文字，與試算表時區脫鉤
   } catch (e) { /* 紀錄失敗不阻斷主流程 */ }
 }
 function _fmtDateTime_(v) {
-  if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss');
+  // v3.64 舊列是 Sheets 以「試算表時區」解析出來的 Date → 用同一個時區格式化才會還原成當初寫的台北時鐘
+  if (v instanceof Date) return Utilities.formatDate(v, _sheetTz_(), 'yyyy-MM-dd HH:mm:ss');
   return String(v == null ? '' : v);
 }
 function getOrderHistory(p) {
