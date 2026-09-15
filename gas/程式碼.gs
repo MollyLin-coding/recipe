@@ -171,7 +171,11 @@ var ROLE_MATRIX = {
   // v3.39 業績模型：僅 admin（Kevin／Molly）；財務／PM／倉管／FB觀看 一律 403，CONSIGN_DEALER_ACTIONS 白名單不加（經銷商 403）
   perfGet: ['admin'], perfSave: ['admin'], perfReset: ['admin'],
   // v3.40 廠務支出／固定成本：僅 admin（Kevin／Molly）；expImport 另可帶 CRM_CASH_KEY 免 token（本機匯入腳本）
-  expList: ['admin'], expSave: ['admin'], expDelete: ['admin'], expImport: ['admin'], fixedGet: ['admin'], fixedSave: ['admin']
+  expList: ['admin'], expSave: ['admin'], expDelete: ['admin'], expImport: ['admin'], fixedGet: ['admin'], fixedSave: ['admin'],
+  // v3.58 工務/業務會議：admin＋PM＋倉管（倉管在函式內強制 type=工務）；刪議題 admin 或建立人本人（函式內判）
+  mtgList: ['admin', 'PM', '倉管'], mtgGet: ['admin', 'PM', '倉管'], mtgCreate: ['admin', 'PM', '倉管'], mtgUpdate: ['admin', 'PM', '倉管'], mtgItemSave: ['admin', 'PM', '倉管'], mtgItemDelete: ['admin', 'PM', '倉管'],
+  // v3.58 毛利分析併入資材庫頁後只對 admin／PM 渲染 → 後端同步補閘門（原本未列＝任何登入者可打；v3.14 樣品成本走同 action，Lulu＝財務也在 FINANCE_USERS 內會呼叫，故一併放行財務）
+  getProfitData: ['admin', 'PM', '財務']
 };
 // v3.38 POST 入口：大 payload（經銷商設定含授權酒款 JSON／長文字、建單明細…）走 POST，免 GET 網址過長被 Google 回 400 HTML 頁。
 //   前端以 text/plain 送 JSON body（免 CORS preflight）；解析後與 doGet 走完全相同的流程（token 閘門／角色／派發）。
@@ -237,7 +241,7 @@ function doGet(e) {
       case 'getEnvInfo':
         try { CacheService.getScriptCache().removeAll(V3144_CACHE_KEYS); } catch (e) {}
         result = getEnvInfo();
-        result.modules = { consign: (typeof consignMe === 'function'), perf: (typeof perfGet === 'function'), expense: (typeof expList === 'function') };   // v3.40 expense 探針   // v3.39 perf 探針   // v3.28 免登入探針：consign.gs 是否真的在部署版本裡（2026-09-03 Action 漏檔事故）
+        result.modules = { consign: (typeof consignMe === 'function'), perf: (typeof perfGet === 'function'), expense: (typeof expList === 'function'), meeting: (typeof mtgList === 'function') };   // v3.58 meeting 探針   // v3.40 expense 探針   // v3.39 perf 探針   // v3.28 免登入探針：consign.gs 是否真的在部署版本裡（2026-09-03 Action 漏檔事故）
         // v3.14.5 診斷：CacheService 到底能不能用（put→get→remove 全程回報例外）
         result.cacheDiag = (function () {
           var d = {};
@@ -357,6 +361,12 @@ function doGet(e) {
       case 'extMarkImported':        result = extMarkImported(p); break;         // 反向匯入後回填對應報價單號              // v3.40 廠務支出：批次匯入(admin 或 CRM_CASH_KEY；來源鍵去重)
       case 'fixedGet':               result = fixedGet(p); break;               // v3.40 固定成本：該月(含沿用)(admin)
       case 'fixedSave':              result = fixedSave(p); break;              // v3.40 固定成本：寫該月列(admin)
+      case 'mtgList':                result = mtgList(p); break;                // v3.58 會議列表(admin/PM/倉管)
+      case 'mtgGet':                 result = mtgGet(p); break;                 // v3.58 單場會議＋議題
+      case 'mtgCreate':              result = mtgCreate(p); break;              // v3.58 新開會議（carryOver 帶入上一場未完成）
+      case 'mtgUpdate':              result = mtgUpdate(p); break;              // v3.58 主檔覆寫／結束會議
+      case 'mtgItemSave':            result = mtgItemSave(p); break;            // v3.58 議題新增／覆寫（源議題狀態同步）
+      case 'mtgItemDelete':          result = mtgItemDelete(p); break;          // v3.58 刪議題（admin 或建立人本人）
       case 'perfReset':              result = perfReset(p); break;              // v3.39 業績模型：恢復種子預設(admin；confirm=業績模型)
       case 'deleteShipment':         result = deleteShipment(p); break;          // 實際出貨紀錄：刪除某一次出貨(v3.26, admin 限定)
       case 'removeOrderItem':        result = removeOrderItem(p); break;         // v3.51 刪除訂單單一酒款列（admin；無出貨紀錄／未完成才可）
@@ -419,6 +429,7 @@ var AUDIT_ACTIONS = {
   consignRestockCreate:1, consignRestockApprove:1, consignRestockReject:1, consignMailTest:1, consignResetDealer:1,
   perfSave:1, perfReset:1,   // v3.39 業績模型寫入（摘要只收白名單參數，整包 JSON 不入紀錄）
   expSave:1, expDelete:1, expImport:1, fixedSave:1,   // v3.40 廠務支出／固定成本寫入
+  mtgCreate:1, mtgUpdate:1, mtgItemSave:1, mtgItemDelete:1,   // v3.58 工務/業務會議寫入
   saveRunCard:1, deleteRunCard:1, saveProcessNote:1,
   addBatchRecord:1, updateBatchRecord:1, deleteBatchRecord:1,
   submitApply:1, reviewApply:1, saveRdRecord:1, deleteRdRecord:1, submitRdApply:1, reviewRdApply:1,
@@ -5322,4 +5333,288 @@ function fixedSave(p) {
     else ws.getRange(rowIdx, 2, 1, FIXED_HEADERS.length - 1).setValues([vals.concat([note, op, now])]);
   } finally { lock.releaseLock(); }
   var f = _fixedRead_(month); f.ok = true; f.saved = true; return f;
+}
+
+// ============================================================
+// 📝 工務/業務會議模組（v3.58・2026-09-15 主公派工／Cowork spec「Code交接_會議分頁與毛利併入資材庫_spec_20260915」）
+//   主表新分頁「會議主檔」（一場一列）＋「會議議題」（一項一列；跨會議追蹤靠 R 欄源議題ID）。
+//   可見角色 admin／PM／倉管（倉管強制只看「工務」型）。寫入走 LockService；日期欄鎖 @ 文字（Sheets 會把 yyyy-MM-dd 轉 Date）。
+// ============================================================
+var MTG_SHEET = '會議主檔';
+var MTG_HEADERS = ['會議ID', '會議類型', '會議日期', '時間', '地點', '與會人員', '主持', '記錄人', '決議摘要', '下次會議日期', '狀態', '建立人', '建立時間', '更新人', '更新時間'];
+var MTC = { id: 0, type: 1, date: 2, time: 3, place: 4, attendees: 5, host: 6, recorder: 7, summary: 8, nextDate: 9, status: 10, createdBy: 11, createdAt: 12, updatedBy: 13, updatedAt: 14 };
+var MTI_SHEET = '會議議題';
+var MTI_HEADERS = ['議題ID', '會議ID', '會議類型', '段落代碼', '段落內序號', '議題／現況問題', '改善方案／行動', '負責人', '完成期限', '狀態', '備註', '建立人', '建立時間', '更新人', '更新時間', '完成日', '排序', '源議題ID'];
+var MTIC = { id: 0, meetingId: 1, type: 2, section: 3, seq: 4, issue: 5, plan: 6, owner: 7, due: 8, status: 9, note: 10, createdBy: 11, createdAt: 12, updatedBy: 13, updatedAt: 14, doneAt: 15, sort: 16, srcId: 17 };
+var MTG_TYPES = ['工務', '業務'];
+var MTG_STATUS = ['進行中', '已結束'];
+var MTG_ITEM_STATUS = ['未開始', '進行中', '完成', '延後'];
+var MTG_SECTIONS = { '工務': ['carry', 'clean', 'process', 'material', 'equip', 'other'], '業務': ['carry', 'kpi', 'leads', 'dealer', 'mkt', 'other'] };
+var MTG_CARRY = 'carry';
+var MTG_ROLES = ['admin', 'PM', '倉管'];
+
+function _mtgSheet_() {
+  var ws = _consignSheet_(MTG_SHEET, MTG_HEADERS);
+  if (ws.getMaxColumns() < MTG_HEADERS.length) ws.insertColumnsAfter(ws.getMaxColumns(), MTG_HEADERS.length - ws.getMaxColumns());
+  [MTC.date + 1, MTC.nextDate + 1].forEach(function (c) { ws.getRange(1, c, ws.getMaxRows(), 1).setNumberFormat('@'); });
+  return ws;
+}
+function _mtiSheet_() {
+  var ws = _consignSheet_(MTI_SHEET, MTI_HEADERS);
+  if (ws.getMaxColumns() < MTI_HEADERS.length) ws.insertColumnsAfter(ws.getMaxColumns(), MTI_HEADERS.length - ws.getMaxColumns());
+  [MTIC.due + 1, MTIC.doneAt + 1].forEach(function (c) { ws.getRange(1, c, ws.getMaxRows(), 1).setNumberFormat('@'); });
+  return ws;
+}
+function _mtgDateStr_(v) { var s = _fmtDate_(v).trim(); return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : ''; }
+function _mtgStr_(v, n) { return String(v == null ? '' : v).trim().slice(0, n || 200); }
+// 倉管只看得到「工務」型：任何帶 type 的請求一律強制覆寫（後端為準，前端只是 UI）
+function _mtgTypeOf_(p, fallback) {
+  var t = _mtgStr_(p && p.type, 10);
+  if (p && p._role === '倉管') return '工務';
+  if (MTG_TYPES.indexOf(t) < 0) return fallback === undefined ? '' : fallback;
+  return t;
+}
+function _mtgRowObj_(r, rowIdx) {
+  return {
+    id: String(r[MTC.id] || ''), type: String(r[MTC.type] || '').trim(), date: _mtgDateStr_(r[MTC.date]), time: String(r[MTC.time] || ''),
+    place: String(r[MTC.place] || ''), attendees: String(r[MTC.attendees] || ''), host: String(r[MTC.host] || ''), recorder: String(r[MTC.recorder] || ''),
+    summary: String(r[MTC.summary] || ''), nextDate: _mtgDateStr_(r[MTC.nextDate]), status: String(r[MTC.status] || '').trim() || '進行中',
+    createdBy: String(r[MTC.createdBy] || ''), createdAt: _fmtDateTime_(r[MTC.createdAt]), updatedBy: String(r[MTC.updatedBy] || ''), updatedAt: _fmtDateTime_(r[MTC.updatedAt]),
+    rowIdx: rowIdx
+  };
+}
+function _mtgRowArr_(o) {
+  return [o.id, o.type, o.date, o.time, o.place, o.attendees, o.host, o.recorder, o.summary, o.nextDate, o.status, o.createdBy, o.createdAt, o.updatedBy, o.updatedAt];
+}
+function _mtiRowObj_(r, rowIdx) {
+  return {
+    id: String(r[MTIC.id] || ''), meetingId: String(r[MTIC.meetingId] || ''), type: String(r[MTIC.type] || '').trim(), section: String(r[MTIC.section] || '').trim(),
+    seq: Number(r[MTIC.seq]) || 0, issue: String(r[MTIC.issue] || ''), plan: String(r[MTIC.plan] || ''), owner: String(r[MTIC.owner] || '').trim(),
+    due: _mtgDateStr_(r[MTIC.due]), status: String(r[MTIC.status] || '').trim() || '未開始', note: String(r[MTIC.note] || ''),
+    createdBy: String(r[MTIC.createdBy] || ''), createdAt: _fmtDateTime_(r[MTIC.createdAt]), updatedBy: String(r[MTIC.updatedBy] || ''), updatedAt: _fmtDateTime_(r[MTIC.updatedAt]),
+    doneAt: _mtgDateStr_(r[MTIC.doneAt]), sort: Number(r[MTIC.sort]) || 0, srcId: String(r[MTIC.srcId] || ''),
+    rowIdx: rowIdx
+  };
+}
+function _mtiRowArr_(o) {
+  return [o.id, o.meetingId, o.type, o.section, o.seq, o.issue, o.plan, o.owner, o.due, o.status, o.note, o.createdBy, o.createdAt, o.updatedBy, o.updatedAt, o.doneAt, o.sort, o.srcId];
+}
+function _mtgAll_() { return _consignRowsRO_(MTG_SHEET, MTG_HEADERS).map(function (r, i) { return _mtgRowObj_(r, i + 2); }).filter(function (o) { return o.id; }); }
+function _mtiAll_() { return _consignRowsRO_(MTI_SHEET, MTI_HEADERS).map(function (r, i) { return _mtiRowObj_(r, i + 2); }).filter(function (o) { return o.id; }); }
+function _mtgSortItems_(items, type) {
+  var order = MTG_SECTIONS[type] || MTG_SECTIONS['工務'];
+  return items.slice().sort(function (a, b) {
+    var sa = order.indexOf(a.section), sb = order.indexOf(b.section);
+    if (sa !== sb) return sa - sb;
+    if (a.seq !== b.seq) return a.seq - b.seq;
+    return a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0;
+  });
+}
+function _mtgFind_(ws, id) {
+  var n = ws.getLastRow() - 1;
+  if (n < 1) return -1;
+  var ids = ws.getRange(2, 1, n, 1).getValues();
+  for (var i = 0; i < ids.length; i++) if (String(ids[i][0]) === id) return i + 2;
+  return -1;
+}
+
+// 列表：會議主檔（新→舊，預設 30 場）＋每場議題數／未完成數。type 空＝全部（倉管一律工務）
+function mtgList(p) {
+  _mtgSheet_(); _mtiSheet_();
+  var type = _mtgTypeOf_(p, '');
+  var limit = Math.max(1, Math.min(200, Number((p && p.limit) || 30)));
+  var items = _mtiAll_(), cnt = {};
+  items.forEach(function (it) {
+    var c = cnt[it.meetingId] = cnt[it.meetingId] || { total: 0, open: 0 };
+    c.total++; if (it.status !== '完成') c.open++;
+  });
+  var list = _mtgAll_().filter(function (m) { return !type || m.type === type; })
+    .sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : (a.createdAt < b.createdAt ? 1 : -1); })
+    .slice(0, limit)
+    .map(function (m) { var c = cnt[m.id] || { total: 0, open: 0 }; m.itemCount = c.total; m.openCount = c.open; delete m.rowIdx; return m; });
+  return { ok: true, type: type, list: list, types: (p && p._role === '倉管') ? ['工務'] : MTG_TYPES, sections: MTG_SECTIONS, statuses: MTG_ITEM_STATUS };
+}
+// 單場：主檔＋全部議題（依段落代碼→序號→建立時間）
+function mtgGet(p) {
+  var id = _mtgStr_(p && p.id, 40);
+  if (!id) return { ok: false, error: '缺少 id' };
+  var m = null;
+  _mtgAll_().forEach(function (x) { if (x.id === id) m = x; });
+  if (!m) return { ok: false, error: '找不到會議：' + id };
+  if (p && p._role === '倉管' && m.type !== '工務') return { ok: false, error: '權限不足' };
+  delete m.rowIdx;
+  var items = _mtgSortItems_(_mtiAll_().filter(function (it) { return it.meetingId === id; }), m.type)
+    .map(function (it) { delete it.rowIdx; return it; });
+  // carry 段的源議題所屬會議日期（顯示「◀ 承 MM-DD」用）
+  var srcIds = {}; items.forEach(function (it) { if (it.srcId) srcIds[it.srcId] = 1; });
+  var srcMeeting = {};
+  if (Object.keys(srcIds).length) {
+    var mById = {}; _mtgAll_().forEach(function (x) { mById[x.id] = x.date; });
+    _mtiAll_().forEach(function (it) { if (srcIds[it.id]) srcMeeting[it.id] = mById[it.meetingId] || ''; });
+  }
+  items.forEach(function (it) { if (it.srcId) it.srcDate = srcMeeting[it.srcId] || ''; });
+  return { ok: true, meeting: m, items: items, sections: MTG_SECTIONS[m.type] || MTG_SECTIONS['工務'], statuses: MTG_ITEM_STATUS };
+}
+// 建主檔；carryOver=1 → 同型「日期 < 本場」最近一場的「狀態≠完成」議題複製為本場 carry 段（R 欄記源議題ID）
+function mtgCreate(p) {
+  p = p || {};
+  var type = _mtgTypeOf_(p, '');
+  if (!type) return { ok: false, error: '會議類型須為：' + MTG_TYPES.join('／') };
+  var date = _mtgDateStr_(p.date);
+  if (!date) return { ok: false, error: '會議日期格式須為 yyyy-MM-dd' };
+  var op = String(p._user || ''), now = _consignNow_();
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    var ws = _mtgSheet_(), wi = _mtiSheet_();
+    var all = _mtgAll_();
+    for (var i = 0; i < all.length; i++) if (all[i].type === type && all[i].date === date) return { ok: false, error: '同日已有會議（' + type + ' ' + date + '），請直接開啟該場' };
+    var m = {
+      id: _consignGenId_('M'), type: type, date: date, time: _mtgStr_(p.time, 30), place: _mtgStr_(p.place, 60) || '南坡萬酒廠',
+      attendees: _mtgStr_(p.attendees, 120), host: _mtgStr_(p.host, 30) || 'Kevin', recorder: _mtgStr_(p.recorder, 30) || op,
+      summary: '', nextDate: _mtgDateStr_(p.nextDate), status: '進行中', createdBy: op, createdAt: now, updatedBy: op, updatedAt: now
+    };
+    ws.appendRow(_mtgRowArr_(m));
+    var carried = 0, prevId = '';
+    if (String(p.carryOver || '') === '1') {
+      var prev = null;
+      all.forEach(function (x) { if (x.type === type && x.date < date && (!prev || x.date > prev.date || (x.date === prev.date && x.createdAt > prev.createdAt))) prev = x; });
+      if (prev) {
+        prevId = prev.id;
+        var src = _mtgSortItems_(_mtiAll_().filter(function (it) { return it.meetingId === prev.id && it.status !== '完成'; }), type);
+        var rows = [];
+        src.forEach(function (it, k) {
+          rows.push(_mtiRowArr_({
+            id: _consignGenId_('I'), meetingId: m.id, type: type, section: MTG_CARRY, seq: k + 1,
+            issue: it.issue, plan: it.plan, owner: it.owner, due: it.due, status: it.status,
+            note: ('◀ 承 ' + prev.date + (it.note ? '｜' + it.note : '')).slice(0, 300),
+            createdBy: op, createdAt: now, updatedBy: op, updatedAt: now, doneAt: '', sort: k + 1, srcId: it.id
+          }));
+        });
+        if (rows.length) { wi.getRange(wi.getLastRow() + 1, 1, rows.length, MTI_HEADERS.length).setValues(rows); carried = rows.length; }
+      }
+    }
+    delete m.rowIdx;
+    return { ok: true, id: m.id, meeting: m, carried: carried, from: prevId };
+  } finally { lock.releaseLock(); }
+}
+// 主檔覆寫（表頭欄位／決議摘要／下次會議日期／狀態）
+function mtgUpdate(p) {
+  p = p || {};
+  var id = _mtgStr_(p.id, 40);
+  if (!id) return { ok: false, error: '缺少 id' };
+  var op = String(p._user || ''), now = _consignNow_();
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    var ws = _mtgSheet_();
+    var row = _mtgFind_(ws, id);
+    if (row < 0) return { ok: false, error: '找不到會議：' + id };
+    var m = _mtgRowObj_(ws.getRange(row, 1, 1, MTG_HEADERS.length).getValues()[0], row);
+    if (p._role === '倉管' && m.type !== '工務') return { ok: false, error: '權限不足' };
+    if (p.date != null) {
+      var d = _mtgDateStr_(p.date);
+      if (!d) return { ok: false, error: '會議日期格式須為 yyyy-MM-dd' };
+      if (d !== m.date) {
+        var dup = _mtgAll_().some(function (x) { return x.id !== id && x.type === m.type && x.date === d; });
+        if (dup) return { ok: false, error: '同日已有會議（' + m.type + ' ' + d + '）' };
+        m.date = d;
+      }
+    }
+    if (p.time != null) m.time = _mtgStr_(p.time, 30);
+    if (p.place != null) m.place = _mtgStr_(p.place, 60);
+    if (p.attendees != null) m.attendees = _mtgStr_(p.attendees, 120);
+    if (p.host != null) m.host = _mtgStr_(p.host, 30);
+    if (p.recorder != null) m.recorder = _mtgStr_(p.recorder, 30);
+    if (p.summary != null) m.summary = String(p.summary).trim().slice(0, 3000);
+    if (p.nextDate != null) { var nd = _mtgDateStr_(p.nextDate); if (p.nextDate && !nd) return { ok: false, error: '下次會議日期格式須為 yyyy-MM-dd' }; m.nextDate = nd; }
+    if (p.status != null) { var st = _mtgStr_(p.status, 10); if (MTG_STATUS.indexOf(st) < 0) return { ok: false, error: '狀態須為：' + MTG_STATUS.join('／') }; m.status = st; }
+    m.updatedBy = op; m.updatedAt = now;
+    ws.getRange(row, 1, 1, MTG_HEADERS.length).setValues([_mtgRowArr_(m)]);
+    delete m.rowIdx;
+    return { ok: true, meeting: m };
+  } finally { lock.releaseLock(); }
+}
+// 議題：新增（無 id）或覆寫（有 id）一列；狀態改完成→P 欄填今天；R 欄有源議題→狀態同步寫回源議題
+function mtgItemSave(p) {
+  p = p || {};
+  var id = _mtgStr_(p.id, 40), meetingId = _mtgStr_(p.meetingId, 40);
+  var op = String(p._user || ''), now = _consignNow_(), today = _consignToday_();
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    var wm = _mtgSheet_(), wi = _mtiSheet_();
+    var old = null, row = -1;
+    if (id) {
+      row = _mtgFind_(wi, id);
+      if (row < 0) return { ok: false, error: '找不到議題：' + id };
+      old = _mtiRowObj_(wi.getRange(row, 1, 1, MTI_HEADERS.length).getValues()[0], row);
+      meetingId = old.meetingId;
+    }
+    if (!meetingId) return { ok: false, error: '缺少 meetingId' };
+    var mrow = _mtgFind_(wm, meetingId);
+    if (mrow < 0) return { ok: false, error: '找不到會議：' + meetingId };
+    var m = _mtgRowObj_(wm.getRange(mrow, 1, 1, MTG_HEADERS.length).getValues()[0], mrow);
+    if (p._role === '倉管' && m.type !== '工務') return { ok: false, error: '權限不足' };
+    if (!id && m.status === '已結束') return { ok: false, error: '會議已結束，不可新增議題（可改既有議題狀態）' };
+    var secs = MTG_SECTIONS[m.type] || MTG_SECTIONS['工務'];
+    var section = _mtgStr_(p.section != null ? p.section : (old ? old.section : ''), 20);
+    if (secs.indexOf(section) < 0) return { ok: false, error: '段落代碼不合法：' + section };
+    var issue = String(p.issue != null ? p.issue : (old ? old.issue : '')).trim().slice(0, 500);
+    if (!issue) return { ok: false, error: '議題／現況問題不可空白' };
+    var owner = _mtgStr_(p.owner != null ? p.owner : (old ? old.owner : ''), 30);
+    if (!owner) return { ok: false, error: '負責人不可空白' };
+    var status = _mtgStr_(p.status != null ? p.status : (old ? old.status : '未開始'), 10) || '未開始';
+    if (MTG_ITEM_STATUS.indexOf(status) < 0) return { ok: false, error: '狀態須為：' + MTG_ITEM_STATUS.join('／') };
+    var due = '';
+    if (p.due != null) { due = _mtgDateStr_(p.due); if (String(p.due).trim() && !due) return { ok: false, error: '完成期限格式須為 yyyy-MM-dd' }; }
+    else if (old) due = old.due;
+    var o = old || { id: _consignGenId_('I'), meetingId: meetingId, type: m.type, seq: 0, createdBy: op, createdAt: now, doneAt: '', sort: 0, srcId: '' };
+    var secChanged = !old || old.section !== section;
+    if (secChanged) {
+      var mx = 0;
+      _mtiAll_().forEach(function (it) { if (it.meetingId === meetingId && it.section === section && it.id !== o.id) mx = Math.max(mx, it.seq); });
+      o.seq = mx + 1; o.sort = o.seq;
+    }
+    o.section = section; o.issue = issue; o.owner = owner; o.status = status; o.due = due;
+    o.plan = String(p.plan != null ? p.plan : (old ? old.plan : '')).trim().slice(0, 500);
+    o.note = String(p.note != null ? p.note : (old ? old.note : '')).trim().slice(0, 300);
+    if (status === '完成') { if (!o.doneAt) o.doneAt = today; } else o.doneAt = '';
+    o.updatedBy = op; o.updatedAt = now;
+    var arr = _mtiRowArr_(o);
+    if (old) wi.getRange(row, 1, 1, MTI_HEADERS.length).setValues([arr]);
+    else wi.appendRow(arr);
+    // 源議題狀態同步（避免上週表與本週表兩套狀態）
+    var synced = false;
+    if (o.srcId) {
+      var srow = _mtgFind_(wi, o.srcId);
+      if (srow > 0) {
+        var s = _mtiRowObj_(wi.getRange(srow, 1, 1, MTI_HEADERS.length).getValues()[0], srow);
+        if (s.status !== o.status || s.doneAt !== o.doneAt) {
+          s.status = o.status; s.doneAt = o.doneAt; s.updatedBy = op; s.updatedAt = now;
+          wi.getRange(srow, 1, 1, MTI_HEADERS.length).setValues([_mtiRowArr_(s)]);
+          synced = true;
+        }
+      }
+    }
+    delete o.rowIdx;
+    return { ok: true, id: o.id, item: o, created: !old, synced: synced };
+  } finally { lock.releaseLock(); }
+}
+// 刪一列：admin，或建立人本人且會議未結束
+function mtgItemDelete(p) {
+  p = p || {};
+  var id = _mtgStr_(p.id, 40);
+  if (!id) return { ok: false, error: '缺少 id' };
+  var lock = LockService.getScriptLock(); lock.waitLock(10000);
+  try {
+    var wi = _mtiSheet_(), wm = _mtgSheet_();
+    var row = _mtgFind_(wi, id);
+    if (row < 0) return { ok: false, error: '找不到議題：' + id };
+    var it = _mtiRowObj_(wi.getRange(row, 1, 1, MTI_HEADERS.length).getValues()[0], row);
+    if (p._role !== 'admin') {
+      if (it.createdBy !== String(p._user || '')) return { ok: false, error: '只能刪除自己建立的議題' };
+      var mrow = _mtgFind_(wm, it.meetingId);
+      if (mrow > 0 && _mtgRowObj_(wm.getRange(mrow, 1, 1, MTG_HEADERS.length).getValues()[0], mrow).status === '已結束') return { ok: false, error: '會議已結束，不可刪除議題' };
+    }
+    wi.deleteRow(row);
+    return { ok: true, id: id, deleted: true };
+  } finally { lock.releaseLock(); }
 }
