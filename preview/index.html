@@ -409,6 +409,18 @@ tbody tr:hover td{background:#faf3e8;}
 .perf-formula{font-size:11.5px;background:var(--bg);padding:8px 10px;border-radius:8px;line-height:1.6;color:var(--ink2);font-family:ui-monospace,Menlo,Consolas,monospace;overflow-x:auto;}
 .btn-dirty{background:var(--red)!important;color:#fff!important;animation:perfPulse 1.2s ease-in-out infinite;}
 @keyframes perfPulse{0%,100%{box-shadow:0 0 0 0 rgba(184,50,50,.45);}50%{box-shadow:0 0 0 6px rgba(184,50,50,0);}}
+/* v3.58 工務/業務會議 */
+.mtg-row{display:flex;gap:8px;align-items:center;padding:9px 4px;border-bottom:1px solid var(--border);cursor:pointer;}
+.mtg-row:last-child{border-bottom:none;}.mtg-row:hover{background:#faf3e8;}
+.mtg-row-main{flex:1;min-width:0;}.mtg-row-l1{font-size:14px;line-height:1.4;}.mtg-row-l2{font-size:11.5px;color:var(--ink2);margin-top:2px;line-height:1.5;word-break:break-word;}
+.mtg-row-r{flex:0 0 auto;text-align:right;}.mtg-cnt{font-family:'Noto Serif TC',serif;font-size:15px;color:var(--gold-dk);}.mtg-open{font-size:11px;color:var(--green);}.mtg-open.has{color:var(--red);}
+.mtg-item{display:flex;gap:8px;align-items:flex-start;padding:8px 2px;border-bottom:1px solid var(--border);}
+.mtg-item:last-child{border-bottom:none;}
+.mtg-no{flex:0 0 22px;text-align:center;font-family:'Noto Serif TC',serif;font-size:13px;color:var(--gold-dk);padding-top:2px;}
+.mtg-item-main{flex:1;min-width:0;}.mtg-item-l1{font-size:13.5px;line-height:1.45;word-break:break-word;}.mtg-item-l2{font-size:12.5px;color:var(--ink2);margin-top:2px;line-height:1.45;word-break:break-word;}
+.mtg-item-l3{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;font-size:11.5px;color:var(--ink2);margin-top:4px;}
+.mtg-item-r{flex:0 0 auto;display:flex;gap:2px;}.mtg-item-r .btn{padding:4px 6px;}
+.mtg-over{color:var(--red);font-weight:700;}
 </style>
 </head>
 <body>
@@ -459,7 +471,7 @@ tbody tr:hover td{background:#faf3e8;}
   <div id="navbar">
     <div class="nav-tab"        data-tab="batch"     onclick="switchTab('batch')">    <span class="ni">📦</span><span>訂單</span></div>
     <div class="nav-tab active" data-tab="recipe"    onclick="switchTab('recipe')">   <span class="ni">📋</span><span>酒譜/run card</span></div>
-    <div class="nav-tab"        data-tab="profit"    onclick="switchTab('profit')">   <span class="ni">📊</span><span>毛利分析</span></div>
+    <div class="nav-tab"        data-tab="meeting"   onclick="switchTab('meeting')">  <span class="ni">📝</span><span>工務/業務會議</span></div><!-- v3.58 原「📊 毛利分析」降為原料/資材庫頁內一張卡（admin／PM） -->
     <div class="nav-tab"        data-tab="inventory" onclick="switchTab('inventory')"><span class="ni">🧪</span><span>原料/資材庫</span></div>
     <div class="nav-tab"        data-tab="rd"        onclick="switchTab('rd')">       <span class="ni">🔬</span><span>研發試算</span></div>
     <div class="nav-tab"        data-tab="stock"     onclick="switchTab('stock')">    <span class="ni">🗄️</span><span>成品庫存</span></div>
@@ -522,7 +534,7 @@ document.addEventListener('wheel', function (e) {
 let _sessExpiredShown = false;
 // v3.33 寫入處理中遮罩（計數器＋延遲顯示，多個寫入重疊也只有一層）
 let _busyN = 0, _busyTimer = null;
-const BUSY_READ_RE = /^(get|bootstrap|login|checkUser|consignMe|consignDealers|consignPrices|consignOverview|consignAlerts|consignLedger|consignStatements|consignDaily|consignRestockList|perfGet|expList|fixedGet)/;   // v3.39 +perfGet；v3.40 +expList/fixedGet
+const BUSY_READ_RE = /^(get|bootstrap|login|checkUser|consignMe|consignDealers|consignPrices|consignOverview|consignAlerts|consignLedger|consignStatements|consignDaily|consignRestockList|perfGet|mtgList|mtgGet|expList|fixedGet)/;   // v3.39 +perfGet；v3.40 +expList/fixedGet
 function _busyEl() {
   let el = document.getElementById('busyOverlay');
   if (!el) { el = document.createElement('div'); el.id = 'busyOverlay'; el.innerHTML = '<div class="busy-box"><div class="busy-spin"></div><div id="busyMsg">系統處理中，請稍候…</div></div>'; document.body.appendChild(el); }
@@ -557,7 +569,7 @@ async function api(params, silent) {
   const url = API + '?' + Object.entries(send).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
   // v3.38 大 payload 走 POST（後端 doPost 同流程）：GET 網址超過 ~10KB Google 直接回 400 HTML → 前端誤判「系統忙碌」而資料沒存。
   //   經銷商設定（授權酒款 JSON＋多段長文字）固定走 POST；其餘 action 網址超過 6000 字元自動改 POST。text/plain 免 preflight。
-  const _post = /^(consignSaveDealer|perfSave|expImport)$/.test(_act) || url.length > 6000;   // v3.40 +expImport   // v3.39 perfSave 整包 params/months 物件固定 POST
+  const _post = /^(consignSaveDealer|perfSave|expImport|mtgItemSave|mtgUpdate)$/.test(_act) || url.length > 6000;   // v3.58 會議長文字固定 POST   // v3.40 +expImport   // v3.39 perfSave 整包 params/months 物件固定 POST
   let _lastErr = '';
   try {
     for (let _try = 0; ; _try++) {
@@ -772,10 +784,11 @@ async function _bootApp(username, role) {
   // admin 才顯示審核
   document.querySelectorAll('.admin-only').forEach(el => el.style.display = role === 'admin' ? '' : 'none');
   // 角色分頁分流：倉管=run card+庫存；財務(Lulu)=只看訂單/run card(含金流總覽)；FB觀看(上海Jason)=只看酒譜；其餘角色維持原本可見範圍
-  const ROLE_TABS = { '倉管': ['batch', 'recipe', 'stock', 'inventory'], '財務': ['batch'], 'FB觀看': ['recipe'] }; // v3.3 主公指示：小李(倉管)加開 酒譜/run card
+  const ROLE_TABS = { '倉管': ['batch', 'recipe', 'stock', 'inventory', 'meeting'], '財務': ['batch'], 'FB觀看': ['recipe'] };   // v3.58 倉管 +meeting（只看工務型，後端強制） // v3.3 主公指示：小李(倉管)加開 酒譜/run card
   const allowed = ROLE_TABS[role];
   // v3.19 F5 還原到原分頁：_restoreTab 只在 _sessRestore 路徑有值；新登入維持預設分頁
-  const _rt = window._restoreTab || null; window._restoreTab = null;
+  let _rt = window._restoreTab || null; window._restoreTab = null;
+  if (_rt === 'profit') _rt = 'inventory';   // v3.58 毛利分析已併入原料/資材庫頁
   if (allowed) {
     document.querySelectorAll('#navbar .nav-tab').forEach(el =>
       el.style.display = allowed.includes(el.dataset.tab) ? '' : 'none');
@@ -785,7 +798,8 @@ async function _bootApp(username, role) {
     document.querySelectorAll('#navbar .nav-tab').forEach(el => {
       if (!el.classList.contains('admin-only')) el.style.display = '';
     });
-    const _tabsOK = ['recipe','profit','inventory','rd','batch','stock','apply','consign','perf','expense'];   // v3.39 +perf；v3.40 +expense
+    const _mtgTab = document.querySelector('#navbar .nav-tab[data-tab="meeting"]'); if (_mtgTab) _mtgTab.style.display = (role === 'admin' || role === 'PM') ? '' : 'none';   // v3.58 會議分頁：admin／PM（倉管走 ROLE_TABS）
+    const _tabsOK = ['recipe','meeting','inventory','rd','batch','stock','apply','consign','perf','expense'];   // v3.39 +perf；v3.40 +expense；v3.58 profit→meeting
     switchTab((_rt && _tabsOK.includes(_rt) && (!['apply', 'consign', 'perf', 'expense'].includes(_rt) || role === 'admin')) ? _rt : 'batch'); // v3.9.2 登入預設=訂單分頁(主公指示)
   }
   showStockAlerts(window._bootStockAlerts);
@@ -953,7 +967,7 @@ function switchTab(tab) {
 
   document.querySelectorAll('.nav-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
   const mc = document.getElementById('mainContent'); mc.scrollTop = 0;
-  ({ recipe:renderRecipePage, profit:renderProfitPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderRuncardPage, order:renderOrderPage, stock:renderStockPage, apply:renderApplyPage, consign:renderConsignPage, perf:renderPerfPage, expense:renderExpensePage })[tab]?.(mc);
+  ({ recipe:renderRecipePage, meeting:renderMeetingPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderRuncardPage, order:renderOrderPage, stock:renderStockPage, apply:renderApplyPage, consign:renderConsignPage, perf:renderPerfPage, expense:renderExpensePage })[tab]?.(mc);
   wmUpdate(); // v3.8 酒譜頁浮水印開/關
 }
 
@@ -1382,7 +1396,7 @@ function renderProfitData(res) {
 // ③ 原料庫 + 資材費用
 // ════════════════════════════════════════════════
 async function renderInventoryPage(mc) {
-  mc.innerHTML = `<div class="card">
+  mc.innerHTML = `<div id="invProfitCard">${invProfitCardHtml()}</div><div class="card">
     <div class="sec-hd"><div class="card-title" style="margin:0">🍾 玻璃瓶庫存</div>
       <div style="display:flex;gap:6px;">${_canSetSafety() ? '<button class="btn btn-primary btn-sm" onclick="showAddBottleItem()">➕ 新增品項</button>' : ''}<button class="btn btn-ghost btn-sm" onclick="loadBottleOverview();loadBottleLedger();">↻</button></div></div>
     <div id="bottleWaterArea"><div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>
@@ -1435,6 +1449,7 @@ async function renderInventoryPage(mc) {
   </div>`;
   await loadInv();
   renderMaterialCost();
+  if (document.getElementById('profitArea') && !_invProfitFold) loadProfit();   // v3.58 毛利卡展開狀態才讀（避免每次進資材庫多打一次 GAS）
   // 玻璃瓶庫存
   const _bd = _localDate();
   document.getElementById('biDate').value = _bd;
@@ -5949,6 +5964,347 @@ async function expFixedSave(btn) {
   toast('✅ 固定成本已存為 ' + expMonth);
   btn.closest('.modal-bg').remove();
   expLoad();
+}
+
+// ════════════════════════════════════════════════
+// 📝 工務/業務會議（v3.58・2026-09-15 主公派工／Cowork spec「Code交接_會議分頁與毛利併入資材庫_spec_20260915」）
+//   工程部週會議題表做進 APP：列表態（歷次會議）→ 會議態（表頭＋六段議題卡＋第七段決議）＋列印（A4 橫式，與 .docx 範本同構）。
+//   資料落主表「會議主檔」「會議議題」；可見 admin／PM／倉管（倉管只有工務型，後端強制）。
+// ════════════════════════════════════════════════
+const MTG_SECTIONS = {
+  '工務': [
+    { code: 'carry',    title: '一、上週待辦追蹤',       hint: '上週決議事項的執行進度（完成／進行中／延後／取消）' },
+    { code: 'clean',    title: '二、潔淨室環境改善事項', hint: '溫濕度・落塵・人員進出動線・清潔消毒・耗材補給' },
+    { code: 'process',  title: '三、製程改善事項',       hint: '萃取・調配・過濾澄清・灌裝・貼標・批次紀錄與良率' },
+    { code: 'material', title: '四、材料改善事項',       hint: '原料（茶葉・基酒・糖・水）・瓶器・瓶蓋・標籤・包材之品質、供應與庫存' },
+    { code: 'equip',    title: '五、設備改善事項',       hint: '故障／異常・保養週期・零件耗材・新設備需求' },
+    { code: 'other',    title: '六、其他討論事項',       hint: '安全衛生・排程協調・跨部門需求・教育訓練・提案' }
+  ],
+  // 🟡 業務型段落＝軍師草案（待主公拍板；只換常數即可）
+  '業務': [
+    { code: 'carry',  title: '一、上週待辦追蹤',         hint: '上週決議事項的執行進度' },
+    { code: 'kpi',    title: '二、本月業績與訂單追蹤',   hint: '目標／實際營收・在手訂單・出貨排程・收款' },
+    { code: 'leads',  title: '三、客戶開發進度（KSR）', hint: '探勘名單・開發信／去電・拜訪・提案・成交' },
+    { code: 'dealer', title: '四、經銷商與通路',         hint: '叫貨・寄售對帳・鋪貨・新通路洽談' },
+    { code: 'mkt',    title: '五、行銷與活動',           hint: '官網／SEO・廣告・社群・檔期活動・素材' },
+    { code: 'other',  title: '六、其他討論事項',         hint: '跨部門需求・教育訓練・提案' }
+  ]
+};
+const MTG_OWNERS = ['Kevin', '阿軒', '小李', 'Molly', 'Vic'];
+const MTG_DEFAULT_ATT = { '工務': 'Kevin／阿軒／小李', '業務': 'Kevin／Molly／Vic' };
+const MTG_ITEM_STATUS = ['未開始', '進行中', '完成', '延後'];
+const MTG_ST_CLS = { '未開始': 'na', '進行中': 'warn', '完成': 'ok', '延後': 'bad' };
+let _mtgType = '工務', _mtgList = null, _mtgCur = null;   // _mtgCur = { meeting, items, sections, statuses }
+function _mtgCanSee() { return !!(curUser && ['admin', 'PM', '倉管'].includes(curUser.role)); }
+function _mtgTypes() { return (curUser && curUser.role === '倉管') ? ['工務'] : ['工務', '業務']; }
+function _mtgSecDefs(type) { return MTG_SECTIONS[type] || MTG_SECTIONS['工務']; }
+function _mtgWd(d) { const w = '日一二三四五六'; try { const t = new Date(d + 'T00:00:00'); return isNaN(t) ? '' : '（週' + w[t.getDay()] + '）'; } catch (e) { return ''; } }
+function _mtgOverdue(it) { return !!(it.due && it.status !== '完成' && it.due < _localDate()); }
+
+function renderMeetingPage(mc) {
+  if (!_mtgCanSee()) { mc.innerHTML = '<div class="card"><div style="color:var(--ink3);padding:14px;font-size:13px;">此分頁僅 admin／PM／倉管 可見</div></div>'; return; }
+  if (!_mtgTypes().includes(_mtgType)) _mtgType = '工務';
+  if (_mtgCur) { mtgRenderDetail(mc); return; }
+  mc.innerHTML = `
+  <div class="card" style="margin-bottom:10px;">
+    <div class="sec-hd">
+      <div class="card-title" style="margin:0;">📝 工務/業務會議</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        ${_mtgTypes().map(t => `<span class="perf-chip ${t === _mtgType ? 'ok' : 'na'}" style="cursor:pointer;font-size:12px;padding:4px 10px;" onclick="mtgSetType('${t}')">${t}會議</span>`).join('')}
+        <button class="btn btn-ghost btn-sm" onclick="mtgLoadList()" title="重新讀取">↻</button>
+        <button class="btn btn-primary btn-sm" onclick="mtgShowNewModal()">＋ 新開會議</button>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--ink3);line-height:1.6;">一場會議一張表：表頭＋六段議題（一項一列、有負責人、有期限）＋決議摘要。新開會議時可自動把上一場「未完成」議題帶進「一、上週待辦追蹤」，本週改狀態會同步回寫原議題。可列印成與紙本範本同構的 A4 橫式。</div>
+  </div>
+  <div id="mtgArea"><div class="card"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div></div>`;
+  mtgLoadList();
+}
+function mtgSetType(t) { _mtgType = t; const mc = document.getElementById('mainContent'); if (curTab === 'meeting') renderMeetingPage(mc); }
+async function mtgLoadList() {
+  const area = document.getElementById('mtgArea'); if (!area) return;
+  const res = await api({ action: 'mtgList', type: _mtgType });
+  if (!res.ok) { area.innerHTML = `<div class="card"><div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${_escf(res.error || '')}</div></div>`; return; }
+  _mtgList = res.list || [];
+  if (!_mtgList.length) { area.innerHTML = `<div class="card"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;">尚無${_escf(_mtgType)}會議，按「＋ 新開會議」開第一場</div></div>`; return; }
+  area.innerHTML = `<div class="card">` + _mtgList.map(m => `
+    <div class="mtg-row" onclick="mtgOpen('${m.id}')">
+      <div class="mtg-row-main">
+        <div class="mtg-row-l1"><b>${_escf(m.date)}</b><span style="color:var(--ink3);font-size:12px;">${_mtgWd(m.date)}${m.time ? ' ' + _escf(m.time) : ''}</span> <span class="perf-chip na">${_escf(m.type)}</span> ${m.status === '已結束' ? '<span class="perf-chip ok">已結束</span>' : '<span class="perf-chip warn">進行中</span>'}</div>
+        <div class="mtg-row-l2">與會：${_escf(m.attendees || '—')}・主持：${_escf(m.host || '—')}・記錄：${_escf(m.recorder || '—')}${m.nextDate ? '・下次 ' + _escf(m.nextDate) : ''}</div>
+      </div>
+      <div class="mtg-row-r"><div class="mtg-cnt">${m.itemCount} 項</div><div class="mtg-open${m.openCount ? ' has' : ''}">${m.openCount ? '未完成 ' + m.openCount : '全部完成'}</div></div>
+    </div>`).join('') + `</div>`;
+}
+async function mtgOpen(id) {
+  const res = await api({ action: 'mtgGet', id });
+  if (!res.ok) { toast('讀取失敗：' + (res.error || '')); return; }
+  _mtgCur = res;
+  const mc = document.getElementById('mainContent'); if (curTab === 'meeting') mtgRenderDetail(mc);
+}
+function mtgBack() { _mtgCur = null; const mc = document.getElementById('mainContent'); if (curTab === 'meeting') renderMeetingPage(mc); }
+async function mtgReload() { if (!_mtgCur) return; const res = await api({ action: 'mtgGet', id: _mtgCur.meeting.id }, true); if (res.ok) { _mtgCur = res; const mc = document.getElementById('mainContent'); if (curTab === 'meeting') mtgRenderDetail(mc); } }
+
+// ── 會議態 ──
+function mtgRenderDetail(mc) {
+  const D = _mtgCur, m = D.meeting, items = D.items || [];
+  const ended = m.status === '已結束';
+  const isAdmin = curUser && curUser.role === 'admin';
+  const secs = _mtgSecDefs(m.type);
+  const cntOpen = items.filter(it => it.status !== '完成').length;
+  const hd = `
+  <div class="card" style="margin-bottom:10px;">
+    <div class="sec-hd">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><button class="btn btn-ghost btn-sm" onclick="mtgBack()">← 會議列表</button><div class="card-title" style="margin:0;">📝 ${_escf(m.type)}會議 ${_escf(m.date)}${_mtgWd(m.date)}</div>${ended ? '<span class="perf-chip ok">已結束</span>' : '<span class="perf-chip warn">進行中</span>'}</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-sm" onclick="mtgReload()" title="重新讀取">↻</button>
+        <button class="btn btn-ghost btn-sm" onclick="mtgPrint()">🖨 列印</button>
+        ${ended ? (isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="mtgSetStatus('進行中')">↩ 重新開啟</button>` : '') : `<button class="btn btn-primary btn-sm" onclick="mtgSetStatus('已結束')">✅ 結束會議</button>`}
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="fg" style="flex:1 1 130px"><label>會議日期</label><input class="inp" id="mtg_date" type="date" value="${_escf(m.date)}"${ended ? ' disabled' : ''}></div>
+      <div class="fg" style="flex:1 1 110px"><label>時間</label><input class="inp" id="mtg_time" value="${_escf(m.time)}" placeholder="09:00-09:45"${ended ? ' disabled' : ''}></div>
+      <div class="fg" style="flex:1 1 130px"><label>地點</label><input class="inp" id="mtg_place" value="${_escf(m.place)}"${ended ? ' disabled' : ''}></div>
+    </div>
+    <div class="form-row">
+      <div class="fg" style="flex:2 1 200px"><label>與會人員</label><input class="inp" id="mtg_attendees" value="${_escf(m.attendees)}"${ended ? ' disabled' : ''}></div>
+      <div class="fg" style="flex:1 1 100px"><label>主持</label><input class="inp" id="mtg_host" value="${_escf(m.host)}"${ended ? ' disabled' : ''}></div>
+      <div class="fg" style="flex:1 1 100px"><label>記錄人</label><input class="inp" id="mtg_recorder" value="${_escf(m.recorder)}"${ended ? ' disabled' : ''}></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+      <div style="font-size:11.5px;color:var(--ink3);">共 ${items.length} 項議題・未完成 ${cntOpen} 項${m.updatedBy ? '・最後更新 ' + _escf(m.updatedBy) + ' ' + _escf(m.updatedAt) : ''}</div>
+      ${ended ? '' : '<button class="btn btn-ghost btn-sm" onclick="mtgSaveHeader(this)">💾 儲存表頭</button>'}
+    </div>
+  </div>`;
+  const secHtml = secs.map(sd => {
+    const list = items.filter(it => it.section === sd.code);
+    const rows = list.length ? list.map((it, i) => mtgItemRowHtml(it, i + 1, ended, isAdmin)).join('') : '<div style="font-size:12px;color:var(--ink3);padding:6px 2px;">（尚無議題）</div>';
+    return `<div class="card" style="margin-bottom:10px;">
+      <div class="sec-hd" style="margin-bottom:4px;"><div><div class="card-title" style="margin:0;">${_escf(sd.title)}</div><div style="font-size:11px;color:var(--ink3);">範圍提示：${_escf(sd.hint)}</div></div>
+        ${ended ? '' : `<button class="btn btn-ghost btn-sm" onclick="mtgShowItemModal('', '${sd.code}')">＋ 新增議題</button>`}</div>
+      ${rows}
+    </div>`;
+  }).join('');
+  const last = `<div class="card" style="margin-bottom:0;">
+    <div class="card-title">七、本週決議摘要與下週追蹤</div>
+    <div class="form-row"><div class="fg"><label>決議摘要</label><textarea class="inp" id="mtg_summary" rows="5" style="margin:0;font-size:13.5px;line-height:1.6;"${ended ? ' disabled' : ''}>${_escf(m.summary)}</textarea></div></div>
+    <div class="form-row" style="align-items:flex-end;">
+      <div class="fg" style="flex:0 1 180px"><label>下次會議日期</label><input class="inp" id="mtg_nextDate" type="date" value="${_escf(m.nextDate)}"${ended ? ' disabled' : ''}></div>
+      <div class="fg" style="flex:1 1 auto;font-size:12px;color:var(--ink3);">記錄人：${_escf(m.recorder || '—')}・主持人確認：${_escf(m.host || '—')}</div>
+      ${ended ? '' : '<div class="fg" style="flex:0 0 auto;"><button class="btn btn-primary btn-sm" onclick="mtgSaveSummary(this)">💾 儲存決議</button></div>'}
+    </div>
+  </div>`;
+  mc.innerHTML = hd + secHtml + last;
+}
+function mtgItemRowHtml(it, no, ended, isAdmin) {
+  const canDel = isAdmin || (!ended && curUser && it.createdBy === curUser.username);
+  const over = _mtgOverdue(it);
+  const src = it.srcId ? `<span class="perf-chip na" title="承自上一場 ${_escf(it.srcDate || '')}">◀ 承 ${_escf((it.srcDate || '').slice(5) || '上週')}</span> ` : '';
+  const stChip = `<span class="perf-chip ${MTG_ST_CLS[it.status] || 'na'}" style="cursor:${ended && !isAdmin ? 'default' : 'pointer'};" title="點一下切換狀態" onclick="${ended && !isAdmin ? '' : `mtgCycleStatus('${it.id}')`}">${_escf(it.status)}</span>`;
+  return `<div class="mtg-item">
+    <div class="mtg-no">${no}</div>
+    <div class="mtg-item-main">
+      <div class="mtg-item-l1">${src}${_escf(it.issue)}</div>
+      ${it.plan ? `<div class="mtg-item-l2">→ ${_escf(it.plan)}</div>` : ''}
+      <div class="mtg-item-l3"><span class="perf-chip warn" style="background:var(--gold-lt);">👤 ${_escf(it.owner)}</span> ${it.due ? `<span class="${over ? 'mtg-over' : ''}">📅 ${_escf(it.due)}${over ? ' 逾期' : ''}</span>` : '<span style="color:var(--ink3);">📅 未定</span>'} ${stChip}${it.doneAt ? `<span style="color:var(--ink3);">✔ ${_escf(it.doneAt)}</span>` : ''}${it.note ? `<span style="color:var(--ink2);">・${_escf(it.note)}</span>` : ''}</div>
+    </div>
+    <div class="mtg-item-r">${ended && !isAdmin ? '' : `<button class="btn btn-ghost btn-sm" onclick="mtgShowItemModal('${it.id}')" title="編輯">✏️</button>`}${canDel ? `<button class="btn btn-ghost btn-sm" style="color:var(--red);" onclick="mtgDeleteAsk('${it.id}')" title="刪除">🗑</button>` : ''}</div>
+  </div>`;
+}
+async function mtgSaveHeader(btn) {
+  const g = k => document.getElementById('mtg_' + k);
+  const p = { action: 'mtgUpdate', id: _mtgCur.meeting.id, date: g('date').value, time: g('time').value.trim(), place: g('place').value.trim(), attendees: g('attendees').value.trim(), host: g('host').value.trim(), recorder: g('recorder').value.trim() };
+  if (!p.date) { reqWarn('缺少會議日期', '請選擇會議日期後再儲存。', g('date')); return; }
+  const res = await api(p);
+  if (!res.ok) { reqWarn('儲存失敗', _escf(res.error || '')); return; }
+  _mtgCur.meeting = res.meeting; toast('✅ 表頭已儲存'); mtgRenderDetail(document.getElementById('mainContent'));
+}
+async function mtgSaveSummary(btn) {
+  const p = { action: 'mtgUpdate', id: _mtgCur.meeting.id, summary: document.getElementById('mtg_summary').value, nextDate: document.getElementById('mtg_nextDate').value };
+  const res = await api(p);
+  if (!res.ok) { reqWarn('儲存失敗', _escf(res.error || '')); return; }
+  _mtgCur.meeting = res.meeting; toast('✅ 決議已儲存'); mtgRenderDetail(document.getElementById('mainContent'));
+}
+async function mtgSetStatus(status) {
+  const m = _mtgCur.meeting;
+  if (status === '已結束') {
+    const open = (_mtgCur.items || []).filter(it => it.status !== '完成').length;
+    const sumEl = document.getElementById('mtg_summary'), nd = document.getElementById('mtg_nextDate');
+    if (!confirm(`確定結束 ${m.type}會議 ${m.date}？\n未完成議題 ${open} 項（下次新開會議可勾選帶入）。\n結束後不可新增議題，仍可改議題狀態。`)) return;
+    // 結束前把畫面上的決議摘要／下次日期一併存下（避免忘了按儲存）
+    const res0 = await api({ action: 'mtgUpdate', id: m.id, summary: sumEl ? sumEl.value : m.summary, nextDate: nd ? nd.value : m.nextDate, status: '已結束' });
+    if (!res0.ok) { reqWarn('結束失敗', _escf(res0.error || '')); return; }
+    _mtgCur.meeting = res0.meeting; toast('✅ 會議已結束');
+  } else {
+    const res = await api({ action: 'mtgUpdate', id: m.id, status });
+    if (!res.ok) { reqWarn('更新失敗', _escf(res.error || '')); return; }
+    _mtgCur.meeting = res.meeting; toast('↩ 會議已重新開啟');
+  }
+  mtgRenderDetail(document.getElementById('mainContent'));
+}
+async function mtgCycleStatus(id) {
+  const it = (_mtgCur.items || []).find(x => x.id === id); if (!it) return;
+  const next = MTG_ITEM_STATUS[(MTG_ITEM_STATUS.indexOf(it.status) + 1) % MTG_ITEM_STATUS.length];
+  const res = await api({ action: 'mtgItemSave', id: it.id, status: next });
+  if (!res.ok) { reqWarn('狀態更新失敗', _escf(res.error || '')); return; }
+  Object.assign(it, res.item);
+  toast(`${it.status}${res.synced ? '（已同步回原議題）' : ''}`, 1400);
+  mtgRenderDetail(document.getElementById('mainContent'));
+}
+function mtgShowItemModal(id, section) {
+  const D = _mtgCur, m = D.meeting, secs = _mtgSecDefs(m.type);
+  const it = id ? (D.items || []).find(x => x.id === id) : null;
+  if (id && !it) { toast('找不到該議題，請重新整理'); return; }
+  const v = it || { section: section || secs[0].code, issue: '', plan: '', owner: '', due: '', status: '未開始', note: '' };
+  const opt = (arr, cur, lb) => arr.map(x => `<option value="${_escf(typeof x === 'string' ? x : x.code)}"${(typeof x === 'string' ? x : x.code) === cur ? ' selected' : ''}>${_escf(lb ? lb(x) : x)}</option>`).join('');
+  const bg = makeModal(`
+    <div class="sec-hd"><div class="card-title" style="margin:0;">${it ? '✏️ 編輯議題' : '＋ 新增議題'}<span style="font-size:12px;color:var(--ink3);font-weight:400;margin-left:8px;">${_escf(m.type)}會議 ${_escf(m.date)}</span></div><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">✕ 關閉</button></div>
+    <div class="form-row">
+      <div class="fg" style="flex:1 1 200px"><label>段落 *</label><select id="mti_section">${opt(secs, v.section, x => x.title)}</select></div>
+      <div class="fg" style="flex:1 1 120px"><label>狀態</label><select id="mti_status">${opt(MTG_ITEM_STATUS, v.status)}</select></div>
+    </div>
+    <div class="form-row"><div class="fg"><label>議題／現況問題 *</label><textarea class="inp" id="mti_issue" rows="2" style="margin:0;font-size:13.5px;">${_escf(v.issue)}</textarea></div></div>
+    <div class="form-row"><div class="fg"><label>改善方案／行動</label><textarea class="inp" id="mti_action" rows="2" style="margin:0;font-size:13.5px;">${_escf(v.plan)}</textarea></div></div>
+    <div class="form-row">
+      <div class="fg" style="flex:1 1 120px"><label>負責人 *</label><input class="inp" id="mti_owner" list="mtiOwnerDl" value="${_escf(v.owner)}" placeholder="選或輸入"><datalist id="mtiOwnerDl">${MTG_OWNERS.map(x => `<option value="${x}">`).join('')}</datalist></div>
+      <div class="fg" style="flex:1 1 140px"><label>完成期限</label><input class="inp" id="mti_due" type="date" value="${_escf(v.due)}"></div>
+    </div>
+    <div class="form-row"><div class="fg"><label>備註</label><input class="inp" id="mti_note" value="${_escf(v.note)}"></div></div>
+    <div class="fe" style="margin-top:6px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+      <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button>
+      <button class="btn btn-primary btn-sm" onclick="mtgItemSaveClick(this, '${it ? it.id : ''}')">💾 儲存${it ? '' : '並關閉'}</button>
+    </div>`, { locked: true });
+  setTimeout(() => { const el = bg.querySelector('#mti_issue'); if (el && !it) el.focus(); }, 50);
+}
+async function mtgItemSaveClick(btn, id) {
+  const g = k => document.getElementById('mti_' + k);
+  const p = { action: 'mtgItemSave', meetingId: _mtgCur.meeting.id, section: g('section').value, issue: g('issue').value.trim(), plan: g('action').value.trim(), owner: g('owner').value.trim(), due: g('due').value, status: g('status').value, note: g('note').value.trim() };
+  if (id) p.id = id;
+  if (!p.issue) { reqWarn('缺少議題', '「議題／現況問題」是必填欄位，請描述現況或問題。', g('issue')); return; }
+  if (!p.owner) { reqWarn('缺少負責人', '每一項議題都要有負責人，請選擇或輸入。', g('owner')); return; }
+  btn.disabled = true; const t = btn.textContent; btn.innerHTML = '<span class="btn-spin"></span>儲存中…';
+  const res = await api(p);
+  btn.disabled = false; btn.textContent = t;
+  if (!res.ok) { reqWarn('儲存失敗', _escf(res.error || '')); return; }
+  toast(id ? '✅ 已更新' : '✅ 已新增議題');
+  btn.closest('.modal-bg').remove();
+  await mtgReload();
+}
+async function mtgDeleteAsk(id) {
+  const it = (_mtgCur.items || []).find(x => x.id === id);
+  if (!confirm(`確定刪除這項議題？\n${it ? it.issue : id}`)) return;
+  const res = await api({ action: 'mtgItemDelete', id });
+  if (!res.ok) { reqWarn('刪除失敗', _escf(res.error || '')); return; }
+  toast('🗑 已刪除'); await mtgReload();
+}
+// ── 新開會議 ──
+function mtgShowNewModal() {
+  const types = _mtgTypes();
+  const bg = makeModal(`
+    <div class="sec-hd"><div class="card-title" style="margin:0;">＋ 新開會議</div><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">✕ 關閉</button></div>
+    <div class="form-row">
+      <div class="fg" style="flex:1 1 120px"><label>類型 *</label><select id="mtn_type" onchange="document.getElementById('mtn_attendees').value=MTG_DEFAULT_ATT[this.value]||''">${types.map(t => `<option value="${t}"${t === _mtgType ? ' selected' : ''}>${t}會議</option>`).join('')}</select></div>
+      <div class="fg" style="flex:1 1 140px"><label>會議日期 *</label><input class="inp" id="mtn_date" type="date" value="${_localDate()}"></div>
+      <div class="fg" style="flex:1 1 110px"><label>時間</label><input class="inp" id="mtn_time" placeholder="09:00-09:45"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg" style="flex:1 1 130px"><label>地點</label><input class="inp" id="mtn_place" value="南坡萬酒廠"></div>
+      <div class="fg" style="flex:2 1 200px"><label>與會人員</label><input class="inp" id="mtn_attendees" value="${_escf(MTG_DEFAULT_ATT[_mtgType] || '')}"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg" style="flex:1 1 100px"><label>主持</label><input class="inp" id="mtn_host" value="Kevin"></div>
+      <div class="fg" style="flex:1 1 100px"><label>記錄人</label><input class="inp" id="mtn_recorder" value="${_escf((curUser && curUser.username) || '')}"></div>
+    </div>
+    <div class="form-row"><div class="fg" style="flex-direction:row;align-items:center;gap:6px;"><input type="checkbox" id="mtn_carry" checked><label for="mtn_carry" style="font-size:13px;color:var(--ink);">帶入上一場同型會議的「未完成」議題到「一、上週待辦追蹤」</label></div></div>
+    <div class="fe" style="margin-top:6px;display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button>
+      <button class="btn btn-primary btn-sm" onclick="mtgCreateClick(this)">📝 建立會議</button>
+    </div>`, { locked: true });
+}
+async function mtgCreateClick(btn) {
+  const g = k => document.getElementById('mtn_' + k);
+  const p = { action: 'mtgCreate', type: g('type').value, date: g('date').value, time: g('time').value.trim(), place: g('place').value.trim(), attendees: g('attendees').value.trim(), host: g('host').value.trim(), recorder: g('recorder').value.trim(), carryOver: g('carry').checked ? '1' : '0' };
+  if (!p.date) { reqWarn('缺少會議日期', '請選擇會議日期。', g('date')); return; }
+  btn.disabled = true; const t = btn.textContent; btn.innerHTML = '<span class="btn-spin"></span>建立中…';
+  const res = await api(p);
+  btn.disabled = false; btn.textContent = t;
+  if (!res.ok) { reqWarn('建立失敗', _escf(res.error || '')); return; }
+  btn.closest('.modal-bg').remove();
+  _mtgType = p.type;
+  toast(`✅ 會議已建立${res.carried ? '，帶入上一場未完成議題 ' + res.carried + ' 項' : ''}`);
+  await mtgOpen(res.id);
+}
+// ── 列印（A4 橫式，與 .docx 範本同構：表頭／七段表格／簽名欄）──
+function mtgPrintHtml(D) {
+  const m = D.meeting, items = D.items || [], secs = _mtgSecDefs(m.type), e = _escf;
+  const chk = s => MTG_ITEM_STATUS.map(x => (x === s ? '☑' : '☐') + x).join(' ');
+  const secHtml = secs.map(sd => {
+    const list = items.filter(it => it.section === sd.code);
+    const rows = list.map((it, i) => `<tr><td class="c">${i + 1}</td><td>${it.srcId ? '<span class="tag">承' + e((it.srcDate || '').slice(5)) + '</span> ' : ''}${e(it.issue)}</td><td>${e(it.plan)}</td><td class="c">${e(it.owner)}</td><td class="c">${e(it.due)}</td><td class="st">${chk(it.status)}</td><td>${e(it.note)}</td></tr>`);
+    for (let i = list.length; i < 3; i++) rows.push(`<tr class="blank"><td class="c">${i + 1}</td><td></td><td></td><td></td><td></td><td class="st">${chk('')}</td><td></td></tr>`);
+    return `<h2>${e(sd.title)}</h2><div class="hint">範圍提示：${e(sd.hint)}</div>
+    <table><thead><tr><th style="width:5%">項次</th><th style="width:26%">議題／現況問題</th><th style="width:26%">改善方案／行動</th><th style="width:8%">負責人</th><th style="width:9%">完成期限</th><th style="width:14%">狀態</th><th>備註</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+  }).join('');
+  return `<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="UTF-8"><title>${e(m.type)}會議議題表 ${e(m.date)}</title>
+<style>
+  @page{size:A4 landscape;margin:10mm;}
+  *{box-sizing:border-box;}
+  body{font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;color:#111;font-size:11px;margin:0;line-height:1.4;}
+  h1{font-size:17px;margin:0 0 6px;text-align:center;}
+  h2{font-size:12.5px;margin:8px 0 0;page-break-after:avoid;}
+  .hint{font-size:9.5px;color:#555;margin:1px 0 3px;}
+  table{width:100%;border-collapse:collapse;margin:0 0 4px;page-break-inside:auto;}
+  th,td{border:1px solid #333;padding:3px 5px;vertical-align:top;}
+  th{background:#eee;font-size:10.5px;white-space:nowrap;}
+  td.c{text-align:center;white-space:nowrap;} td.st{white-space:nowrap;font-size:10px;}
+  tr.blank td{height:22px;}
+  .tag{font-size:9px;color:#555;border:1px solid #999;border-radius:3px;padding:0 3px;}
+  .meta td{padding:4px 6px;} .meta .lb{background:#eee;font-weight:700;width:9%;white-space:nowrap;}
+  .sum{border:1px solid #333;min-height:60px;padding:5px 7px;white-space:pre-wrap;margin-bottom:6px;}
+  .sign td{padding:8px 6px;height:34px;}
+  .foot{font-size:9px;color:#777;margin-top:4px;text-align:right;}
+</style></head><body>
+<h1>南坡萬酒廠　${e(m.type === '工務' ? '工程部' : '業務部')}週會議題表</h1>
+<table class="meta"><tr><td class="lb">會議日期</td><td>${e(m.date)}${_mtgWd(m.date)}</td><td class="lb">時間</td><td>${e(m.time || '　：　～　：')}</td><td class="lb">地點</td><td>${e(m.place)}</td></tr>
+<tr><td class="lb">與會人員</td><td>${e(m.attendees)}</td><td class="lb">主持</td><td>${e(m.host)}</td><td class="lb">記錄人</td><td>${e(m.recorder)}</td></tr></table>
+${secHtml}
+<h2>七、本週決議摘要與下週追蹤</h2>
+<div class="sum">${e(m.summary || '')}</div>
+<table class="sign"><tr><td style="width:40%">下次會議：${e(m.nextDate || '　　年　　月　　日')}${m.nextDate ? _mtgWd(m.nextDate) : ''}</td><td style="width:30%">記錄人簽名：</td><td>主持人確認：</td></tr></table>
+<div class="foot">列印：${e(_localDate())}　by ${e((curUser && curUser.username) || '')}　會議ID ${e(m.id)}　狀態 ${e(m.status)}</div>
+<script>window.onload=function(){window.print();};<\/script>
+</body></html>`;
+}
+function mtgPrint() {
+  if (!_mtgCur) return;
+  const w = window.open('', '_blank');
+  if (!w) { toast('瀏覽器擋下彈出視窗，請允許本站彈出視窗後再試'); return; }
+  w.document.write(mtgPrintHtml(_mtgCur));
+  w.document.close();
+  toast('已開啟列印視窗');
+}
+// ── 毛利分析卡（v3.58 併入原料/資材庫頁；admin／PM 才渲染，預設收納、展開才讀資料）──
+let _invProfitFold = (() => { try { const v = localStorage.getItem('npw-inv-profit-fold'); return v == null ? true : v === '1'; } catch (e) { return true; } })();
+function invProfitCardHtml() {
+  if (!curUser || !['admin', 'PM'].includes(curUser.role)) return '';
+  const clients = clientList.length ? clientList.map(c => c.name) : ['Feeling Bar', '南坡萬公版', 'Feeling Bar Cafe'];
+  const cOpts = clients.map(c => `<option>${_escf(c)}</option>`).join('');
+  return `<div class="card" style="margin-bottom:10px;${_invProfitFold ? 'padding-bottom:10px;' : ''}">
+    <div class="sec-hd" style="${_invProfitFold ? 'margin-bottom:0;' : ''}"><div class="card-title" style="margin:0">📊 毛利分析${_invProfitFold ? ' <span style="font-size:11.5px;color:var(--ink3);font-weight:400;">（展開查看各客戶酒款售價／成本／毛利率）</span>' : ''}</div>
+      <div style="display:flex;gap:6px;align-items:center;">${_invProfitFold ? '' : '<button class="btn btn-ghost btn-sm" onclick="loadProfit(true)">↻ 刷新</button>'}<button class="btn btn-ghost btn-sm exp-fold-btn" onclick="invToggleProfit()">${_invProfitFold ? '▸ 展開' : '▾ 收納'}</button></div></div>
+    <div id="invProfitBody" ${_invProfitFold ? 'hidden' : ''}>
+      <div class="form-row" style="margin-bottom:12px;"><div class="fg" style="flex:0 0 155px"><label>客戶</label><select id="profitClient" onchange="loadProfit()">${cOpts}</select></div></div>
+      <div id="profitArea"><div style="text-align:center;color:var(--ink3);padding:20px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>
+    </div>
+  </div>`;
+}
+function invToggleProfit() {
+  _invProfitFold = !_invProfitFold;
+  try { localStorage.setItem('npw-inv-profit-fold', _invProfitFold ? '1' : '0'); } catch (e) {}
+  const host = document.getElementById('invProfitCard'); if (!host) return;
+  host.innerHTML = invProfitCardHtml();
+  if (!_invProfitFold) loadProfit();
 }
 </script>
 </body>
