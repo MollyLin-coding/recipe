@@ -1550,7 +1550,8 @@ function bindOrderItemSheet(p) {
   const newProduct = String((p && p.newProduct) || '').trim();   // v3.59 選填：同時把酒款名統一成酒譜名（主公 2026-09-15 指示 Babyface 統一名稱）
   if (!orderNo) return { ok: false, error: '缺少 orderNo' };
   if (!(idx >= 0)) return { ok: false, error: '缺少 itemIndex' };
-  if (!sheet) return { ok: false, error: '缺少 sheet（酒譜分頁名）' };
+  // v3.60 sheet 可省略：客戶尚未建酒譜書（如 OEM-Lane72）時，只把酒款名改成正確名稱，不動 sheet/srcClient
+  if (!sheet && !newProduct) return { ok: false, error: '缺少 sheet（酒譜分頁名）或 newProduct（要改的酒款名）' };
   const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
   const ws = ss.getSheetByName('訂單主表');
   if (!ws) return { ok: false, error: '找不到訂單主表分頁' };
@@ -1567,13 +1568,15 @@ function bindOrderItemSheet(p) {
       const it = items[idx] || {};
       if (product && String(it.product || '') !== product) return { ok: false, error: '酒款順序已變動（第 ' + (idx + 1) + ' 款現為「' + (it.product || '') + '」），請重新整理訂單列表再試' };
       if (it.batchId) return { ok: false, error: '「' + it.product + '」已有 Run Card，不可改綁酒譜' };
-      // 配方來源客戶：指定 srcClient 優先，否則用訂單客戶；兩者都必須是 CLIENTS 鍵
-      const recipeClient = srcClient || orderClient;
-      let cfg;
-      try { cfg = getClientCfg(recipeClient); } catch (e) { return { ok: false, error: '「' + recipeClient + '」不是酒譜系統客戶，請改選有酒譜書的客戶來源' }; }
-      if (!isRecipeSheet(sheet)) return { ok: false, error: '「' + sheet + '」不是酒譜分頁（毛利／報價分頁不可綁）' };
-      const cws = SpreadsheetApp.openById(cfg.id).getSheetByName(sheet);
-      if (!cws) return { ok: false, error: '「' + recipeClient + '」的酒譜書找不到分頁「' + sheet + '」' };
+      // 配方來源客戶：指定 srcClient 優先，否則用訂單客戶；兩者都必須是 CLIENTS 鍵（只改名時整段略過）
+      if (sheet) {
+        const recipeClient = srcClient || orderClient;
+        let cfg;
+        try { cfg = getClientCfg(recipeClient); } catch (e) { return { ok: false, error: '「' + recipeClient + '」不是酒譜系統客戶，請改選有酒譜書的客戶來源' }; }
+        if (!isRecipeSheet(sheet)) return { ok: false, error: '「' + sheet + '」不是酒譜分頁（毛利／報價分頁不可綁）' };
+        const cws = SpreadsheetApp.openById(cfg.id).getSheetByName(sheet);
+        if (!cws) return { ok: false, error: '「' + recipeClient + '」的酒譜書找不到分頁「' + sheet + '」' };
+      }
       const before = { sheet: String(it.sheet || ''), srcClient: String(it.srcClient || ''), product: String(it.product || '') };
       // v3.59 改名防線：出貨紀錄／Run Card 索引都以 product 字串關聯，已有出貨列就不准改名（先刪批再改）
       if (newProduct && newProduct !== before.product) {
@@ -1582,13 +1585,17 @@ function bindOrderItemSheet(p) {
         if (shipped > 0) return { ok: false, error: '「' + before.product + '」已有出貨紀錄 ' + shipped + ' 瓶，不可改名（請先處理出貨紀錄）' };
         it.product = newProduct;
       }
-      it.sheet = sheet;
-      if (srcClient && srcClient !== orderClient) it.srcClient = srcClient; else delete it.srcClient;
+      if (sheet) {
+        it.sheet = sheet;
+        if (srcClient && srcClient !== orderClient) it.srcClient = srcClient; else delete it.srcClient;
+      }
       items[idx] = it;
       ws.getRange(i + 1, 5).setValue(JSON.stringify(items));
       _logOrderChange_(orderNo, p._user || '', '補綁酒譜',
-        '第 ' + (idx + 1) + ' 款「' + (it.product || '') + '」' + (it.product !== before.product ? ('（原名「' + before.product + '」）') : '') + '→ ' + (it.srcClient ? (it.srcClient + ' / ') : '') + sheet
-        + (before.sheet ? ('（原 ' + (before.srcClient ? before.srcClient + ' / ' : '') + before.sheet + '）') : '（原未綁）'));
+        '第 ' + (idx + 1) + ' 款「' + (it.product || '') + '」' + (it.product !== before.product ? ('（原名「' + before.product + '」）') : '')
+        + (sheet ? ('→ ' + (it.srcClient ? (it.srcClient + ' / ') : '') + sheet
+            + (before.sheet ? ('（原 ' + (before.srcClient ? before.srcClient + ' / ' : '') + before.sheet + '）') : '（原未綁）'))
+          : '（僅更名，酒譜未動）'));
       return { ok: true, orderNo: orderNo, itemIndex: idx, item: { product: it.product, sheet: it.sheet, srcClient: it.srcClient || '' } };
     }
     return { ok: false, error: '找不到訂單：' + orderNo };
