@@ -1240,6 +1240,72 @@ function migrateOrderNos(p) {
 }
 
 // 前台送單
+// ── v3.63 建單／改單時自動綁酒譜分頁（根治「空 sheet」的來源端）────────────────
+// 背景：Bug 35（§42.29）是在「讀取端」補綁，但只要建單路徑沒綁，空 sheet 就會一直產生。
+//   最常見來源：報價系統 extCreateOrder 推單——客戶名是報價系統的名字（「日富一日」「昭和浪漫」，
+//   不是 CLIENTS 鍵 `全客製-日富一日`／`全客製-昭和浪漫冰室`），酒款也是報價單名，前端那套比對根本沒跑到。
+// 做法：與前端 _rcAutoMatch 同一套規則，改在後端 createOrder／updateOrder 統一補：
+//   客戶別名（去 全客製-／OEM-／經銷商－／換前標- 前綴後互相包含）→ 同酒名 → 同分頁名 → 去前綴分頁名 → 去「客戶名-」前綴
+// 只在 it.sheet 為空時填，永不覆蓋既有值；對不到就維持空白（讀取端仍有手選 UI 可補）。
+function _normClientKey_(c) {
+  return String(c == null ? '' : c).replace(/^(全客製-|OEM-|經銷商－|經銷商-|換前標-)/, '').replace(/\s+/g, '').toLowerCase();
+}
+function _clientCandidates_(orderClient) {
+  const all = Object.keys(CLIENTS);
+  const n = _normClientKey_(orderClient);
+  if (!n) return [];
+  const exact = all.filter(function (c) { return c === orderClient; });
+  const alias = all.filter(function (c) {
+    if (c === orderClient) return false;
+    const m = _normClientKey_(c);
+    return !!m && (m.indexOf(n) >= 0 || n.indexOf(m) >= 0);
+  });
+  return exact.concat(alias);
+}
+function _autoResolveItemSheet_(orderClient, product) {
+  const pn = String(product == null ? '' : product).trim();
+  if (!pn) return null;
+  const cands = _clientCandidates_(orderClient);
+  if (!cands.length) return null;
+  let list;
+  try { list = (getRecipeList({}) || {}).list || []; } catch (e) { return null; }
+  for (let i = 0; i < cands.length; i++) {
+    const c = cands[i];
+    const rs = list.filter(function (x) { return x.client === c; });
+    if (!rs.length) continue;
+    // 去「客戶名-」前綴（好野吧-玫開二度／Babyface-茉莉檸檬茶琴酒）
+    let bare = '';
+    const pfx = _normClientKey_(c), pfxOrd = _normClientKey_(orderClient);
+    [pfx, pfxOrd].forEach(function (px) {
+      if (bare || !px) return;
+      const low = pn.toLowerCase();
+      if (low.indexOf(px) === 0 && /^[-_－\s]/.test(pn.slice(px.length))) bare = pn.slice(px.length + 1).trim();
+    });
+    let hit = null;
+    for (let k = 0; k < rs.length && !hit; k++) if (rs[k].recipeName === pn) hit = rs[k];
+    for (let k = 0; k < rs.length && !hit; k++) if (rs[k].sheet === pn) hit = rs[k];
+    for (let k = 0; k < rs.length && !hit; k++) if (stripRecipePrefix(rs[k].sheet) === pn) hit = rs[k];
+    if (bare) {
+      for (let k = 0; k < rs.length && !hit; k++) if (rs[k].recipeName === bare) hit = rs[k];
+      for (let k = 0; k < rs.length && !hit; k++) if (stripRecipePrefix(rs[k].sheet) === bare) hit = rs[k];
+    }
+    if (hit) return { client: c, sheet: hit.sheet };
+  }
+  return null;
+}
+// 對一組 items 就地補 sheet／srcClient（回傳補綁筆數，供紀錄用）
+function _fillItemSheets_(items, orderClient) {
+  let n = 0;
+  (items || []).forEach(function (it) {
+    if (!it || String(it.sheet || '').trim()) return;
+    const hit = _autoResolveItemSheet_(orderClient, it.product);
+    if (!hit) return;
+    it.sheet = hit.sheet;
+    if (hit.client !== orderClient) it.srcClient = hit.client;
+    n++;
+  });
+  return n;
+}
 function createOrder(p) {
   const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
   const ws = ss.getSheetByName('訂單主表');
@@ -1260,6 +1326,7 @@ function createOrder(p) {
     if (it.sample && (Number(it.sample.qty) || 0) > 0) o.sample = { bottleType: String(it.sample.bottleType || ''), qty: Number(it.sample.qty) || 0, note: String(it.sample.note || '') }; // v3.4 試飲/SGS
     return o;
   });
+  _fillItemSheets_(items, p.client);   // v3.63 建單即綁酒譜（含報價系統推單）
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
@@ -1464,6 +1531,7 @@ function updateOrder(p) {
     if (it.sample && (Number(it.sample.qty) || 0) > 0) o.sample = { bottleType: String(it.sample.bottleType || ''), qty: Number(it.sample.qty) || 0, note: String(it.sample.note || '') }; // v3.4 試飲/SGS
     return o;
   });
+  _fillItemSheets_(items, p.client);   // v3.63 改單時順手補綁尚未綁譜的款（不覆蓋既有 sheet）
   const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
   const ws = ss.getSheetByName('訂單主表');
   if (!ws) return { ok: false, error: '找不到訂單主表分頁' };
