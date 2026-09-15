@@ -512,7 +512,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.60';
+const APP_VERSION='v3.61';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -2777,7 +2777,7 @@ const EXTRA_CLIENT_RECIPES = {
   // v3.60 主公指示（2026-09-15）：72Lane 酒款名稱一律對齊「72Lane_酒譜資料庫」各分頁 Row2 E 欄的酒款名，
   //   舊的過渡假名（茉莉香片琴酒(利口酒)／焙火烏龍威士忌(利口酒)／玫瑰烏龍威士忌／桂花烏龍威士忌）全部作廢。
   //   ⚠️ 七薰茉莉香片琴酒有兩版（(3:7) 與 全南坡萬琴酒基底），建單時要選對。
-  'OEM-Lane72': ['七薰茉莉香片琴酒(3:7)', '七薰茉莉香片琴酒', '焙火烏龍威士忌', '桂花威士忌', '玫瑰威士忌'],
+  // v3.61：OEM-Lane72（全客製-72Lane）已轉正式客戶（後端 CLIENTS 供 L72_ 真酒譜 5 款），自此清單移除
   // v3.55：全客製-日富一日 已轉正式客戶（後端 CLIENTS 供 FUJI- 真酒譜 2 款），自此清單移除
 };
 // v3.10：全客製-酒肉朋友 已轉正式客戶（後端 CLIENTS 供真酒譜「梨香蜜桃紅烏龍調酒」），自 EXTRA 清單移除
