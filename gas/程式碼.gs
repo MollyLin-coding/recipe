@@ -84,6 +84,18 @@ const CLIENTS = {
     profitSheet: 'JL_報價毛利分析', profitFmt: 'jl-1row',
     capMap: { 100: '100ml江小白' },
   },
+  // v3.61 全客製-72Lane 轉正式客戶（主公提供「72Lane_酒譜資料庫」20260915）
+  // 客戶鍵沿用既有的 'OEM-Lane72'（前端 CLIENT_LABELS 顯示「全客製-Lane72」，訂單 260705-001 存的也是這個值）。
+  // 分頁前綴 L72_（2026-09-15 由 Claude 代為加上，順便修掉「七薰茉莉香片琴酒((3:7)」沒閉合的括號）：
+  //   L72_七薰茉莉香片琴酒(3:7) / L72_七薰茉莉香片琴酒(全南坡萬琴酒) / L72_焙火烏龍威士忌 / L72_桂花威士忌 / L72_玫瑰威士忌
+  // ⚠️ 這本書「還沒有」報價毛利分頁（原 工作表1 是空白頁）→ 毛利頁選此客戶會顯示找不到毛利分頁，屬預期。
+  //    主公建好「L72_報價毛利分析」後，要回來把 profitFmt 改成實際欄位格式（現在的 jrp-1row 只是佔位）。
+  // 瓶型不設預設：同一張單同時有 500ml伏特加瓶 與 1000ml 黑色PP瓶，一律手動選。
+  'OEM-Lane72': {
+    id: '14efyPLxCCYolDfsTqcehUPU8JdxZoB9aB8RLjJB_7r8',
+    prefix: /^L72_/i, strip: /^L72_/i,
+    profitSheet: 'L72_報價毛利分析', profitFmt: 'jrp-1row',
+  },
 };
 // 主表 ID：優先讀 Script Property 'SHEET_ID'（測試部署指向沙盒副本用），
 // 找不到時 fallback 正式硬編碼 ID（向後相容：正式部署不設此屬性，行為與改版前完全一致）。
@@ -766,6 +778,13 @@ function getRecipe(p) {
     // I欄(index 8)是 ABV 值，格式可能是 "8%" 或 8
     const abvRaw = String(r2[8] || '').replace('%','').trim();
     abv = parseFloat(abvRaw) || 0;
+    // v3.61 欄位容錯：部分酒譜書把 ABV 填在 H 欄（標頭在 G），I 欄空白 → ABV 讀成 0、酒稅算錯。
+    //   實例：72Lane 全部、雋荖 夏染/春吟。標準版面 H 欄是「酒精濃度」標頭（字串，parseFloat=NaN），
+    //   故只在 I 空、且 H 能解析成 0~100 的數字時才退回讀 H，不會誤傷標準版面。
+    if (!abv) {
+      const abvH = parseFloat(String(r2[7] || '').replace('%','').trim());
+      if (abvH > 0 && abvH <= 100) abv = abvH;
+    }
   }
 
   // ── 階段一：定位子料區邊界並建 subMap(根治 v10.3 第19.2 脆弱點) ──
