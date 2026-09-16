@@ -178,6 +178,7 @@ var ROLE_MATRIX = {
   migrateOrderNos: ['admin'], migrateOrderTypes: ['admin'], backfillOrderCreators: ['admin'],
   deleteBatchRecord: ['admin'], deleteRunCard: ['admin'], deleteRdRecord: ['admin'],
   checkUser: ['admin'],
+  getFinanceSummary: ['admin', '財務'],   // v3.65（複檢 P1-8）原本未列＝任何已登入者可打
   // 完成回報/確認出貨日/出貨扣庫、成品與玻璃瓶庫存異動、新增瓶品項、安全水位 → admin + 倉管
   completeOrderItem: ['admin', '倉管'], confirmShipDate: ['admin', '倉管'], shipOrder: ['admin', '倉管'],
   stockIn: ['admin', '倉管'], stockOut: ['admin', '倉管'],
@@ -266,7 +267,11 @@ function doGet(e) {
     }
     switch(action) {
       case 'getEnvInfo':
-        try { CacheService.getScriptCache().removeAll(V3144_CACHE_KEYS); } catch (e) {}
+        // v3.65（複檢 P1-3）：這裡原本無條件 removeAll(V3144_CACHE_KEYS)，但 getEnvInfo 同時是
+        //   前端每 270 秒打一次的「保溫 ping」（index.html setInterval 270000），而訂單快取 TTL 300 秒、
+        //   其餘 1800 秒 → 快取永遠活不過一個週期，每個開著的分頁各清一次，等於整層快取形同虛設，
+        //   使用者幾乎永遠打到冷路徑（getOrders 熱狀態就要 4.7 秒）。改成只有明確帶 bust=1 才清。
+        if (String((p && p.bust) || '') === '1') { try { CacheService.getScriptCache().removeAll(V3144_CACHE_KEYS); } catch (e) {} }
         result = getEnvInfo();
         result.modules = { consign: (typeof consignMe === 'function'), perf: (typeof perfGet === 'function'), expense: (typeof expList === 'function'), meeting: (typeof mtgList === 'function'), rdBackup: (typeof _rdBackup_ === 'function') };   // v3.58 meeting 探針   // v3.40 expense 探針   // v3.39 perf 探針   // v3.28 免登入探針：consign.gs 是否真的在部署版本裡（2026-09-03 Action 漏檔事故）
         // v3.14.5 診斷：CacheService 到底能不能用（put→get→remove 全程回報例外）
@@ -848,7 +853,7 @@ function getRecipe(p) {
     //    以免反把正確的 100% 砍成 1% 製造新回歸（開發最高原則 #1：不做有風險的局部補丁）。
     const pct = rawPct <= 1 ? rawPct * 100 : rawPct;
     const vol = parseFloat(row[2]) || 0;
-    const ingAbv = parseFloat(row[3]) || 0;
+    const ingAbv = _normAbv_(row[3]);   // v3.65（複檢 P0-2）百分比格式的 D 欄會讀成 0.4，前端會拿它重算全批 ABV 並據以算酒稅
     const cost = parseFloat(row[8]) || 0;
     // v3.14.3 製作方式：E 欄(index 4)＝該原料的製法備註（酒譜表為單一事實來源，APP 唯讀帶出）
     //   例：(茶葉重 : RO水量 = 4g : 100ml, 定溫冷萃24小時)；舊酒款多為簡寫 (2:100)，原樣顯示即可。
@@ -875,7 +880,10 @@ function getRecipe(p) {
   // totalVol / abv 從「總體積」列補讀(階段一已定位 totalVolRow)
   if (totalVolRow >= 0) {
     totalVol = parseFloat(data[totalVolRow][2]) || 0;
-    abv = parseFloat(data[totalVolRow][3]) || abv;
+    // v3.65（複檢 P0-2）：這行原本用原始 parseFloat，會把 v3.62 在 Row2 做好的 _normAbv_ 正規化蓋掉
+    //   → 百分比格式的「總體積」列 D 欄讀成 0.17，酒稅走錯級距（40% 的酒 4000ml：740 元被算成 11.2 元）。
+    const _a2 = _normAbv_(data[totalVolRow][3]);
+    if (_a2 > 0) abv = _a2;
   }
   // 製程備註：從 subEndRow(若是製程備註列)或往下找
   for (let i = (subEndRow >= 0 ? subEndRow : ingEnd); i < data.length; i++) {
@@ -2041,7 +2049,9 @@ function _financeMonth_(month) {
   return { orderRevenue: revenue, cashReceived: cash, orderCount: count };
 }
 function getFinanceSummary(p) {
-  const user = String((p && p.user) || '');
+  // v3.65（複檢 P1-8）：原本用「前端自稱的 p.user」判斷，任何登入者送 &user=Kevin 就能看當月金流。
+  //   改用 session 覆寫的 p._user（doGet 層填入，前端無法偽造）；ROLE_MATRIX 另有第二道閘。
+  const user = String((p && p._user) || '');
   if (FINANCE_USERS.indexOf(user) < 0) return { ok: false, error: '無權限查看金流摘要' };
   const month = String((p && p.month) || '') || Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM');
   const f = _financeMonth_(month);
@@ -2078,7 +2088,7 @@ function completeOrderItem(p) {
     const batch = addBatchRecord({
       creator: p.creator || p.pm || '', client: client, pm: p.pm || p.creator || '',
       orderId: orderNo, recipe: item.product, date: today, deliveryDate: deliveryDate,
-      volume: (parseFloat(item.volume) || item.volume),
+      volume: (_volumeToMl_(item.volume) || item.volume),   // v3.65（複檢 P0-5）「1L」原本記成 1ml
       bottle: (p.bottle || item.bottleType || ''),
       cap: p.cap || '', frontLabel: p.frontLabel || '', backLabel: p.backLabel || '',
       bottleCount: (Number(p.bottleCount) || item.qty || 0),
@@ -2555,7 +2565,7 @@ function submitRdApply(p) {
   const id = 'RA' + Date.now();
   const now = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
   ws.appendRow([id, now, p.creator, p.client, p.name,
-    parseFloat(p.volume) || 0, p.bottle || '',
+    _volumeToMl_(p.volume), p.bottle || '',   // v3.65（複檢 P0-5）同上
     parseFloat(p.abv) || 0,
     p.ingredients || '[]', p.results || '{}',
     '待審核', '', '', '']);
@@ -2631,7 +2641,7 @@ function createRecipeSheet(row) {
   // ── 解析輸入 ──
   var client     = String(row[3]);
   var recipeName = String(row[4]);
-  var totalVol   = parseFloat(row[5]) || 4000;
+  var totalVol   = _volumeToMl_(row[5]) || 4000;   // v3.65（複檢 P0-5）同上
   var abv        = parseFloat(row[7]) || 0;
   var rawIngs    = [];
   try { rawIngs = JSON.parse(String(row[8])); } catch(e) {}
@@ -3230,13 +3240,18 @@ function addShipment(p) {
     const agg = _shipAggAll_(_shipRows_())[String(orderNo)] || { byKey: {}, maxSeq: 0, batches: 0 };
 
     const use = [], bad = [];
+    // v3.65（複檢 P0-4）：訂單明細允許同款同瓶型拆成多列，本次出貨也就可能送來多行同 key。
+    //   原本每行各自比對「訂購量 − 已出量」→ 訂購 10 瓶送兩行各 8 瓶會各自通過，寫入 16 瓶、
+    //   寄倉餘量變 −6 且整單被判「已出貨」。改成累計（與 consignSale、下方扣庫存的 _needBy 同寫法）。
+    const _needShip = {};
     lines.forEach(function (ln) {
       const q = Math.floor(Number(ln.qty)) || 0;
       if (q <= 0) return;
       const k = _shipKeyOf_(ln.product, ln.bottleType);
       if (ordered[k] == null) { bad.push('「' + String(ln.product || '') + '」不在此訂單的酒款明細內'); return; }
       const remain = (ordered[k] || 0) - (agg.byKey[k] || 0);
-      if (q > remain) bad.push('「' + String(ln.product || '') + '」本次 ' + q + ' 瓶，超過寄倉餘量 ' + remain + ' 瓶');
+      _needShip[k] = (_needShip[k] || 0) + q;
+      if (_needShip[k] > remain) bad.push('「' + String(ln.product || '') + '」本次合計 ' + _needShip[k] + ' 瓶，超過寄倉餘量 ' + remain + ' 瓶');
       else use.push({ product: String(ln.product || ''), bottleType: String(ln.bottleType || ''), qty: q, key: k });
     });
     if (bad.length) return { ok: false, error: '出貨數量有誤，整批未寫入：' + bad.join('；'), problems: bad };
@@ -4034,10 +4049,12 @@ var ORDER_MUTATING_ACTIONS = {
 // 新增寫入函式時只要在這裡登記一行，就不會出現「改了資料卻還看到舊值」。
 var CACHE_BUST_MAP = {
   bottleIn:['bottleOv_v1'], bottleOut:['bottleOv_v1'], addBottleItem:['bottleOv_v1'],
-  saveRunCard:['rcIdx_v1'], deleteRunCard:['rcIdx_v1'],
+  // v3.65（複檢 P1-4）saveRunCard 完工會自動入庫成品 → 水位警示要跟著失效
+  saveRunCard:['rcIdx_v1','stockAlerts_v1'], deleteRunCard:['rcIdx_v1'],
   stockIn:['stockAlerts_v1'], stockOut:['stockAlerts_v1'], setSafetyLevel:['stockAlerts_v1'],
   // 出貨/完工會動成品庫存與卡片狀態 → 水位警示與 run card 索引一併重算
-  shipOrder:['stockAlerts_v1'], completeOrderItem:['stockAlerts_v1','rcIdx_v1'],
+  // v3.65（複檢 P1-4）completeOrderItem 會扣玻璃瓶 → 補 bottleOv_v1（TTL 1800 秒，原本最長 30 分鐘顯示舊數字）
+  shipOrder:['stockAlerts_v1'], completeOrderItem:['stockAlerts_v1','rcIdx_v1','bottleOv_v1'],
   // v3.27 出貨紀錄合併扣庫存 → 水位警示同步失效
   addShipment:['stockAlerts_v1'], deleteShipment:['stockAlerts_v1']
 };
