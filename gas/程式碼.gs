@@ -586,6 +586,19 @@ function _userDealerCol_(headerRow) {
   for (let i = 0; i < h.length; i++) if (String(h[i] == null ? '' : h[i]).trim() === '綁定經銷商') return i;
   return 5;
 }
+// v3.66 角色欄防呆（主公 2026-09-17：阿軒／Vic 反映不能改訂單）：使用者資料 C 欄若多了空白、全形字或大小寫不同（'PM '／'pm'／'ＰＭ'），
+//   舊版原樣存進 session → ROLE_MATRIX 與前端 isPM() 都是嚴格比對 → 整個人被當成一般 user（看不到建單／編輯訂單）。
+//   這裡統一：NFKC 正規化（全形→半形）＋去頭尾與中間空白＋已知角色不分大小寫歸位；認不得的值原樣（trim 後）回傳，空白＝user。
+var KNOWN_ROLES = ['admin', 'PM', 'user', '倉管', '財務', 'FB觀看', '經銷商'];
+function _normRole_(role) {
+  var s = String(role == null ? '' : role);
+  try { s = s.normalize('NFKC'); } catch (e) {}
+  s = s.replace(/\s+/g, '');
+  if (!s) return 'user';
+  var low = s.toLowerCase();
+  for (var i = 0; i < KNOWN_ROLES.length; i++) if (KNOWN_ROLES[i].toLowerCase() === low) return KNOWN_ROLES[i];
+  return s;
+}
 function login(p) {
   const username = p.username, password = p.password;
   if (!username || !password) return { ok: false, error: '請提供帳號密碼' };
@@ -601,12 +614,12 @@ function login(p) {
     // 容錯：欄位前後空白一律忽略；純數字密碼容忍 Sheet 吃掉開頭 0（存 50916、輸入 050916 也過）
     const accOk = String(acc == null ? '' : acc).trim() === String(username).trim();
     if (!accOk) continue;
-    matchedAcc = { role: role || 'user' };
+    matchedAcc = { role: _normRole_(role) };
     const pwStr = String(pwd == null ? '' : pwd).trim();
     const inStr = String(password).trim();
     const pwOk = pwStr === inStr || (/^\d+$/.test(inStr) && pwStr === String(Number(inStr)));
     if (pwOk) {
-      const finalRole = role || 'user';
+      const finalRole = _normRole_(role);   // v3.66 角色欄防呆（見 _normRole_）
       const token = Utilities.getUuid();
       _sessPut_(token, { username: String(username).trim(), role: finalRole, dealer: String(dealerKey == null ? '' : dealerKey).trim() });
       _sessSweep_();   // 順手清掉過期的 Properties session
