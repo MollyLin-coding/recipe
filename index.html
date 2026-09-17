@@ -263,6 +263,7 @@ tbody tr:hover td{background:#faf3e8;}
 .sub-row{display:flex;align-items:center;gap:6px;padding:4px 0;font-size:12px;}
 .sdrop,.sub-drop{position:absolute;background:var(--card);border:1px solid var(--border);border-radius:8px;z-index:200;max-height:200px;overflow-y:auto;box-shadow:var(--sh);display:none;min-width:220px;}
 .sdrop.open,.sub-drop.open{display:block;}
+#rd_drop{max-height:324px;}   /* v3.68 主公指示：研發試算「搜尋品名」下拉一次看得到 6 款（原 200px≈4 款）；複合原料的子原料下拉維持原高度 */
 .sbox{position:relative;}
 .sd-item{padding:8px 12px;cursor:pointer;}
 .sd-item:hover{background:var(--gold-lt);}
@@ -512,7 +513,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.67';
+const APP_VERSION='v3.68';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
