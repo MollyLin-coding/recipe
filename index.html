@@ -512,7 +512,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.66';
+const APP_VERSION='v3.67';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -1685,13 +1685,13 @@ function rdShowDetail(id) {
   const ingRows = ings.map(g => {
     if (g.type === 'compound') {
       const subs = (g.subs || []).map(s => `<div style="padding-left:14px;font-size:11px;color:var(--ink3);">└ ${rcEsc(pubIngName(s))} ${nt(s.volume)}ml</div>`).join('');
-      return `<div style="padding:5px 0;border-bottom:1px dashed var(--border);"><b>${rcEsc(pubIngName(g))}</b> <span style="font-size:11px;color:var(--gold-dk);">複合${g.hasLoss ? '·÷0.8耗損' : ''}</span>${subs}</div>`;
+      return `<div style="padding:5px 0;border-bottom:1px dashed var(--border);"><b>${rcEsc(pubIngName(g))}</b> <span style="font-size:11px;color:var(--gold-dk);">複合${g.hasLoss ? '·÷0.8耗損' : ''}</span>${subs}${rdNoteHtml(g)}</div>`;
     }
     if (g.type === 'free') {
       const u = g.unit === '自訂' ? (g.customUnit || '自訂') : (g.unit || '');
-      return `<div style="padding:5px 0;border-bottom:1px dashed var(--border);"><b>${rcEsc(pubIngName(g))}</b> <span style="font-size:11px;color:var(--gold-dk);">自由材料</span> <span style="font-size:12px;">用量 ${rcEsc(g.qty || 0)}${rcEsc(u)}｜進貨 NT$${nt(g.packPrice)}/${rcEsc(g.packSize || 0)}${rcEsc(u)}${(+g.ratio > 0) ? '｜占比 ' + nt(g.ratio, 1) + '%' : ''}${(+g.abv > 0) ? '｜ABV ' + g.abv + '%' : ''}</span></div>`;
+      return `<div style="padding:5px 0;border-bottom:1px dashed var(--border);"><b>${rcEsc(pubIngName(g))}</b> <span style="font-size:11px;color:var(--gold-dk);">自由材料</span> <span style="font-size:12px;">用量 ${rcEsc(g.qty || 0)}${rcEsc(u)}｜進貨 NT$${nt(g.packPrice)}/${rcEsc(g.packSize || 0)}${rcEsc(u)}${(+g.ratio > 0) ? '｜占比 ' + nt(g.ratio, 1) + '%' : ''}${(+g.abv > 0) ? '｜ABV ' + g.abv + '%' : ''}</span>${rdNoteHtml(g)}</div>`;
     }
-    return `<div style="padding:5px 0;border-bottom:1px dashed var(--border);"><b>${rcEsc(pubIngName(g))}</b> <span style="font-size:12px;">占比 ${nt(g.ratio, 1)}%｜用量 ${nt(g.volume)}ml${(+g.abv > 0) ? '｜ABV ' + g.abv + '%' : ''}${g.hasLoss ? '｜÷0.8耗損' : ''}</span></div>`;
+    return `<div style="padding:5px 0;border-bottom:1px dashed var(--border);"><b>${rcEsc(pubIngName(g))}</b> <span style="font-size:12px;">占比 ${nt(g.ratio, 1)}%｜用量 ${nt(g.volume)}ml${(+g.abv > 0) ? '｜ABV ' + g.abv + '%' : ''}${g.hasLoss ? '｜÷0.8耗損' : ''}</span>${rdNoteHtml(g)}</div>`;
   }).join('') || '<div style="color:var(--ink3);font-size:12px;">（無原料明細）</div>';
   const resRow = (lb, v, unit) => (v == null || v === '' ? '' : `<div class="rm"><div class="lb">${lb}</div><div class="vl">${v}${unit || ''}</div></div>`);
   const isAdmin = curUser && curUser.role === 'admin';
@@ -1725,7 +1725,7 @@ function rdPrintHtml(r, ings, rs) {
         <td class="c">${i + 1}</td>
         <td><b>${e(nm)}</b> <span class="tag">複合${g.hasLoss ? '·÷0.8耗損' : ''}</span>${subs}</td>
         <td class="c">${nt(g.ratio, 1)}%</td><td class="r">${nt(g.volume)} ml</td><td class="c">${nt(g.abv, 1)}%</td>
-        <td class="c big">☐</td><td class="wr"></td><td class="wr"></td></tr>`;
+        <td class="c big">☐</td><td class="wr"></td><td class="wr">${e(g.note || '')}</td></tr>`;
     }
     if (g.type === 'free') {
       const u = g.unit === '自訂' ? (g.customUnit || '') : (g.unit || '');
@@ -1734,13 +1734,13 @@ function rdPrintHtml(r, ings, rs) {
         <td><b>${e(nm)}</b> <span class="tag">自由材料</span><div class="sub">進貨 NT$${nt(g.packPrice)} / ${e(g.packSize || 0)}${e(u)}</div></td>
         <td class="c">${(+g.ratio > 0) ? nt(g.ratio, 1) + '%' : '—'}</td>
         <td class="r">${nt(g.qty)} ${e(u)}</td><td class="c">${(+g.abv > 0) ? nt(g.abv, 1) + '%' : '—'}</td>
-        <td class="c big">☐</td><td class="wr"></td><td class="wr"></td></tr>`;
+        <td class="c big">☐</td><td class="wr"></td><td class="wr">${e(g.note || '')}</td></tr>`;
     }
     return `<tr>
       <td class="c">${i + 1}</td>
       <td><b>${e(nm)}</b>${g.hasLoss ? ' <span class="tag">÷0.8耗損</span>' : ''}</td>
       <td class="c">${nt(g.ratio, 1)}%</td><td class="r">${nt(g.volume)} ml</td><td class="c">${nt(g.abv, 1)}%</td>
-      <td class="c big">☐</td><td class="wr"></td><td class="wr"></td></tr>`;
+      <td class="c big">☐</td><td class="wr"></td><td class="wr">${e(g.note || '')}</td></tr>`;
   }).join('');
 
   const resCell = (lb, v) => `<div><div class="lb">${lb}</div><div class="vl">${v}</div></div>`;
@@ -1989,6 +1989,11 @@ function rdAddCompound() {
   rdRender(); rdCalc();
 }
 function rdDel(i) { rdState.ings.splice(i,1); rdRender(); rdCalc(); }
+// v3.67 主公 2026-09-17 指示：原料列表每一列多一個「備註」欄（ing.note；隨 ingredients JSON 一起存，舊記錄無此欄＝空白相容）
+function rdNoteRowHtml(i, ing) {
+  return `<div class="ic-r2" style="margin-top:4px;"><div class="if" style="flex:1 1 100%;"><label>備註</label><input value="${rcEsc(ing.note || '')}" oninput="rdState.ings[${i}].note=this.value" placeholder="選填：品牌批號、替代料、萃取條件、注意事項…" maxlength="200" style="width:100%;max-width:none;"></div></div>`;
+}
+function rdNoteHtml(g) { return (g && String(g.note || '').trim()) ? `<div style="font-size:11px;color:var(--ink2);margin-top:2px;">📝 ${rcEsc(g.note)}</div>` : ''; }
 function rdRender() {
   const el = document.getElementById('rd_ings'); if (!el) return;
   if (!rdState.ings.length) { el.innerHTML='<div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">尚未加入原料</div>'; rdCalc(); return; }
@@ -2023,6 +2028,7 @@ function rdRender() {
         ${subsHtml}
         <button class="btn btn-ghost btn-sm" style="margin-top:4px;font-size:11px;" onclick="rdAddSubDrop(${i})">+ 加入子原料</button>
         <div class="sdrop sub-drop" id="sdrop_${i}"></div>
+        ${rdNoteRowHtml(i, ing)}
       </div>`;
     } else if (ing.type === 'free') {
       // v2.2 自由材料列：進貨單位/規格/單價/本批用量 → 成本=單價÷規格×用量；純成本列
@@ -2049,6 +2055,7 @@ function rdRender() {
           <div class="if"><label>ABV%</label><input type="number" min="0" value="${ing.abv || ''}" oninput="${ref}.abv=parseFloat(this.value)||0;rdCalc()" style="width:52px;"></div>
         </div>
         <div style="font-size:10px;color:var(--ink3);margin-top:2px;">占比/ABV 選填：外購基酒等液體填了即計入 100% 驗證與酒精濃度；不填＝純成本列</div>
+        ${rdNoteRowHtml(i, ing)}
       </div>`;
     } else {
       return `<div class="ing-card">
@@ -2069,6 +2076,7 @@ function rdRender() {
           <div class="if"><label>用量ml</label><input type="number" value="${nt(ing.volume,0)}" id="rdv_${i}" oninput="${ref}.volume=parseFloat(this.value)||0;${ref}.ratio=rdState.tv>0?(parseFloat(this.value)||0)/rdState.tv*100:0;rdCalc()" style="width:65px;"></div>
           ${!ing.isManual?`<label style="display:flex;align-items:center;gap:3px;font-size:11px;"><input type="checkbox" ${ing.hasLoss?'checked':''} onchange="${ref}.hasLoss=this.checked;rdCalc()">耗損</label>`:''}
         </div>
+        ${rdNoteRowHtml(i, ing)}
       </div>`;
     }
   }).join('');
@@ -2279,10 +2287,10 @@ function rdLoadOne(i, modalBg) {
 }
 function rdExportCSV() {
   const r = window._rdRes || {};
-  const lines = ['原料,品牌,ABV%,單價,容量ml,占比%,用量ml,耗損,成本'];
+  const lines = ['原料,品牌,ABV%,單價,容量ml,占比%,用量ml,耗損,成本,備註'];   // v3.67 +備註
   rdState.ings.forEach(ing => {
     if (ing.type === 'compound') {
-      lines.push([ing.name,'複合','','','','','',(ing.hasLoss?'÷0.8':''),''].join(','));
+      lines.push([ing.name,'複合','','','','','',(ing.hasLoss?'÷0.8':''),'', (n => '"' + String(n || '').replace(/"/g, '""') + '"')(ing.note)].join(','));
       (ing.subs||[]).forEach(s => { const c=rdCpm(s)*(s.volume||0); lines.push(['  '+s.name,s.brand,s.abv,s.price,s.unitVol,'',nt(s.volume),'',nt(c,2)].join(',')); });
     } else if (ing.type === 'free') {
       // v2.2 自由材料：占比/ABV 欄標「—」；容量欄放進貨規格；用量欄放本批用量（單位另註）
@@ -2290,9 +2298,9 @@ function rdExportCSV() {
       let c = ps > 0 ? ((parseFloat(ing.packPrice) || 0) / ps) * (parseFloat(ing.qty) || 0) : 0;
       if (ing.hasLoss) c = c / 0.8;
       const u = ing.unit === '自訂' ? (ing.customUnit || '自訂') : (ing.unit || '');
-      lines.push([ing.name + '(自由材料/' + u + ')', '', ((ing.abv || 0) > 0 ? ing.abv : '—'), ing.packPrice || 0, ing.packSize || 0, ((ing.ratio || 0) > 0 ? nt(ing.ratio) : '—'), (ing.qty || 0), ing.hasLoss ? '÷0.8' : '', nt(c, 2)].join(','));
+      lines.push([ing.name + '(自由材料/' + u + ')', '', ((ing.abv || 0) > 0 ? ing.abv : '—'), ing.packPrice || 0, ing.packSize || 0, ((ing.ratio || 0) > 0 ? nt(ing.ratio) : '—'), (ing.qty || 0), ing.hasLoss ? '÷0.8' : '', nt(c, 2), (n => '"' + String(n || '').replace(/"/g, '""') + '"')(ing.note)].join(','));
     } else {
-      lines.push([ing.name,ing.brand,ing.abv,ing.price,ing.unitVol,nt(ing.ratio),nt(ing.volume),ing.hasLoss?'÷0.8':'',''].join(','));
+      lines.push([ing.name,ing.brand,ing.abv,ing.price,ing.unitVol,nt(ing.ratio),nt(ing.volume),ing.hasLoss?'÷0.8':'','', (n => '"' + String(n || '').replace(/"/g, '""') + '"')(ing.note)].join(','));
     }
   });
   lines.push('','===試算結果===','ABV,酒稅,食材成本,食材報價,資材成本,總成本');
