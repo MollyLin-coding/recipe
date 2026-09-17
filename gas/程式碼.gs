@@ -2520,8 +2520,10 @@ function _rdBackup_(action, row, p) {
     }
     var r = row || [];
     var v = function (x) { return (x instanceof Date) ? _fmtDateTime_(x) : (x == null ? '' : x); };
-    ws.appendRow([Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss'), action,
-      String(v(r[0])), String(v(r[1])), v(r[2]), v(r[3]), v(r[4]), v(r[5]), v(r[6]), v(r[7]), v(r[8])]);
+    var _ts = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss'), _ct = String(v(r[1]));
+    ws.appendRow([_ts, action, String(v(r[0])), _ct, v(r[2]), v(r[3]), v(r[4]), v(r[5]), v(r[6]), v(r[7]), v(r[8])]);
+    // appendRow 仍會把時間字串吃成 Date（欄格式擋不住，沙盒實測還 +15 小時）→ 比照 v3.64 _forceTextCell_ 重寫成純文字
+    var _lr = ws.getLastRow(); _forceTextCell_(ws, _lr, 1, _ts); _forceTextCell_(ws, _lr, 4, _ct);
     return '';
   } catch (e) {
     return '備份失敗：' + String((e && e.message) || e).slice(0, 120);
