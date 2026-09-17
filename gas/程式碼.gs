@@ -199,7 +199,10 @@ var ROLE_MATRIX = {
   // v3.58 工務/業務會議：admin＋PM＋倉管（倉管在函式內強制 type=工務）；刪議題 admin 或建立人本人（函式內判）
   mtgList: ['admin', 'PM', '倉管'], mtgGet: ['admin', 'PM', '倉管'], mtgCreate: ['admin', 'PM', '倉管'], mtgUpdate: ['admin', 'PM', '倉管'], mtgItemSave: ['admin', 'PM', '倉管'], mtgItemDelete: ['admin', 'PM', '倉管'],
   // v3.58 毛利分析併入資材庫頁後只對 admin／PM 渲染 → 後端同步補閘門（原本未列＝任何登入者可打；v3.14 樣品成本走同 action，Lulu＝財務也在 FINANCE_USERS 內會呼叫，故一併放行財務）
-  getProfitData: ['admin', 'PM', '財務']
+  getProfitData: ['admin', 'PM', '財務'],
+  // v3.65 研發試算：僅 admin（Kevin／Molly）——試算含各客戶配方與成本，屬全站最敏感資料；PM／一般／倉管／財務 一律 403（deleteRdRecord／reviewRdApply 原本就是 admin）
+  //   getRdApplies 同類資料（研發申請清單含配方），只有 admin 審核頁會呼叫，一併上鎖
+  getRdRecords: ['admin'], saveRdRecord: ['admin'], submitRdApply: ['admin'], getRdApplies: ['admin']
 };
 // v3.38 POST 入口：大 payload（經銷商設定含授權酒款 JSON／長文字、建單明細…）走 POST，免 GET 網址過長被 Google 回 400 HTML 頁。
 //   前端以 text/plain 送 JSON body（免 CORS preflight）；解析後與 doGet 走完全相同的流程（token 閘門／角色／派發）。
@@ -265,7 +268,7 @@ function doGet(e) {
       case 'getEnvInfo':
         try { CacheService.getScriptCache().removeAll(V3144_CACHE_KEYS); } catch (e) {}
         result = getEnvInfo();
-        result.modules = { consign: (typeof consignMe === 'function'), perf: (typeof perfGet === 'function'), expense: (typeof expList === 'function'), meeting: (typeof mtgList === 'function') };   // v3.58 meeting 探針   // v3.40 expense 探針   // v3.39 perf 探針   // v3.28 免登入探針：consign.gs 是否真的在部署版本裡（2026-09-03 Action 漏檔事故）
+        result.modules = { consign: (typeof consignMe === 'function'), perf: (typeof perfGet === 'function'), expense: (typeof expList === 'function'), meeting: (typeof mtgList === 'function'), rdBackup: (typeof _rdBackup_ === 'function') };   // v3.58 meeting 探針   // v3.40 expense 探針   // v3.39 perf 探針   // v3.28 免登入探針：consign.gs 是否真的在部署版本裡（2026-09-03 Action 漏檔事故）
         // v3.14.5 診斷：CacheService 到底能不能用（put→get→remove 全程回報例外）
         result.cacheDiag = (function () {
           var d = {};
@@ -2444,17 +2447,23 @@ function saveRdRecord(p) {
     const data = ws.getDataRange().getValues();
     for (let i = 1; i < data.length; i++) {
       if (String(data[i][0]) === wantId) {
+        // v3.65 覆寫前先把舊值留一筆快照（備份失敗不阻斷主操作）
+        const _bw = _rdBackup_('更新前快照', data[i], p);
         // C~I 欄覆寫（A=id、B=建立時間 保留不動）
         ws.getRange(i + 1, 3, 1, 7).setValues([[p.creator, p.client, p.name, p.volume, p.bottle, p.ingredients, p.results]]);
-        return { ok: true, id: wantId, updated: true };
+        const _ru = { ok: true, id: wantId, updated: true }; if (_bw) _ru.backupWarn = _bw;
+        return _ru;
       }
     }
     // 帶了 id 卻找不到（可能已被刪）→ 落回新增，不讓使用者的編輯憑空消失
   }
   const id = 'R' + Date.now();
   const now = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
-  ws.appendRow([id, now, p.creator, p.client, p.name, p.volume, p.bottle, p.ingredients, p.results]);
-  return { ok: true, id: id, updated: false };
+  const _newRow = [id, now, p.creator, p.client, p.name, p.volume, p.bottle, p.ingredients, p.results];
+  ws.appendRow(_newRow);
+  const _bwN = _rdBackup_('新增', _newRow, p);   // v3.65 新增後留一筆
+  const _rn = { ok: true, id: id, updated: false }; if (_bwN) _rn.backupWarn = _bwN;
+  return _rn;
 }
 
 function getRdRecords() {
@@ -2480,11 +2489,45 @@ function deleteRdRecord(p) {
   const rows = ws.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][0]) === String(p.id)) {
+      const _bwD = _rdBackup_('刪除前快照', rows[i], p);   // v3.65 刪列前先留快照
       ws.deleteRow(i + 1);
-      return { ok: true };
+      const _rdel = { ok: true }; if (_bwD) _rdel.backupWarn = _bwD;
+      return _rdel;
     }
   }
   return { ok: false, error: '找不到記錄 id' };
+}
+
+// ── v3.65 研發試算自動備份（append-only；主公 2026-09-17 拍板 N2）────────────
+// 主表分頁「研發試算備份」（不存在即建）：備份時間｜動作｜id｜建立時間｜creator｜client｜name｜volume｜bottle｜ingredients｜results
+//   動作＝新增／更新前快照／刪除前快照。⚠️ 備份失敗不得阻斷主操作：全程 try/catch，失敗回警示字串（主函式掛到 result.backupWarn）。
+//   不提供任何讀取備份的 API／UI——災難復原時直接開 Sheet 查（不多開一個敏感讀取面）。
+var RD_BACKUP_SHEET = '研發試算備份';
+var RD_BACKUP_HEADERS = ['備份時間', '動作', 'id', '建立時間', 'creator', 'client', 'name', 'volume', 'bottle', 'ingredients', 'results'];
+function _rdBackup_(action, row, p) {
+  try {
+    // 沙盒限定的故障模擬（驗收用；PROD 直接忽略此參數）
+    if (p && String(p._rdBackupFail || '') === '1' && getEnvInfo().env !== 'PROD') throw new Error('模擬備份故障');
+    var ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+    var ws = ss.getSheetByName(RD_BACKUP_SHEET);
+    if (!ws) {
+      ws = ss.insertSheet(RD_BACKUP_SHEET);
+      ws.getRange(1, 1, 1, RD_BACKUP_HEADERS.length).setValues([RD_BACKUP_HEADERS]);
+      ws.setFrozenRows(1);
+      // 時間欄鎖文字：Sheets 會把時間字串轉 Date 再依試算表時區顯示（v3.64 +15 小時事故同型雷）
+      ws.getRange(1, 1, ws.getMaxRows(), 1).setNumberFormat('@');
+      ws.getRange(1, 4, ws.getMaxRows(), 1).setNumberFormat('@');
+    }
+    var r = row || [];
+    var v = function (x) { return (x instanceof Date) ? _fmtDateTime_(x) : (x == null ? '' : x); };
+    var _ts = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss'), _ct = String(v(r[1]));
+    ws.appendRow([_ts, action, String(v(r[0])), _ct, v(r[2]), v(r[3]), v(r[4]), v(r[5]), v(r[6]), v(r[7]), v(r[8])]);
+    // appendRow 仍會把時間字串吃成 Date（欄格式擋不住，沙盒實測還 +15 小時）→ 比照 v3.64 _forceTextCell_ 重寫成純文字
+    var _lr = ws.getLastRow(); _forceTextCell_(ws, _lr, 1, _ts); _forceTextCell_(ws, _lr, 4, _ct);
+    return '';
+  } catch (e) {
+    return '備份失敗：' + String((e && e.message) || e).slice(0, 120);
+  }
 }
 
 // ── 研發申請 ─────────────────────────────────────────────────
