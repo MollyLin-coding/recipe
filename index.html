@@ -473,7 +473,7 @@ tbody tr:hover td{background:#faf3e8;}
     <div class="nav-tab active" data-tab="recipe"    onclick="switchTab('recipe')">   <span class="ni">📋</span><span>酒譜/run card</span></div>
     <div class="nav-tab"        data-tab="meeting"   onclick="switchTab('meeting')">  <span class="ni">📝</span><span>工務/業務會議</span></div><!-- v3.58 原「📊 毛利分析」降為原料/資材庫頁內一張卡（admin／PM） -->
     <div class="nav-tab"        data-tab="inventory" onclick="switchTab('inventory')"><span class="ni">🧪</span><span>原料/資材庫</span></div>
-    <div class="nav-tab"        data-tab="rd"        onclick="switchTab('rd')">       <span class="ni">🔬</span><span>研發試算</span></div>
+    <div class="nav-tab admin-only" data-tab="rd"      onclick="switchTab('rd')">       <span class="ni">🔬</span><span>研發試算</span></div><!-- v3.65 admin-only：試算含客戶配方與成本（後端 ROLE_MATRIX 為準） -->
     <div class="nav-tab"        data-tab="stock"     onclick="switchTab('stock')">    <span class="ni">🗄️</span><span>成品庫存</span></div>
     <div class="nav-tab admin-only" data-tab="consign" onclick="switchTab('consign')"><span class="ni">🤝</span><span>經銷商寄售</span></div><!-- v3.28 -->
     <div class="nav-tab admin-only" data-tab="perf" onclick="switchTab('perf')"><span class="ni">📈</span><span>業績模型</span></div><!-- v3.39 admin-only -->
@@ -512,7 +512,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.64';
+const APP_VERSION='v3.65';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -800,7 +800,7 @@ async function _bootApp(username, role) {
     });
     const _mtgTab = document.querySelector('#navbar .nav-tab[data-tab="meeting"]'); if (_mtgTab) _mtgTab.style.display = (role === 'admin' || role === 'PM') ? '' : 'none';   // v3.58 會議分頁：admin／PM（倉管走 ROLE_TABS）
     const _tabsOK = ['recipe','meeting','inventory','rd','batch','stock','apply','consign','perf','expense'];   // v3.39 +perf；v3.40 +expense；v3.58 profit→meeting
-    switchTab((_rt && _tabsOK.includes(_rt) && (!['apply', 'consign', 'perf', 'expense'].includes(_rt) || role === 'admin')) ? _rt : 'batch'); // v3.9.2 登入預設=訂單分頁(主公指示)
+    switchTab((_rt && _tabsOK.includes(_rt) && (!['apply', 'consign', 'perf', 'expense', 'rd'].includes(_rt) || role === 'admin')) ? _rt : 'batch');   /* v3.65 +rd */ // v3.9.2 登入預設=訂單分頁(主公指示)
   }
   showStockAlerts(window._bootStockAlerts);
   showShipDateAlerts(window._bootOrders);   // v3.14.4 與訂單列表共用同一份，不再重複打 getOrders
@@ -960,6 +960,8 @@ function wmAttach(box){
   box.style.position='relative'; box.appendChild(d);
 }
 function switchTab(tab) {
+  // v3.65 研發試算僅 admin（Kevin／Molly）：非 admin 從任何入口（按鈕／F5 還原／殘留狀態）都擋下，留在原分頁
+  if (tab === 'rd' && !(curUser && curUser.role === 'admin')) { toast('🔒 研發試算僅 admin 可用'); return; }
   // v3.39 業績模型有未儲存變更 → 離開前確認（留在原分頁）
   if (tab !== curTab && curTab === 'perf' && _perfDirty && !confirm('📈 業績模型有未儲存的變更，離開將捨棄，確定離開？')) return;
   curTab = tab;
@@ -1102,7 +1104,7 @@ function renderRecipeDetail(area) {
     <div class="total-bar">總計：<span id="totalPct"></span> · 成本 <span id="totalCostBar">${fm(cost)}</span></div>
     <div class="fe recipe-actions" style="gap:6px;margin-bottom:10px;">
       <button class="btn btn-ghost btn-sm" onclick="recalcRecipe(true)">↺ 還原比例</button>
-      <button class="btn btn-ghost btn-sm" onclick="toRd()">→ 帶入研發試算</button>
+      ${(curUser && curUser.role === 'admin') ? '<button class="btn btn-ghost btn-sm" onclick="toRd()">→ 帶入研發試算</button>' : ''}
       <button class="btn btn-ghost btn-sm" onclick="showApplyModal()">✏️ 申請更改</button>
     </div>
     <div class="sub" style="margin-bottom:5px;">製程備註</div>
@@ -1586,6 +1588,7 @@ function renderMaterialCost() {
 // ④ 研發試算（v10：精簡結果、加客戶、資材費）
 // ════════════════════════════════════════════════
 async function renderRdPage(mc) {
+  if (!curUser || curUser.role !== 'admin') { mc.innerHTML = '<div class="card"><div style="color:var(--ink3);padding:14px;font-size:13px;">🔒 此分頁僅 admin 可見</div></div>'; return; }   // v3.65
   if (!C.inv) { const res=await api({action:'getInventory'}); if(res.ok) C.inv=res.items||[]; }
   const { ings, tv, bt, title, client } = rdState;
   const botOpts = Object.keys(BSPEC).map(b=>`<option${b===bt?' selected':''}>${b}</option>`).join('');
@@ -1842,7 +1845,7 @@ function rdLoadFromDetail(id, btn) {
 async function rdDelFromDetail(id, btn) {
   if (!confirm('確定刪除這筆試算記錄？（不可復原）')) return;
   const res = await api({ action: 'deleteRdRecord', id: id });
-  if (res.ok) { toast('已刪除'); btn.closest('.modal-bg').remove(); rdRenderSavedList(true); }
+  if (res.ok) { toast('已刪除' + (res.backupWarn ? '（⚠️ 刪除前快照未寫入：' + res.backupWarn + '）' : ''), res.backupWarn ? 5000 : 2200); btn.closest('.modal-bg').remove(); rdRenderSavedList(true); }   // v3.65
   else toast('刪除失敗：' + (res.error || ''));
 }
 // ── v2.2.1 暫存草稿（本機 localStorage 單一槽位；編到一半先存、回來繼續）──
@@ -2219,6 +2222,7 @@ async function rdSave() {
     rdState.srcId = res.id;   // 之後再按儲存，續存同一筆
     rdState.srcName = rdState.title || '';   // v3.44 同步基準名，避免連續儲存誤觸改名防呆
     toast((res.updated ? '已更新這筆試算！' : '試算已儲存！') + (_dropped > 0 ? ('（已略過 ' + _dropped + ' 列空白原料）') : ''));
+    if (res.backupWarn) setTimeout(() => toast('⚠️ 試算已存，但自動備份未寫入：' + res.backupWarn, 5000), 2300);   // v3.65
     rdRenderSavedList(true);
   } else toast('儲存失敗:'+res.error); // v3.9.1 存後刷新常駐清單
 }
