@@ -253,6 +253,11 @@ tbody tr:hover td{background:#faf3e8;}
 .if{display:flex;flex-direction:column;gap:2px;}
 .if label{font-size:10px;color:var(--ink3);}
 .if input{width:70px;padding:4px 6px;border:1.5px solid var(--border);border-radius:5px;font-size:12px;}
+/* v3.69 研發試算原料卡：欄位同一橫列、緊貼靠左，備註吃剩餘寬度 */
+#rd_ings .ic-r2{gap:4px 12px;}
+#rd_ings .ing-card .if{flex:0 0 auto;min-width:0;}
+#rd_ings .ing-card .if.rd-note-f{flex:1 1 220px;}
+#rd_ings .ing-card .if.rd-note-f input{width:100%;max-width:none;}
 .del-btn{background:none;border:none;color:var(--ink3);cursor:pointer;font-size:14px;padding:2px 4px;flex-shrink:0;}
 .del-btn:hover{color:var(--red);}
 .cpd-box{border:1.5px dashed var(--border);border-radius:8px;padding:8px;margin-bottom:6px;}
@@ -513,7 +518,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.68';
+const APP_VERSION='v3.69';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -1598,7 +1603,7 @@ async function renderRdPage(mc) {
   const cliOpts = (clientList.length?clientList.map(c=>c.name):['Feeling Bar','南坡萬公版','Feeling Bar Cafe']).map(c=>`<option${c===client?' selected':''}>${c}</option>`).join('');
   mc.innerHTML = `
   <div class="card" style="margin-bottom:10px;">
-    <div class="card-title">研發試算</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px;"><div class="card-title" style="margin-bottom:0;">研發試算</div><div class="fe" style="gap:6px;flex-wrap:wrap;">${rdActionBtns()}</div></div><!-- v3.69 頂部同一組動作鈕，免捲到底 -->
     <div class="form-row">
       <div class="fg"><label>試算名稱</label><input class="inp" id="rd_title" value="${title}" placeholder="名稱（儲存用）" style="margin:0;font-size:13px;" oninput="rdState.title=this.value"></div>
       <div class="fg" style="flex:0 0 160px"><label>客戶（可選可自行輸入）</label><input class="inp" id="rd_client" list="rdCliList" value="${client || ''}" placeholder="選或輸入客戶" style="margin:0;font-size:13px;" oninput="rdState.client=this.value"><datalist id="rdCliList">${cliOpts}</datalist></div>
@@ -1645,13 +1650,7 @@ async function renderRdPage(mc) {
     <div id="rd_sum"></div>
   </div>
 
-  <div class="fe" style="gap:6px;flex-wrap:wrap;">
-    <button class="btn btn-ghost btn-sm" onclick="lockRun(this, rdSaveAs)" title="以新名稱另存一筆新的試算記錄（原記錄不會被改動）">🆕 另存新檔</button>
-    <button class="btn btn-ghost btn-sm" onclick="lockRun(this, rdSave)">💾 儲存</button>
-    <button class="btn btn-ghost btn-sm" onclick="rdLoadList()">📋 載入</button>
-    <button class="btn btn-ghost btn-sm" onclick="rdExportCSV()">⬇ CSV</button>
-    <button class="btn btn-primary btn-sm" onclick="lockRun(this, rdSubmitApply)">📤 送出申請</button>
-  </div>
+  <div class="fe" style="gap:6px;flex-wrap:wrap;">${rdActionBtns()}</div>
   <div id="rdSavedList" style="margin-bottom:80px;"></div>`;
 
   rdDraftBar(); rdRender(); rdUpdateMat(); rdCalc();
@@ -1991,6 +1990,18 @@ function rdAddCompound() {
 }
 function rdDel(i) { rdState.ings.splice(i,1); rdRender(); rdCalc(); }
 // v3.67 主公 2026-09-17 指示：原料列表每一列多一個「備註」欄（ing.note；隨 ingredients JSON 一起存，舊記錄無此欄＝空白相容）
+// v3.69 研發試算動作鈕（頂部／底部共用同一份，改一處兩處同步）
+function rdActionBtns() {
+  return `<button class="btn btn-ghost btn-sm" onclick="lockRun(this, rdSaveAs)" title="以新名稱另存一筆新的試算記錄（原記錄不會被改動）">🆕 另存新檔</button>
+    <button class="btn btn-ghost btn-sm" onclick="lockRun(this, rdSave)">💾 儲存</button>
+    <button class="btn btn-ghost btn-sm" onclick="rdLoadList()">📋 載入</button>
+    <button class="btn btn-ghost btn-sm" onclick="rdExportCSV()">⬇ CSV</button>
+    <button class="btn btn-primary btn-sm" onclick="lockRun(this, rdSubmitApply)">📤 送出申請</button>`;
+}
+// v3.69 備註改為同列尾端欄位（吃剩餘寬度；窄螢幕自動換行）
+function rdNoteFieldHtml(i, ing) {
+  return `<div class="if rd-note-f"><label>備註</label><input value="${rcEsc(ing.note || '')}" oninput="rdState.ings[${i}].note=this.value" placeholder="選填：品牌批號、替代料、萃取條件、注意事項…" maxlength="200"></div>`;
+}
 function rdNoteRowHtml(i, ing) {
   return `<div class="ic-r2" style="margin-top:4px;"><div class="if" style="flex:1 1 100%;"><label>備註</label><input value="${rcEsc(ing.note || '')}" oninput="rdState.ings[${i}].note=this.value" placeholder="選填：品牌批號、替代料、萃取條件、注意事項…" maxlength="200" style="width:100%;max-width:none;"></div></div>`;
 }
@@ -2048,15 +2059,13 @@ function rdRender() {
           <div class="if"><label>單價NT$</label><input type="number" min="0" value="${ing.packPrice || ''}" oninput="${ref}.packPrice=parseFloat(this.value)||0;rdCalc()" style="width:66px;"></div>
           <div class="if"><label>本批用量</label><input type="number" min="0" value="${ing.qty || ''}" oninput="${ref}.qty=parseFloat(this.value)||0;rdCalc()" style="width:62px;"></div>
           <label style="display:flex;align-items:center;gap:3px;font-size:11px;"><input type="checkbox" ${ing.hasLoss ? 'checked' : ''} onchange="${ref}.hasLoss=this.checked;rdCalc()">耗損÷0.8</label>
-        </div>
-        <div class="ic-r2">
           <div class="if"><label>占比%</label><input type="number" min="0" id="rdr_${i}" value="${nt(ing.ratio) || ''}" oninput="${ref}.ratio=parseFloat(this.value)||0;${ref}.volume=rdState.tv*(parseFloat(this.value)||0)/100;document.getElementById('rdv_${i}').value=nt(${ref}.volume,0);rdCalc()" style="width:60px;"></div>
           <span style="font-size:11px;color:var(--ink3);">↔</span>
           <div class="if"><label>用量ml</label><input type="number" min="0" id="rdv_${i}" value="${nt(ing.volume, 0) || ''}" oninput="${ref}.volume=parseFloat(this.value)||0;${ref}.ratio=rdState.tv>0?(parseFloat(this.value)||0)/rdState.tv*100:0;rdCalc()" style="width:62px;"></div>
           <div class="if"><label>ABV%</label><input type="number" min="0" value="${ing.abv || ''}" oninput="${ref}.abv=parseFloat(this.value)||0;rdCalc()" style="width:52px;"></div>
+          ${rdNoteFieldHtml(i, ing)}
         </div>
         <div style="font-size:10px;color:var(--ink3);margin-top:2px;">占比/ABV 選填：外購基酒等液體填了即計入 100% 驗證與酒精濃度；不填＝純成本列</div>
-        ${rdNoteRowHtml(i, ing)}
       </div>`;
     } else {
       return `<div class="ing-card">
@@ -2065,19 +2074,18 @@ function rdRender() {
           <div id="rc_${i}" class="ing-cost"></div>
           <button class="btn btn-sm" style="flex:0 0 auto;color:var(--red);border:1px solid var(--red);background:transparent;padding:2px 8px;font-size:11px;white-space:nowrap;" onclick="rdDel(${i})">🗑 刪除</button>
         </div>
-        ${ing.isManual?`
         <div class="ic-r2">
+        ${ing.isManual?`
           <div class="if"><label>ABV%</label><input type="number" value="${ing.abv}" oninput="${ref}.abv=parseFloat(this.value)||0;rdCalc()" style="width:55px;"></div>
           <div class="if"><label>單價NT$</label><input type="number" value="${ing.price}" oninput="${ref}.price=parseFloat(this.value)||0;rdCalc()" style="width:70px;"></div>
           <div class="if"><label>容量ml</label><input type="number" value="${ing.unitVol}" oninput="${ref}.unitVol=parseFloat(this.value)||0;rdCalc()" style="width:65px;"></div>
-        </div>`:''}
-        <div class="ic-r2">
+        `:''}
           <div class="if"><label>占比%</label><input type="number" id="rdr_${i}" value="${nt(ing.ratio)}" oninput="${ref}.ratio=parseFloat(this.value)||0;${ref}.volume=rdState.tv*(parseFloat(this.value)||0)/100;document.getElementById('rdv_${i}').value=nt(${ref}.volume,0);rdCalc()" style="width:65px;"></div>
           <span style="font-size:11px;color:var(--ink3);">↔</span>
           <div class="if"><label>用量ml</label><input type="number" value="${nt(ing.volume,0)}" id="rdv_${i}" oninput="${ref}.volume=parseFloat(this.value)||0;${ref}.ratio=rdState.tv>0?(parseFloat(this.value)||0)/rdState.tv*100:0;rdCalc()" style="width:65px;"></div>
           ${!ing.isManual?`<label style="display:flex;align-items:center;gap:3px;font-size:11px;"><input type="checkbox" ${ing.hasLoss?'checked':''} onchange="${ref}.hasLoss=this.checked;rdCalc()">耗損</label>`:''}
+          ${rdNoteFieldHtml(i, ing)}
         </div>
-        ${rdNoteRowHtml(i, ing)}
       </div>`;
     }
   }).join('');
