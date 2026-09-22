@@ -2840,6 +2840,16 @@ function orderTypeSelectHtml(selected) {
 function omClientFieldHtml(type, selected) {
   const consignUi = type === TYPE_CONSIGN_UI;
   let spec = consignUi ? (window._consignDealers || []).filter(d => d.enabled).map(d => [d.key, d.label + '（' + d.key + '）']) : TYPE_CLIENTS[type];
+  // v3.70（主公 2026-09-22）：「自有酒款出貨訂單(有金流)」的客戶下拉原本是**硬編三家經銷商**，
+  //   每新增一間寄售商都要改程式才看得到（實例：downstair 從沒被加進去；誠品生活／桃園青埔環球購物中心同理）。
+  //   改成「硬編清單 ∪ 經銷商設定裡啟用中的經銷商」，以後在試算表新增＋啟用即自動出現，程式零改動。
+  //   仍保留硬編清單當 fallback（bootstrap 的 consignDealers 還沒回來時不會變空），並以 key 去重。
+  if (type === TYPE_SHIP) {
+    const _seen = new Set((spec || []).map(pr => pr[0]));
+    const _extra = (window._consignDealers || []).filter(d => d.enabled && !_seen.has(d.key))
+      .map(d => [d.key, d.label ? (d.label + '（' + d.key + '）') : d.key]);
+    if (_extra.length) spec = (spec || []).concat(_extra);
+  }
   if (consignUi && !spec.length) {
     // bootstrap 的 consignDealers 還沒回來（登入後數十秒內開建單會遇到）：先用建單客戶表的「經銷商－*」頂著，同時背景抓一次回來重建清單
     spec = (TYPE_CLIENTS[TYPE_SHIP] || []).filter(p => String(p[0]).startsWith('經銷商－'));
