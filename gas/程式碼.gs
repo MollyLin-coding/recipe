@@ -391,6 +391,7 @@ function doGet(e) {
       case 'extCreateOrder':         result = extCreateOrder(p); break;          // 報價單→訂單（同報價單號＝更新，冪等）
       case 'extGetOrders':           result = extGetOrders(p); break;            // 訂單全表＋出貨紀錄（同步用）
       case 'extMarkImported':        result = extMarkImported(p); break;         // 反向匯入後回填對應報價單號              // v3.40 廠務支出：批次匯入(admin 或 CRM_CASH_KEY；來源鍵去重)
+      case 'extConsignLedger':       result = extConsignLedger(p); break;        // v3.71 寄售帳（經銷商設定＋門市在庫異動＋牌價）給報價系統同步（唯讀）
       case 'fixedGet':               result = fixedGet(p); break;               // v3.40 固定成本：該月(含沿用)(admin)
       case 'fixedSave':              result = fixedSave(p); break;              // v3.40 固定成本：寫該月列(admin)
       case 'mtgList':                result = mtgList(p); break;                // v3.58 會議列表(admin/PM/倉管)
@@ -1872,7 +1873,7 @@ function crmCashKeySetup(p) {
 // ##  ⚠ 這段跟其他程式一樣必須留在 程式碼.gs（Actions 只推這一檔）。
 // ═══════════════════════════════════════════════════════════════════
 var QS_SRC_COL = 35;   // AI 欄：對應報價單號
-var QS_LINK_ACTIONS = ['extPing', 'extCreateOrder', 'extGetOrders', 'extMarkImported'];
+var QS_LINK_ACTIONS = ['extPing', 'extCreateOrder', 'extGetOrders', 'extMarkImported', 'extConsignLedger'];
 function _qsLinkKey_() { try { return PropertiesService.getScriptProperties().getProperty('QS_LINK_KEY') || ''; } catch (e) { return ''; } }
 function _qsLinkOk_(p) { var k = _qsLinkKey_(); return !!k && k.length >= 20 && String((p && p.key) || '') === k; }
 // 一次性設定：只在 QS_LINK_KEY 尚未存在時可寫；已設定後拒絕（換鑰匙請至 GAS 編輯器改 Script Property）
@@ -1975,6 +1976,36 @@ function extMarkImported(p) {
     return { ok: true, orderNo: orderNo, quoteNo: quoteNo };
   }
   return { ok: false, error: '找不到訂單：' + orderNo };
+}
+
+// v3.71 寄售帳給報價系統（唯讀，QS_LINK_KEY 金鑰限定；報價系統「寄售管理」以廠務為主、每小時同步）。
+//   回：dealers＝經銷商設定（鍵／顯示名／啟用／折扣／結帳日／預設規格）、rows＝經銷商庫存異動（全部欄位，含建立時間），
+//       prices＝牌價表（系統酒名→對外名稱／規格／建議零售價），statements＝對帳單摘要（期別／狀態／請款金額）。
+//   since（yyyy-MM-dd HH:mm:ss，可省略）＝只回「建立時間 ≥ since」的異動列；經銷商與牌價一律全回。
+//   ⚠ 純讀取，不動任何資料；型別／欄位跟 consignLedger 給店長頁看的 _consignRowObj_ 同一套。
+function extConsignLedger(p) {
+  var since = String((p && p.since) || '').trim();
+  var map = _consignDealerMap_();
+  var dealers = Object.keys(map).map(function (k) {
+    var c = map[k];
+    return { key: c.key, label: c.label, enabled: !!c.enabled, discount: c.discount, closeDay: c.closeDay, defaultVolume: c.defaultVolume || '', contractStart: c.contractStart || '' };
+  });
+  var rows = _consignLedgerRows_().map(_consignRowObj_).filter(function (r) { return !!r.id && (!since || String(r.createdAt || '') >= since); });
+  var prices = [];
+  try {
+    _consignRowsRO_(CONSIGN_PRICE_SHEET, CONSIGN_PRICE_HEADERS).forEach(function (r) {
+      if (!r[CPR.product]) return;
+      prices.push({ product: String(r[CPR.product] || ''), pubName: String(r[CPR.pubName] || ''), volume: String(r[CPR.volume] || ''), price: Number(r[CPR.price]) || 0 });
+    });
+  } catch (e) { prices = []; }
+  var statements = [];
+  try {
+    statements = _consignStmtRows_().map(_consignStmtObj_).filter(function (s) { return !!s.id; }).map(function (s) {
+      return { id: s.id, dealer: s.dealer, period: s.period, from: s.from, to: s.to, status: s.status, soldQty: s.soldQty, amount: s.amount, paidDate: s.paidDate || '', orderNo: s.orderNo || '' };
+    });
+  } catch (e) { statements = []; }
+  return { ok: true, dealers: dealers, rows: rows, prices: prices, statements: statements, count: rows.length,
+    at: Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd HH:mm:ss') };
 }
 
 function crmCashRead(p) {
