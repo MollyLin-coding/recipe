@@ -1607,7 +1607,18 @@ function updateOrder(p) {
       });
       const allDone = items.every(function (it) { return it.status === '完成'; });
       const anyDone = items.some(function (it) { return it.status === '完成'; });
-      const status = allDone ? '已完成' : (anyDone ? '製作中' : '待製作');
+      let status = allDone ? '已完成' : (anyDone ? '製作中' : '待製作');
+      // v3.72（報價系統複檢 2026-09-23）：改單原本一律依品項狀態重算 → 已出貨的單只要被改一次（同仁改單／報價系統「更新廠務訂單」）
+      //   就掉回「已完成／製作中」：列表看不出已出貨、玻璃瓶預佔（_bottleReserved_）又把它算回去。改成：
+      //   ①有出貨紀錄且每一款（酒款＋瓶型）都出清 → 已出貨（跟 addShipment 同一套判斷）
+      //   ②目前是已出貨、但沒有出貨紀錄（v3.26 前的整張出貨 shipOrder）→ 維持已出貨
+      const curStatus = String(data[i][8] || '').trim();
+      const sagg = _shipAggOfOrder_(ss, orderNo);
+      if (sagg && sagg.batches > 0) {
+        const ordered = _shipOrderedOf_(items);
+        const oks = Object.keys(ordered);
+        if (oks.length && oks.every(function (k) { return (sagg.byKey[k] || 0) >= ordered[k]; })) status = '已出貨';
+      } else if (curStatus === '已出貨') status = '已出貨';
       ws.getRange(i + 1, 2, 1, 9).setValues([[
         p.client, p.orderType || '', p.deliveryDate || '', JSON.stringify(items),
         Number(p.total) || 0, Number(p.balance) || 0, p.depositStatus || '', status, p.pm || ''
@@ -1941,6 +1952,13 @@ function extGetOrders(p) {
   var types = null;
   try { if (p && p.types) types = (typeof p.types === 'string' && p.types.charAt(0) === '[') ? JSON.parse(p.types) : String(p.types).split(','); } catch (e) { types = null; }
   if (types && types.length) orders = orders.filter(function (o) { return types.indexOf(o.orderType) >= 0; });
+  // v3.72（報價系統複檢 2026-09-23）：報價系統「更新廠務訂單」前只要查一張（findOrderNo 訂單編號／findQuoteNo 對應報價單號）
+  //   → 只回那張、不讀出貨紀錄。整包（全部訂單＋出貨紀錄）實測 15～20 秒，加上建單會超過報價系統前端 25 秒逾時。
+  var findNo = String((p && p.findOrderNo) || '').trim(), findQ = String((p && p.findQuoteNo) || '').trim();
+  if (findNo || findQ) {
+    orders = orders.filter(function (o) { return (findNo && String(o.orderNo) === findNo) || (findQ && String(o.qsQuoteNo || '').trim() === findQ); });
+    return { ok: true, orders: orders, shipments: [], count: orders.length, partial: true };
+  }
   var shipments = [];
   try {
     const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
@@ -3222,6 +3240,16 @@ function _shipOrderedOf_(items) {
   });
   return ordered;
 }
+// v3.72 單張訂單的出貨彙總（唯讀；「出貨紀錄」分頁不存在＝沒出過貨，刻意不呼叫 _shipSheet_() 以免讀取路徑建分頁）
+function _shipAggOfOrder_(ss, orderNo) {
+  try {
+    const sws = ss.getSheetByName(SHIP_SHEET_NAME);
+    if (!sws || sws.getLastRow() < 2) return null;
+    return _shipAggAll_(sws.getRange(2, 1, sws.getLastRow() - 1, SHIP_HEADERS.length).getValues())[String(orderNo)] || null;
+  } catch (e) { return null; }
+}
+// v3.72 使用者打的文字寫進試算表前：開頭是 = + - @ 會被 Sheets 當成公式執行 → 前面加 ' 當純文字（畫面與讀回的值都不含 '）
+function _sheetSafeText_(s) { s = String(s == null ? '' : s); return /^[=+\-@]/.test(s) ? "'" + s : s; }
 
 // 成品庫存帳本中「有帳」的酒款集合（南坡萬v.2 曾有任何異動列即算有帳）＋目前庫存。
 // 用資料判定而非訂單類型字串＝日後新增訂單類型不必回來改這裡。
@@ -4596,15 +4624,21 @@ function _consignOnShipmentDelete_(client, orderNo, seq, delLines, op) {
   var map = _consignDealerMap_();
   var cfg = map[String(client)];
   if (!cfg) return null;
-  // 找到當初自動寫的進貨列（同單同批），逐列沖回
+  // 找到當初自動寫的進貨列（同單同批），沖回
+  // v3.72（報價系統複檢 2026-09-23）：刪掉最後一批再補出貨會拿到同一個批次號 → 那批再刪一次時，原本會把「上一輪已經沖過」的進貨再沖一次
+  //   （門市在庫變負）。改成同單同批按「酒款＋規格＋瓶型」把進貨（正）與進貨取消（負）相加，只沖還剩下的正數。
   var rows = _consignLedgerRows_();
-  var back = [];
+  var net = {}, order = [];
   rows.forEach(function (r) {
     if (String(r[CLG.dealer]) !== String(client)) return;
     if (String(r[CLG.orderNo]) !== String(orderNo) || String(r[CLG.seq]) !== String(seq)) return;
-    if (String(r[CLG.type]) !== '進貨') return;
-    back.push({ product: String(r[CLG.product]), volume: String(r[CLG.volume]), bottleType: String(r[CLG.bottleType]), qty: Math.round(Number(r[CLG.qty]) || 0) });
+    var t = String(r[CLG.type]);
+    if (t !== '進貨' && t !== '進貨取消') return;
+    var k = String(r[CLG.product]) + '|' + String(r[CLG.volume]) + '|' + String(r[CLG.bottleType]);
+    if (!net[k]) { net[k] = { product: String(r[CLG.product]), volume: String(r[CLG.volume]), bottleType: String(r[CLG.bottleType]), qty: 0 }; order.push(k); }
+    net[k].qty += Math.round(Number(r[CLG.qty]) || 0);
   });
+  var back = order.map(function (k) { return net[k]; }).filter(function (b) { return b.qty > 0; });
   if (!back.length) return null;
   var ws = _consignSheet_(CONSIGN_LEDGER_SHEET, CONSIGN_LEDGER_HEADERS);
   var now = _consignNow_(), gid = _consignGenId_('CX'), today = _consignToday_();
@@ -4707,7 +4741,7 @@ function consignSale(p) {
     if (bad.length) return { ok: false, error: '登記有誤，整批未寫入：' + bad.join('；'), problems: bad };
     if (!use.length) return { ok: false, error: '售出數量皆為 0，未寫入' };
     var ws = _consignSheet_(CONSIGN_LEDGER_SHEET, CONSIGN_LEDGER_HEADERS);
-    var now = _consignNow_(), gid = _consignGenId_('CS'), op = String((p && p._user) || ''), note = String((p && p.note) || '');
+    var now = _consignNow_(), gid = _consignGenId_('CS'), op = String((p && p._user) || ''), note = _sheetSafeText_(String((p && p.note) || ''));
     var out = use.map(function (u, i) {
       return [gid + '-' + (i + 1), date, dealer, u.product, u.volume, u.bottleType, '售出', -u.qty, u.unitPrice, '', '', op, now, note];
     });
@@ -4762,7 +4796,7 @@ function consignAdjust(p) {
     var ws = _consignSheet_(CONSIGN_LEDGER_SHEET, CONSIGN_LEDGER_HEADERS);
     var now = _consignNow_(), gid = _consignGenId_('CA'), op = String((p && p._user) || '');
     var out = use.map(function (u, i) {
-      return [gid + '-' + (i + 1), date, dealer, u.product, u.volume, u.bottleType, type, u.delta, '', '', '', op, now, note];
+      return [gid + '-' + (i + 1), date, dealer, u.product, u.volume, u.bottleType, type, u.delta, '', '', '', op, now, _sheetSafeText_(note)];   // v3.72 防公式
     });
     ws.getRange(ws.getLastRow() + 1, 1, out.length, CONSIGN_LEDGER_HEADERS.length).setValues(out);
     return { ok: true, dealer: dealer, type: type, date: date, lines: use };
@@ -5074,7 +5108,7 @@ function consignRestockCreate(p) {
       MailApp.sendEmail({ to: CONSIGN_NOTIFY_EMAILS.join(','), subject: subj, body: body, name: '南坡萬廠務系統' });
       emailed = true;
     } catch (e) { emailErr = String((e && e.message) || e); }
-    var row = [id, dealer, today, '待放行', JSON.stringify(use), wish, note, op, now, '', '', '', '', emailed ? 'TRUE' : 'FALSE', emailErr, ''];   // v3.30 O 欄=寄信例外文字（診斷）；v3.32 P 欄=出貨日
+    var row = [id, dealer, today, '待放行', JSON.stringify(use), wish, _sheetSafeText_(note), op, now, '', '', '', '', emailed ? 'TRUE' : 'FALSE', emailErr, ''];   // v3.72 備註防公式   // v3.30 O 欄=寄信例外文字（診斷）；v3.32 P 欄=出貨日
     _consignRestockEnsureHeaders_(ws);   // 舊分頁補表頭
     var r = ws.getLastRow() + 1;
     ws.getRange(r, CRS.date + 1).setNumberFormat('@'); ws.getRange(r, CRS.wishDate + 1).setNumberFormat('@');
