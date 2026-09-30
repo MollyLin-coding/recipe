@@ -518,7 +518,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.70';
+const APP_VERSION='v3.75';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -1956,7 +1956,7 @@ function rdDrop() {
   const list = inv.filter(i => (!cat||i.category===cat) && (!kw||i.name.toLowerCase().includes(kw)||(i.brand||'').toLowerCase().includes(kw)));
   if (!list.length) { drop.classList.remove('open'); return; }
   drop.classList.add('open');
-  drop.innerHTML = list.slice(0,30).map(item =>
+  drop.innerHTML = list.map(item =>   // v3.75 拿掉 30 筆上限：糖漿/蜂蜜等大分類超過 30 筆時後面被截掉（Molly 2026-09-30 回報只到一海香百香果）
     `<div class="sd-item" onclick="rdPick(${JSON.stringify(item).replace(/"/g,'&quot;')})">
       <div class="sd-name">${fullIngName(item)}</div>
       <div class="sd-sub">${item.category||''} · ${fm0(item.price)}/${item.vol?nt(item.vol,0)+'ml':'—'} · ABV ${item.abv||0}%</div>
@@ -2105,7 +2105,7 @@ function rdSubDropList(pi) {
   const el = document.getElementById('sdlist_'+pi); if (!el) return;
   const kw = (document.getElementById('sdkw_'+pi)?.value || '').trim().toLowerCase();
   const list = (C.inv || []).filter(i => !kw || i.name.toLowerCase().includes(kw) || (i.brand||'').toLowerCase().includes(kw));
-  el.innerHTML = list.slice(0,30).map(item =>
+  el.innerHTML = list.map(item =>   // v3.75 同上，複合原料子項清單也拿掉 30 筆上限
     `<div class="sd-item" onclick="rdPickSub(${pi},${JSON.stringify(item).replace(/"/g,'&quot;')})">
       <div class="sd-name">${fullIngName(item)}</div>
       <div class="sd-sub">${item.category||''} · ${fm0(item.price)}/${item.vol?nt(item.vol,0)+'ml':'—'}</div>
