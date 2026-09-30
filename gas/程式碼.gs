@@ -2235,7 +2235,20 @@ function getInventory() {
     const isSolid = detectSolid(row[10], category);  // K欄 + 分類兩層判讀
     items.push({ category, brand, name, abv, price, vol, unitCost, unit: unitCost, platform, isSolid });
   }
-  const result = { ok: true, items };
+  // v3.74 同品項多家廠商只留最低價（Molly 2026-09-30：價格表逐家記錄進價，APP 只要看最便宜那筆）。
+  //   同品項＝大分類＋品牌＋品名＋容量＋酒精濃度都相同；容量不同（如 Malibu 700ml／1000ml）視為不同規格，兩筆都留；
+  //   濃度不同也分開（南坡萬自製「黑蘭姆酒」有 40% 與 0% 兩種，不可合併）。
+  //   價格 0 或空白視為未填，不會蓋掉有填價格的那筆；同價保留表上先出現的。
+  const best = {}, order = [];
+  items.forEach(function (it) {
+    const k = [it.category, it.brand, it.name, it.vol, it.abv].join('\u0001');
+    const cur = best[k];
+    if (!cur) { best[k] = it; order.push(k); return; }
+    const a = cur.price > 0 ? cur.price : Infinity, b = it.price > 0 ? it.price : Infinity;
+    if (b < a) best[k] = it;
+  });
+  const deduped = order.map(function (k) { return best[k]; });
+  const result = { ok: true, items: deduped };
   cache.put('inventory_v2', JSON.stringify(result), 300);
   return result;
 }
