@@ -2218,8 +2218,12 @@ function getInventory() {
     const a = String(row[0] || '').trim();
     if (a.indexOf('▌') >= 0) { curCat = a.replace(/▌/g, '').trim(); continue; }
     if (!a) continue;
-    const brand = String(row[1] || '').trim();
-    const name = String(row[2] || '').trim();
+    let brand = String(row[1] || '').trim();
+    let name = String(row[2] || '').trim();
+    // v3.73 價格表有一批列只填「品牌」、品名/規格留空（知多、尊美醇、野格、Campari…共 21 筆），
+    //   原本 `if (!name) continue` 整列跳過 → 價格表有、APP 原料庫沒有（Molly 2026-09-30 回報「沒有連動」）。
+    //   改為品名空白時以品牌當品名（brand 清空，避免前端 fullIngName 顯示成「知多 知多」）。
+    if (!name && brand) { name = brand; brand = ''; }
     const abv = parseFloat(row[3]) || 0;
     const price = parseFloat(row[4]) || 0;
     const vol = parseFloat(row[5]) || 0;             // F欄：容量ml
