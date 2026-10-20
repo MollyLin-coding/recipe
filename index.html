@@ -3350,7 +3350,7 @@ function showOrderDetail(orderNo) {
       ${isAdmin ? `<button class="btn btn-ghost btn-sm" style="color:#c0392b;border:1px solid #e74c3c;" onclick="deleteOrderFromDetail('${o.orderNo}')">🗑 刪除訂單</button>` : ''}
       ${isAdmin ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();showDeliveryModal('${o.orderNo}')">🚚 編輯配送</button>` : ''}
       ${(isAdmin && !isConsignOrder(o)) ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();showFinanceModal(${idx})">💰 金流</button>` : ''}
-      ${(canAct && o.orderType !== TYPE_CONSIGN_SETTLE) ? `<button class="btn btn-sm" style="background:var(--green);color:#fff;border:1px solid var(--green);font-weight:700;" onclick="this.closest('.modal-bg').remove();showShipModal(${idx})">🚚 實際出貨紀錄（可分批出貨）</button>` : ''}
+      ${((canAct || isPM()) && o.orderType !== TYPE_CONSIGN_SETTLE) ? `<button class="btn btn-sm" style="background:var(--green);color:#fff;border:1px solid var(--green);font-weight:700;" onclick="this.closest('.modal-bg').remove();showShipModal(${idx})">🚚 實際出貨紀錄（可分批出貨）</button>` : ''}   <!-- v3.76 PM 也可登記出貨（後端 addShipment 同步開放；刪除仍 admin） -->
       ${isConsignOrder(o) ? `<button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove();switchTab('consign')">🤝 經銷商寄售統計</button>` : ''}
       <button class="btn btn-primary btn-sm" onclick="this.closest('.modal-bg').remove()">關閉</button>
     </div>`);
@@ -3452,7 +3452,7 @@ async function delShipment(orderNo, seq) {
   }
   else toast("刪除失敗：" + (res.error || ""));
 }
-// ➕ 登記一次出貨（admin+倉管）：每款預設帶入「目前寄倉餘量」＝按下去就是全出，也可改成只出一部分
+// ➕ 登記一次出貨（admin+倉管＋PM，v3.76）：每款預設帶入「目前寄倉餘量」＝按下去就是全出，也可改成只出一部分
 // v3.27：這一顆鈕＝出貨的唯一入口（紀錄＋扣成品庫存）。原「確認實際出貨日」「確認出貨(扣庫存)」已併入。
 //   成品庫存只有「南坡萬v.2」一本帳 → 後端只扣該帳本裡有帳的酒款；代工品項只記錄不扣。
 async function showShipModal(oi) {
@@ -4016,10 +4016,10 @@ function showConfirmShipModal(oi) {
     else toast('確認失敗：' + (res.error || ''));
   });
 }
-// 登入後：到表訂出貨日未確認實際出貨日 → 提醒 admin+倉管（水位回升同理，確認後消失）
+// 登入後：到表訂出貨日未確認實際出貨日 → 提醒 admin+倉管＋PM（v3.76 起 PM 可登記出貨，一併提醒）
 async function showShipDateAlerts(pre) {
   const old = document.getElementById('shipDateAlertBar'); if (old) old.remove();
-  if (!curUser || !(curUser.role === 'admin' || curUser.role === '倉管')) return;
+  if (!curUser || !(curUser.role === 'admin' || curUser.role === '倉管' || curUser.role === 'PM')) return;
   const isAdmin = curUser.role === 'admin';
   const res = (pre && pre.ok) ? pre                                            // v3.14.4 開機吃 bootstrap 預抓
     : await api(isAdmin ? { action: 'getOrders' } : { action: 'getOrders', view: 'bartender' }, true);

@@ -185,7 +185,8 @@ var ROLE_MATRIX = {
   bottleIn: ['admin', '倉管'], bottleOut: ['admin', '倉管'], addBottleItem: ['admin', '倉管'],
   setSafetyLevel: ['admin', '倉管'],
   // v3.26 實際出貨紀錄：登打出貨＝出貨作業(admin+倉管)；刪除紀錄是破壞性動作＝僅 admin
-  addShipment: ['admin', '倉管'], deleteShipment: ['admin'],
+  // v3.76（2026-10-20 主公指示）：PM（Vic／阿軒）也可登記出貨；刪除仍僅 admin
+  addShipment: ['admin', '倉管', 'PM'], deleteShipment: ['admin'],
   // v3.28 經銷商寄售：經銷商本人＋admin 可登記售出/異動；對帳單產生/結清/設定/種子 僅 admin；總覽 admin+財務
   consignMe: ['admin', '財務', '經銷商'], consignSale: ['admin', '經銷商'], consignAdjust: ['admin', '經銷商'],
   consignLedger: ['admin', '財務', '經銷商'], consignStatements: ['admin', '財務', '經銷商'],
