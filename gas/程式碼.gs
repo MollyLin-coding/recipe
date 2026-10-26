@@ -238,6 +238,7 @@ function doGet(e) {
           .setMimeType(ContentService.MimeType.JSON);
       }
       p._user = sess.username; p._role = sess.role; p._dealer = sess.dealer || '';
+      p._sessExp = sess.exp || 0;   // v3.77 每個需登入的回應都附 sessExp（見函式尾）
       // v3.28 經銷商角色：只准白名單 action，且一律用 session 綁定的經銷商鍵覆寫 p.dealer（絕不信前端參數）
       if (sess.role === CONSIGN_ROLE) {
         if (CONSIGN_DEALER_ACTIONS.indexOf(action) < 0) {
@@ -446,6 +447,8 @@ function doGet(e) {
   } catch(err) {
     result = { ok: false, error: err.message };
   }
+  // v3.77 session 到期時間隨每個回應回前端（倒數橫幅＋逾時強制回登入頁）；login 的 exp 在 login() 內自帶
+  try { if (p._sessExp && result && typeof result === 'object' && !Array.isArray(result) && result.sessExp == null) result.sessExp = p._sessExp; } catch (e2) {}
   return ContentService
     .createTextOutput(JSON.stringify(result))
     .setMimeType(ContentService.MimeType.JSON);
@@ -549,10 +552,13 @@ function _getSession_(token) {
   //   活躍使用者到點照樣被踢（F5 還原 probe 失敗＝主公看到的強制登出）。
   //   改為：剩餘壽命 < 一半（3h）就地雙寫續 6h → 有在用就不斷線；閒置超過 6h 才需重登（安全底線不變）。
   //   舊格式（無 exp）項目也會在此一併升級為含 exp 的新格式。
+  // v3.77：回傳 exp（續期後為新值）供前端倒數顯示／逾時強制回登入頁（主公 2026-10-26 指示）
+  sess.exp = o.exp || 0;
   try {
     var _now = (new Date()).getTime();
     if (!o.exp || (o.exp - _now) < SESSION_TTL_SEC * 500) {   // *500 = *1000/2 → 剩餘 < 3h
       _sessPut_(token, sess);
+      sess.exp = _now + SESSION_TTL_SEC * 1000;
     }
   } catch (e) {}
   return sess;
@@ -631,7 +637,7 @@ function login(p) {
       _sessPut_(token, { username: String(username).trim(), role: finalRole, dealer: String(dealerKey == null ? '' : dealerKey).trim() });
       _sessSweep_();   // 順手清掉過期的 Properties session
       _logLogin_(username, finalRole, '成功');
-      return { ok: true, role: finalRole, token: token, dealer: String(dealerKey == null ? '' : dealerKey).trim() };
+      return { ok: true, role: finalRole, token: token, dealer: String(dealerKey == null ? '' : dealerKey).trim(), sessExp: (new Date()).getTime() + SESSION_TTL_SEC * 1000 };   // v3.77 +sessExp
     }
   }
   _logLogin_(username, matchedAcc ? matchedAcc.role : '', matchedAcc ? '密碼錯誤' : '帳號不存在');
@@ -4210,7 +4216,7 @@ function bootstrap(p) {
 // ============================================================
 var CONSIGN_ROLE = '經銷商';
 // 經銷商角色可呼叫的 action 白名單（比照 FBVIEW_ALLOWED_ACTIONS，未列者一律 403）
-var CONSIGN_DEALER_ACTIONS = ['changePassword', 'consignMe', 'consignSale', 'consignAdjust', 'consignLedger', 'consignStatements', 'consignRestockCreate', 'consignRestockList', 'consignDaily'];
+var CONSIGN_DEALER_ACTIONS = ['changePassword', 'consignMe', 'consignSale', 'consignAdjust', 'consignLedger', 'consignStatements', 'consignRestockCreate', 'consignRestockList', 'consignDaily', 'whoami'];   // v3.77 +whoami（店長頁保溫 ping／延長登入；零 Sheets I/O）
 var TYPE_CONSIGN_SETTLE = '經銷商寄售月結認列單';
 
 var CONSIGN_CFG_SHEET = '經銷商設定';

@@ -187,6 +187,14 @@ tr:last-child td{border-bottom:none;}
 .tlb{font-size:10px;color:var(--ink3);font-weight:400;margin-bottom:2px;}
 .warn{background:#fbeaea;border:1px solid #f0c0c0;color:var(--red);border-radius:var(--r-sm);padding:8px 10px;font-size:12px;margin-top:8px;}
 #apiLoadBar{position:fixed;top:0;left:0;height:3px;width:0;background:var(--gold);z-index:9999;transition:width .3s;opacity:0;}
+/* v3.77 登入倒數橫幅：剩 20 分鐘出現（黃）、剩 5 分鐘轉紅；一鍵延長（與廠務系統 index.html 同款） */
+#sessBar{display:none;position:fixed;top:0;left:0;right:0;z-index:20001;padding:9px 14px;background:#fff6d6;border-bottom:2px solid #e0b500;color:#5a4300;font-size:15px;font-weight:700;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.15);}
+#sessBar.on{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;}
+#sessBar.urgent{background:#fdecea;border-bottom-color:#c0392b;color:#8e1b12;}
+#sessBar b{font-variant-numeric:tabular-nums;font-size:17px;}
+#sessBar button{border:0;border-radius:8px;padding:9px 16px;min-height:44px;font-weight:700;cursor:pointer;background:#2e7d32;color:#fff;font-size:15px;}
+#sessBar.urgent button{background:#c0392b;}
+#loginErr.sess-kicked{color:var(--red);font-weight:700;background:#fdecea;border:1px solid #f0c0c0;border-radius:8px;padding:8px 10px;margin-bottom:8px;line-height:1.6;}
 #apiLoadBar.on{width:80%;opacity:1;}
 </style>
 </head>
@@ -342,7 +350,47 @@ const APP_VERSION='v3.76';
 window.addEventListener('DOMContentLoaded', function () { const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION; });
 // 開頁暖機：趁使用者打密碼時吃掉 GAS 冷啟動
 window.addEventListener('DOMContentLoaded', function () { api({ action: 'getEnvInfo' }, true); });
-setInterval(function () { api({ action: 'getEnvInfo' }, true); }, 270000);
+// v3.77 主公拍板 Q1-B：分頁開著就不逾時——已登入時保溫 ping 改打 whoami（經 _getSession_ 滑動續期；後端白名單已加 whoami）
+setInterval(function () { api(curToken ? { action: 'whoami' } : { action: 'getEnvInfo' }, true); }, 270000);
+// ── v3.77 登入倒數橫幅＋逾時強制回登入頁（與 index.html 同款）──
+let _sessExp = 0;
+const SESS_WARN_MS = 20 * 60 * 1000, SESS_URGENT_MS = 5 * 60 * 1000;
+function _sessNote(exp) { const n = Number(exp) || 0; if (n > 0) { _sessExp = n; _sessTick(); } }
+function _sessBarEl() {
+  let b = document.getElementById('sessBar');
+  if (!b) {
+    b = document.createElement('div'); b.id = 'sessBar';
+    b.innerHTML = '<span>⏱ 登入將於 <b id="sessLeft">--:--</b> 後逾時，逾時後未送出的資料會遺失</span><button type="button" onclick="sessExtend()">延長登入</button>';
+    document.body.appendChild(b);
+  }
+  return b;
+}
+function _sessTick() {
+  const b = _sessBarEl();
+  if (!curToken || !_sessExp) { b.className = ''; return; }
+  const rem = _sessExp - Date.now();
+  if (rem <= 0) { b.className = ''; forceLogin('⏱ 登入已逾時（閒置超過 6 小時），未送出的資料已失效，請重新登入。'); return; }
+  if (rem > SESS_WARN_MS) { b.className = ''; return; }
+  const s = Math.floor(rem / 1000), mm = String(Math.floor(s / 60)).padStart(2, '0'), ss = String(s % 60).padStart(2, '0');
+  const el = b.querySelector('#sessLeft'); if (el) el.textContent = mm + ':' + ss;
+  b.className = 'on' + (rem <= SESS_URGENT_MS ? ' urgent' : '');
+}
+setInterval(_sessTick, 1000);
+async function sessExtend() {
+  const r = await api({ action: 'whoami' }, true);
+  if (r && r.ok) toast('✅ 已延長登入 6 小時');
+  else if (r && r._offline) toast('網路連線失敗，請稍後再按一次');
+}
+function forceLogin(msg) {
+  document.querySelectorAll('.modal-bg').forEach(m => { try { m.remove(); } catch (e) {} });
+  try { _busyN = 0; if (_busyTimer) { clearTimeout(_busyTimer); _busyTimer = null; } const ov = document.getElementById('busyOverlay'); if (ov) ov.classList.remove('on'); } catch (e) {}
+  try { _apiN = 0; const lb = document.getElementById('apiLoadBar'); if (lb) { lb.classList.remove('on'); lb.style.width = '0'; } } catch (e) {}
+  try { const h = document.getElementById('helpPanel'); if (h) h.style.display = 'none'; document.body.style.overflow = ''; } catch (e) {}
+  doLogout();
+  const err = document.getElementById('loginErr');
+  if (err && msg) { err.className = 'sess-kicked'; err.textContent = msg; }
+  try { window.scrollTo(0, 0); } catch (e) {}
+}
 document.addEventListener('wheel', function (e) { const el = document.activeElement; if (el && el.tagName === 'INPUT' && el.type === 'number') el.blur(); }, { passive: true });
 
 let curToken = null, curUser = null, ME = null;
@@ -384,8 +432,10 @@ async function api(params, silent) {
         const txt = await res.text();
         if (txt.trim().charAt(0) === '<') throw new Error('THROTTLED_HTML');
         const j = JSON.parse(txt);
+        if (j && j.sessExp) _sessNote(j.sessExp);   // v3.77 每個回應都帶 token 到期時間 → 更新倒數
         if (j && j.error === 'SESSION_EXPIRED' && curUser && !_sessExpiredShown) {
-          _sessExpiredShown = true; toast('登入逾時，請重新登入'); doLogout();
+          _sessExpiredShown = true;
+          forceLogin('⏱ 登入已逾時，剛才的操作沒有儲存，請重新登入後再做一次。');   // v3.77 關掉所有視窗、整個畫面回登入頁
           setTimeout(() => { _sessExpiredShown = false; }, 2000);
         }
         return j;
@@ -438,7 +488,7 @@ async function doLogin() {
   const err = document.getElementById('loginErr');
   if (!username || !password) { err.textContent = '請輸入帳號與密碼'; return; }
   const btn = document.getElementById('loginBtn');
-  btn.disabled = true; btn.innerHTML = '<span class="btn-spin"></span>登入中…'; err.textContent = '';
+  btn.disabled = true; btn.innerHTML = '<span class="btn-spin"></span>登入中…'; err.className = ''; err.textContent = '';   // v3.77 清掉逾時紅框
   const res = await api({ action: 'login', username, password });
   if (!res.ok) { btn.disabled = false; btn.textContent = '登入'; err.textContent = res.error || '登入失敗'; return; }
   if (res.role !== '經銷商' && res.role !== 'admin' && res.role !== '財務') {
@@ -478,10 +528,13 @@ async function _sessRestore() {
 _sessRestore();
 function doLogout() {
   _sessClear(); curToken = null; curUser = null; ME = null;
+  // v3.77：登出（含逾時）一律收掉所有開著的視窗；倒數歸零
+  document.querySelectorAll('.modal-bg').forEach(m => { try { m.remove(); } catch (e) {} });
+  _sessExp = 0; { const b = document.getElementById('sessBar'); if (b) b.className = ''; }
   document.getElementById('app').style.display = 'none';
   document.getElementById('loginWrap').style.display = 'flex';
   document.getElementById('loginPass').value = '';
-  document.getElementById('loginErr').textContent = '';
+  { const e = document.getElementById('loginErr'); e.className = ''; e.textContent = ''; }
 }
 // v3.53 內建使用說明面板：開啟時鎖背景捲動；ESC／返回鍵關閉
 function showHelp() {

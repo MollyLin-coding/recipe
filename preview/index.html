@@ -198,6 +198,14 @@ tbody tr:hover td{background:#faf3e8;}
 .warn{color:var(--red);font-size:12px;}.ok{color:var(--green);font-size:12px;}
 .warn-row{border-color:var(--red)!important;background:rgba(220,38,38,.06)!important;}
 #apiLoadBar{position:fixed;top:0;left:0;height:3px;width:0;background:var(--gold-dk);z-index:9999;opacity:0;pointer-events:none;}
+/* v3.77 登入倒數橫幅：剩 20 分鐘出現（黃）、剩 5 分鐘轉紅；一鍵延長 */
+#sessBar{display:none;position:fixed;top:0;left:0;right:0;z-index:20001;padding:9px 14px;background:#fff6d6;border-bottom:2px solid #e0b500;color:#5a4300;font-size:14px;font-weight:700;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,.15);}
+#sessBar.on{display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;}
+#sessBar.urgent{background:#fdecea;border-bottom-color:#c0392b;color:#8e1b12;}
+#sessBar b{font-variant-numeric:tabular-nums;font-size:16px;}
+#sessBar button{border:0;border-radius:8px;padding:7px 14px;font-weight:700;cursor:pointer;background:#2e7d32;color:#fff;font-size:14px;}
+#sessBar.urgent button{background:#c0392b;}
+#loginErr.sess-kicked{color:var(--red);font-weight:700;background:#fdecea;border:1px solid #f0c0c0;border-radius:8px;padding:8px 10px;margin-bottom:8px;line-height:1.6;}
 #apiLoadBar.on{width:92%;opacity:1;transition:width 8s cubic-bezier(.1,.7,.1,1),opacity .2s;}
 #offlineBanner{position:fixed;bottom:0;left:0;right:0;background:#92400e;color:#fff;font-size:12px;text-align:center;padding:6px 10px;z-index:9998;}
 .sub{color:var(--ink3);font-size:12px;}
@@ -528,7 +536,49 @@ window.addEventListener('DOMContentLoaded', function () {
 window.addEventListener('DOMContentLoaded', function () { api({ action: 'getEnvInfo' }, true); });
 // v3.8 卡點2 保溫 ping：APP 開著時每 4.5 分鐘靜默 ping 一次，消滅掛機後的 GAS 冷啟動
 // （開頁暖機只熱一次，小李掛機半小時後端又冷了；背景分頁瀏覽器自動降頻，流量負擔可忽略）
-setInterval(function () { api({ action: 'getEnvInfo' }, true); }, 270000);
+// v3.77 主公拍板 Q1-B：分頁開著就不逾時——已登入時保溫 ping 改打 whoami（會經過 _getSession_ 滑動續期；getEnvInfo 免 token、不會續期＝10/26 被踢的真因）
+setInterval(function () { api(curToken ? { action: 'whoami' } : { action: 'getEnvInfo' }, true); }, 270000);
+// ── v3.77 登入倒數橫幅＋逾時強制回登入頁 ─────────────────────────
+let _sessExp = 0;
+const SESS_WARN_MS = 20 * 60 * 1000, SESS_URGENT_MS = 5 * 60 * 1000;
+function _sessNote(exp) { const n = Number(exp) || 0; if (n > 0) { _sessExp = n; _sessTick(); } }
+function _sessBarEl() {
+  let b = document.getElementById('sessBar');
+  if (!b) {
+    b = document.createElement('div'); b.id = 'sessBar';
+    b.innerHTML = '<span>⏱ 登入將於 <b id="sessLeft">--:--</b> 後逾時，逾時後未儲存的資料會遺失</span><button type="button" onclick="sessExtend()">延長登入</button>';
+    document.body.appendChild(b);
+  }
+  return b;
+}
+function _sessTick() {
+  const b = _sessBarEl();
+  if (!curToken || !_sessExp) { b.className = ''; return; }
+  const rem = _sessExp - Date.now();
+  if (rem <= 0) { b.className = ''; forceLogin('⏱ 登入已逾時（閒置超過 6 小時），未儲存的資料已失效，請重新登入。'); return; }
+  if (rem > SESS_WARN_MS) { b.className = ''; return; }
+  const s = Math.floor(rem / 1000), mm = String(Math.floor(s / 60)).padStart(2, '0'), ss = String(s % 60).padStart(2, '0');
+  const el = b.querySelector('#sessLeft'); if (el) el.textContent = mm + ':' + ss;
+  b.className = 'on' + (rem <= SESS_URGENT_MS ? ' urgent' : '');
+}
+setInterval(_sessTick, 1000);
+async function sessExtend() {
+  const r = await api({ action: 'whoami' }, true);   // 後端剩餘 < 3h 必續期 6h，回應帶新 sessExp
+  if (r && r.ok) toast('✅ 已延長登入 6 小時');
+  else if (r && !r._offline) { /* SESSION_EXPIRED → api() 已 forceLogin */ }
+  else toast('網路連線失敗，請稍後再按一次');
+}
+// 逾時／登出一律走這裡：關掉所有視窗與遮罩 → 回登入頁 → 在登入頁上方寫明原因
+function forceLogin(msg) {
+  document.querySelectorAll('.modal-bg').forEach(m => { try { m.remove(); } catch (e) {} });
+  try { _busyN = 0; if (_busyTimer) { clearTimeout(_busyTimer); _busyTimer = null; } const ov = document.getElementById('busyOverlay'); if (ov) ov.classList.remove('on'); } catch (e) {}
+  try { _apiLoadN = 0; const lb = document.getElementById('apiLoadBar'); if (lb) { lb.classList.remove('on'); lb.style.width = '0'; } } catch (e) {}
+  try { document.body.classList.remove('sess-restoring'); } catch (e) {}
+  doLogout();
+  const err = document.getElementById('loginErr');
+  if (err && msg) { err.className = 'sess-kicked'; err.textContent = msg; }
+  try { window.scrollTo(0, 0); } catch (e) {}
+}
 
 // v3.14.2（主公指示）：取消數字輸入框「滑鼠滾輪改數值」——滾輪碰到聚焦中的 number 欄位即自動失焦，
 // 數值不被誤改、頁面照常捲動。全站一次生效（建單數量/RunCard占比體積/金流金額/庫存數量…）。
@@ -584,11 +634,13 @@ async function api(params, silent) {
         const txt = await res.text();
         if (txt.trim().charAt(0) === '<') throw new Error('THROTTLED_HTML'); // 限流/錯誤頁，不是 JSON
         const j = JSON.parse(txt);
+        if (j && j.sessExp) _sessNote(j.sessExp);   // v3.77 每個回應都帶 token 到期時間 → 更新倒數
         if (j && j.error === 'SESSION_EXPIRED' && curUser && !_sessExpiredShown) {
           _sessExpiredShown = true;
           _kickLog('操作中-後端回SESSION_EXPIRED', 'action=' + _act);   // v3.42.1 黑盒子
-          toast('登入逾時，請重新登入');
-          doLogout();
+          // v3.77 主公 2026-10-26 指示：逾時一律「整個畫面回登入頁」——關掉所有開著的視窗與遮罩，
+          //   不再讓編輯視窗疊在登入頁上（10/26 事故：主公以為還在線上、改了一堆數量才發現沒存進去）
+          forceLogin('⏱ 登入已逾時，剛才的操作沒有儲存，請重新登入後再做一次。');
           setTimeout(() => { _sessExpiredShown = false; }, 2000);
         }
         return j;
@@ -732,7 +784,7 @@ async function doLogin() {
   const loginBtn = document.getElementById('loginBtn');
   loginBtn.disabled = true;
   loginBtn.innerHTML = '<span class="btn-spin"></span>登入中…';
-  document.getElementById('loginErr').textContent = '';
+  { const e = document.getElementById('loginErr'); e.className = ''; e.textContent = ''; }   // v3.77 清掉逾時紅框
   // v2.1：先 login 拿 token，其餘請求才帶得到 token（不可並行，否則被後端 session 閘門擋下）
   const res = await api({ action: 'login', username, password });
   if (!res.ok) {
@@ -890,10 +942,13 @@ function doLogout() {
   document.body.classList.remove('fbviewer');
   Object.assign(C, { inv:null, profit:{}, recipes:{}, batch:null });
   recipeList = []; rdState = { ings:[], tv:4000, bt:'4L桶', title:'', client:'', matSel:{} };
+  // v3.77：登出（含逾時）一律收掉所有開著的視窗；倒數歸零
+  document.querySelectorAll('.modal-bg').forEach(m => { try { m.remove(); } catch (e) {} });
+  _sessExp = 0; { const b = document.getElementById('sessBar'); if (b) b.className = ''; }
   document.getElementById('app').style.display = 'none';
   document.getElementById('loginWrap').style.display = 'flex';
   document.getElementById('loginPass').value = '';
-  document.getElementById('loginErr').textContent = '';
+  { const e = document.getElementById('loginErr'); e.className = ''; e.textContent = ''; }
 }
 // 自行修改密碼（所有登入者皆可；接後端 changePassword）
 function showChangePwModal() {
@@ -3787,7 +3842,10 @@ function showOrderModal(edit) {
       ...(_isConsignForm() ? _blankFinanceFields() : collectFinanceFields()), ...collectDeliveryFields()   // v3.28 寄售單金流一律空白
     });
     if (res.ok) { if (!isEdit) orderDraftClear(); toast(isEdit ? ('訂單已更新 ' + edit.orderNo) : ('已建立訂單 ' + res.orderNo)); modal.remove(); loadOrderMgmt(); if (isFinanceUser()) loadFinanceSummary(); }
-    else toast((isEdit ? '更新失敗：' : '建單失敗：') + (res.error || ''));
+    else if (res.error !== 'SESSION_EXPIRED') {
+      // v3.77 B2（主公 10/26 核可）：失敗改紅色阻斷視窗（原本只閃 2.2 秒 toast、又被遮罩蓋住＝看不到原因）；表單保留。逾時走 forceLogin，不另開視窗。
+      reqWarn(isEdit ? '訂單更新失敗' : '建單失敗', escHtml(res._offline ? ('連線失敗：' + (res.error || '')) : (res.error || '未知錯誤')) + '<br>表單內容已保留，修正後可再按一次「儲存並關閉」。');
+    }
   };
   const b = modal.querySelector('#om_sub');
   b.onclick = () => lockRun(b, doCreate);
