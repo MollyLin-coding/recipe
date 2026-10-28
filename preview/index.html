@@ -2723,7 +2723,10 @@ async function loadFinanceSummary() {
       <div class="fin-box">
         <div style="font-size:11px;color:var(--ink3);">當月訂單營收（損益）</div>
         <div style="font-size:20px;font-weight:700;color:var(--gold-dk);">NT$${(res.orderRevenue || 0).toLocaleString()}</div>
-        <div style="font-size:10px;color:var(--ink3);">出貨日在本月的 ${res.orderCount || 0} 張訂單</div>
+        <div style="font-size:10px;color:var(--ink3);">出貨日在本月的 ${res.orderCount || 0} 張訂單（會計認列口徑）</div>
+        <div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--bd);font-size:11px;color:var(--ink3);">本月接單（建單日）</div>
+        <div style="font-size:15px;font-weight:700;color:var(--ink);">NT$${(res.bookingRevenue || 0).toLocaleString()}</div>
+        <div style="font-size:10px;color:var(--ink3);">建單日在本月的 ${res.bookingCount || 0} 張訂單（接單口徑，不入損益）</div>
       </div>
       <div class="fin-box">
         <div style="font-size:11px;color:var(--ink3);">當月實際收取款項（現金流）</div>

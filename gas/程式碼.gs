@@ -2080,13 +2080,20 @@ function _orderRevenueRow_(r) {
   }
   return { shipMonth: shipMonth, eff: eff, total: total };
 }
+// v3.78 建單月（接單口徑）：K 欄「建立時間」是 createOrder 以 toLocaleString('zh-TW') 存的字串（如 2026/10/20 下午 3:08:10），
+//   也相容 Date 物件；解析不到回空字串（呼叫端不計入）。主公 2026-10-28 指示：損益（出貨日）不動，另加「本月接單（建單日）」。
+function _orderCreatedMonth_(v) {
+  if (v && typeof v.getTime === 'function' && !isNaN(v.getTime())) return Utilities.formatDate(v, 'Asia/Taipei', 'yyyy-MM');
+  var m = String(v == null ? '' : v).match(/(\d{4})[\/\-\.](\d{1,2})/);
+  return m ? (m[1] + '-' + ('0' + m[2]).slice(-2)) : '';
+}
 // v3.40 共用：某月金流摘要（原 getFinanceSummary 迴圈原樣抽出；廠務支出分頁 expList 的「實收現金」共用同一口徑）
 function _financeMonth_(month) {
   const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
   const ws = ss.getSheetByName('訂單主表');
-  if (!ws) return { orderRevenue: 0, cashReceived: 0, orderCount: 0 };
+  if (!ws) return { orderRevenue: 0, cashReceived: 0, orderCount: 0, bookingRevenue: 0, bookingCount: 0 };
   const data = ws.getDataRange().getValues();
-  let revenue = 0, cash = 0, count = 0;
+  let revenue = 0, cash = 0, count = 0, booking = 0, bookingCount = 0;   // v3.78 +booking（建單月接單額，與 revenue 同金額口徑 rev.eff）
   for (let i = 1; i < data.length; i++) {
     const r = data[i];
     if (!r[0]) continue;
@@ -2099,10 +2106,11 @@ function _financeMonth_(month) {
     const effFinal = (adjusted && adjAmt !== '') ? adjAmt : (finalAmt !== '' ? finalAmt : (Number(r[6]) || 0));
     const rev = _orderRevenueRow_(r);   // v3.39 抽成共用函式（業績模型「實際營收」同口徑）；算法逐字不變
     if (rev.shipMonth === month) { count++; revenue += rev.eff; }
+    if (_orderCreatedMonth_(r[10]) === month) { bookingCount++; booking += rev.eff; }   // v3.78 接單口徑
     if (_fmtDate_(r[15]).slice(0, 7) === month && depositAmt !== '') cash += depositAmt;
     if (_fmtDate_(r[18]).slice(0, 7) === month) cash += effFinal;
   }
-  return { orderRevenue: revenue, cashReceived: cash, orderCount: count };
+  return { orderRevenue: revenue, cashReceived: cash, orderCount: count, bookingRevenue: booking, bookingCount: bookingCount };
 }
 function getFinanceSummary(p) {
   // v3.65（複檢 P1-8）：原本用「前端自稱的 p.user」判斷，任何登入者送 &user=Kevin 就能看當月金流。
@@ -2111,7 +2119,7 @@ function getFinanceSummary(p) {
   if (FINANCE_USERS.indexOf(user) < 0) return { ok: false, error: '無權限查看金流摘要' };
   const month = String((p && p.month) || '') || Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM');
   const f = _financeMonth_(month);
-  return { ok: true, month: month, orderRevenue: f.orderRevenue, cashReceived: f.cashReceived, orderCount: f.orderCount };
+  return { ok: true, month: month, orderRevenue: f.orderRevenue, cashReceived: f.cashReceived, orderCount: f.orderCount, bookingRevenue: f.bookingRevenue, bookingCount: f.bookingCount };   // v3.78 +booking
 }
 
 // 完成回報：共用 addBatchRecord 寫一筆製作記錄(F欄=關聯訂單編號)，再更新訂單主表 item 狀態
