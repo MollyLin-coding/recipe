@@ -526,7 +526,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.79';
+const APP_VERSION='v3.80';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -625,7 +625,7 @@ async function api(params, silent) {
   const url = API + '?' + Object.entries(send).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
   // v3.38 大 payload 走 POST（後端 doPost 同流程）：GET 網址超過 ~10KB Google 直接回 400 HTML → 前端誤判「系統忙碌」而資料沒存。
   //   經銷商設定（授權酒款 JSON＋多段長文字）固定走 POST；其餘 action 網址超過 6000 字元自動改 POST。text/plain 免 preflight。
-  const _post = /^(consignSaveDealer|perfSave|expImport|mtgItemSave|mtgUpdate)$/.test(_act) || url.length > 6000;   // v3.58 會議長文字固定 POST   // v3.40 +expImport   // v3.39 perfSave 整包 params/months 物件固定 POST
+  const _post = /^(consignSaveDealer|perfSave|expImport|mtgItemSave|mtgUpdate|qcSave)$/.test(_act) || url.length > 6000;   // v3.80 品管單含照片固定 POST   // v3.58 會議長文字固定 POST   // v3.40 +expImport   // v3.39 perfSave 整包 params/months 物件固定 POST
   let _lastErr = '';
   try {
     for (let _try = 0; ; _try++) {
@@ -2758,7 +2758,7 @@ async function loadOrderMgmt(_retried) {
   window._mgmtOrders = res.orders || [];
   renderMonthOrders(window._mgmtOrders);
   ensureBottleCache(); // 建單玻璃瓶警告用（背景預載）
-  ensureRcIndex().then(() => renderMonthOrders(window._mgmtOrders || [])); // v2.9.3 索引到手後重繪 run card 鈕
+  Promise.all([ensureRcIndex(), ensureQcIndex()]).then(() => renderMonthOrders(window._mgmtOrders || [])); // v2.9.3 索引到手後重繪 run card 鈕；v3.80 併抓品管索引
 }
 
 // 建單表單（admin）：接 createOrder，欄位對齊訂單主表 11 欄
@@ -3283,7 +3283,7 @@ function renderMonthOrders(orders) {
       if (!rcSt) return `<button class="btn btn-sm" style="${common}border:1px dashed var(--ink3);background:transparent;color:var(--ink3);opacity:.65;" onclick="event.stopPropagation();rcShowHistoryByNo('${o.orderNo}',${i})">⚠ ${nm} 尚待PM建立Run Card</button>`;
       if (rcSt.done) return `<button class="btn btn-sm" style="${common}border:1px solid var(--green);background:#e8f2ea;color:var(--green);font-weight:600;" onclick="event.stopPropagation();rcShowHistoryByNo('${o.orderNo}',${i})">✔ ${nm}（已完成）</button>`;
       return `<button class="btn btn-sm" style="${common}border:1px solid var(--yellow);background:#faf0dc;color:var(--yellow);font-weight:600;" onclick="event.stopPropagation();rcShowHistoryByNo('${o.orderNo}',${i})">📋 ${nm}（進行中）</button>`;
-    }).join('') + accBtnsFor(o) : '';
+    }).join('') + accBtnsFor(o) + qcBtnsFor(o) : '';   // v3.80 🔬 出貨品管鈕
     return `<div onclick="showOrderDetail('${o.orderNo}')" style="cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;background:var(--card);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <div style="flex:1;min-width:0;">
@@ -3365,6 +3365,7 @@ function showOrderDetail(orderNo) {
       <span class="badge ${it.status === '完成' ? 'bg-green' : 'bg-yellow'}" style="font-size:9px;">${it.status || '待製作'}</span>
       ${_isOwnStockOutType(o.orderType) ? '' : `<button class="btn btn-ghost btn-sm" style="padding:3px 7px;font-size:11px;" onclick="rcShowHistory(${idx},${i})">📋 Run Card</button>`}
       ${accMatch(o, it) && accCanUse() ? `<button class="btn btn-sm" style="padding:3px 7px;font-size:11px;border:1px solid #7a4f9b;background:#f3ecf8;color:#7a4f9b;font-weight:600;" onclick="accOpen('${o.orderNo}',${i})">🧮 酸度補正試算</button>` : ''}
+      ${(_isOwnStockOutType(o.orderType) || o.orderType === TYPE_CONSIGN_SETTLE) ? '' : qcBtnHtml(o, it, i, true)}
       ${canAct && it.status !== '完成' && it.sheet ? `<button class="btn btn-success btn-sm" style="padding:3px 7px;font-size:11px;" onclick="this.closest('.modal-bg').remove();showCompleteModal(${idx},${i})">完成回報</button>` : ''}
       ${isAdmin && (o.items || []).length > 1 && !(it.shipped > 0) && it.status !== '完成' && !it.batchId ? `<button class="btn btn-ghost btn-sm" title="刪除此款（僅限尚未出貨、未完成、無 Run Card 的款）" style="padding:3px 7px;font-size:11px;color:var(--red);border-color:var(--red);" onclick="removeOrderItemUi(${idx},${i})">🗑 刪除此款</button>` : ''}
       ${canAct && isConsignOrder(o) && ((it.remainStock == null ? it.qty : it.remainStock) > 0) ? `<label title="勾選後可用下方「一次寄出勾選款」" style="display:flex;align-items:center;cursor:pointer;margin:0;"><input type="checkbox" class="cs_pick" data-ii="${i}" onchange="consignPickSum()" style="width:17px;height:17px;margin:0;"></label><button class="btn btn-sm" style="padding:3px 7px;font-size:11px;background:var(--gold-dk);color:#fff;font-weight:700;" onclick="consignShipItem(${idx},${i})">📦 寄出給經銷商</button>` : ''}
@@ -3551,6 +3552,7 @@ async function showShipModal(oi) {
     <div class="modal-title">🚚 登記第 ${seq} 次出貨</div>
     <div style="font-size:12px;color:var(--ink3);margin-bottom:8px;">${o.orderNo} · ${clientLabel(o.client)}｜表訂出貨日 ${o.deliveryDate || "—"}</div>
     <div class="fg" style="margin-bottom:6px;"><label>出貨日期</label><input class="inp" type="date" id="sp_date" value="${_shipToday()}" style="margin:0;"></div>
+    ${qcShipWarnHtml(o, rows.map(r => r.product))}
     <div style="font-size:12px;font-weight:600;color:var(--gold-dk);margin-top:6px;">出貨款式與數量<span style="font-weight:400;color:var(--ink3);">（預設＝目前寄倉量；只出一部分就把數字改小。自有酒款會同步扣成品庫存）</span></div>
     ${body}
     <div id="sp_warn" style="display:none;margin-top:6px;padding:6px 8px;border:1px solid #e74c3c;border-radius:6px;color:#c0392b;font-size:12px;font-weight:600;"></div>
@@ -4628,6 +4630,404 @@ async function rcNewFromOrder(oi, ii){
   const it=(o.items||[])[ii]; if(!it) return;
   const st=await rcFillFromOrderItem(rcNewState(), o, it, ii);
   rcOpenEditor(st);
+}
+// ════════════════════════════════════════════════
+// v3.80 🔬 出貨品管（主公 2026-10-29 指示）
+// 緣由：酒肉朋友 Lot2 放量批酸度偏高、出廠前沒有品管機制 → 客戶退貨才發現（RD_Master 5.10）。
+// 每張訂單每款酒出貨前由調酒師填一張品管單：儀器（Brix／pH／總酸）＋感官 8 軸（1～5，3＝與標準樣一致）
+//   ＋外觀（色澤／澄清度／照片）＋異味一票否決 → 後端判定 放行／待試飲／退回（qcJudge 為後端 _qcJudge_ 的鏡像，只做即時預覽）。
+// 標準樣＝同客戶同酒款被 admin 按「⭐ 設為標準」的那張（通常是客戶核可打樣那天的品管單）。
+// ════════════════════════════════════════════════
+const QC_SENS = [
+  ['alc', '酒精感', '灼熱／酒精刺激'], ['tea', '主香氣（茶）', '茶香強度'], ['fruit', '主角果香', '主角水果香氣'],
+  ['sour', '酸', '酸度感受'], ['sweet', '甜', '甜度感受'], ['bitter', '苦澀', '苦味＋茶單寧澀感'],
+  ['body', '口感厚度', '酒體、圓潤度'], ['finish', '餘韻', '吞下後香氣停留']
+];
+const QC_SCALE = ['明顯偏弱', '略弱', '符合標準', '略強', '明顯偏強'];
+const QC_COLOR_SCALE = ['明顯偏淺', '略淺', '符合標準', '略深', '明顯偏深'];
+const QC_OFFS = ['氧化紙板味', '醋酸／發酵味', '硫味', '藥水味', '其他異味'];
+const QC_CLARITY = ['清澈', '微霧', '混濁', '有沉澱', '與標準相同'];
+const QC_SOURCES = ['成品瓶抽樣', '桶內取樣', '打樣（客戶核可樣）', '其他'];
+const QC_TOL = { brix: 0.5, ph: 0.10, taRel: 0.10, abv: 0.5 };
+const QC_INST = [
+  ['brix', '糖度 Brix', '°Bx', '0.1', '必填'], ['ph', 'pH', '', '0.01', 'pH／總酸擇一必填'], ['ta', '總酸', '%', '0.01', '以檸檬酸計 g/100ml'],
+  ['abv', '實測酒精度', '%', '0.1', '選填'], ['temp', '樣品溫度', '°C', '0.1', '選填，建議回溫 20°C']
+];
+const QC_VCOLOR = { '放行': 'var(--green)', '待試飲': '#b7791f', '退回': '#c0392b' };
+const QC_VBG = { '放行': '#e8f2ea', '待試飲': '#fbf1dc', '退回': '#fbe9e7' };
+const QC_VICON = { '放行': '✔', '待試飲': '⏳', '退回': '✖' };
+function qcCanUse() { return !!(curUser && curUser.role !== 'FB觀看' && curUser.role !== '經銷商'); }
+function qcIsAdmin() { return !!(curUser && curUser.role === 'admin'); }
+function _qcIdxApply(r) {
+  if (!r || !r.ok) return;
+  const m = new Map(); (r.index || []).forEach(x => m.set(x.orderNo + '||' + x.product, x));
+  window._qcIdx = m; window._qcIdxAt = Date.now();
+}
+async function ensureQcIndex(force) {
+  if (!qcCanUse()) return;
+  if (!force && window._qcIdx && Date.now() - (window._qcIdxAt || 0) < 60000) return;
+  try { _qcIdxApply(await api({ action: 'qcIndex' }, true)); } catch (e) { }
+}
+function qcStateOf(o, it) { return window._qcIdx ? (window._qcIdx.get(o.orderNo + '||' + (it.product || '')) || null) : undefined; }
+function qcBtnHtml(o, it, i, compact) {
+  if (!qcCanUse() || !it.product) return '';
+  const st = qcStateOf(o, it);
+  const common = 'padding:3px 8px;font-size:11px;border-radius:6px;cursor:pointer;';
+  const nm = compact ? '' : (rcEsc(it.product) + '・');
+  const click = `event.stopPropagation();qcOpen('${o.orderNo}',${i})`;
+  if (st === undefined) return `<button class="btn btn-sm" style="${common}border:1px solid var(--border);background:transparent;color:var(--ink3);" onclick="${click}">🔬 ${nm}出貨品管</button>`;
+  if (!st) return `<button class="btn btn-sm" style="${common}border:1px dashed #c0392b;background:transparent;color:#c0392b;" onclick="${click}">🔬 ${nm}出貨品管（未做）</button>`;
+  const v = st.verdict || '待試飲';
+  return `<button class="btn btn-sm" style="${common}border:1px solid ${QC_VCOLOR[v]};background:${QC_VBG[v]};color:${QC_VCOLOR[v]};font-weight:600;" onclick="${click}">🔬 ${nm}${QC_VICON[v]} ${v}${st.date ? ' ' + String(st.date).slice(5) : ''}${st.n > 1 ? '（' + st.n + '張）' : ''}</button>`;
+}
+function qcBtnsFor(o) { return (o.items || []).map((it, i) => qcBtnHtml(o, it, i, false)).join(''); }
+// 出貨登記時的提醒（不硬擋）：寄倉中且最新品管不是「放行」的款
+function qcShipWarnHtml(o, products) {
+  if (!window._qcIdx || !qcCanUse()) return '';
+  const bad = (products || []).map(p => { const st = window._qcIdx.get(o.orderNo + '||' + p); return (!st || st.verdict !== '放行') ? (p + '：' + (st ? st.verdict : '未做品管')) : ''; }).filter(x => x);
+  if (!bad.length) return '';
+  return `<div style="margin:6px 0;padding:8px 10px;border:2px solid #c0392b;border-radius:8px;background:#fbe9e7;color:#c0392b;font-size:12px;font-weight:600;">🔬 以下酒款尚未「品管放行」：<br>${bad.map(rcEsc).join('<br>')}<div style="font-weight:400;color:var(--ink);margin-top:3px;">建議先完成出貨品管再出貨（酒肉朋友 Lot2 退貨教訓）。仍要出貨可照常儲存。</div></div>`;
+}
+// 判定鏡像（與後端 _qcJudge_ 同規則；寫入以後端為準）
+function qcLamp(key, v, s) {
+  if (v == null || v === '' || s == null || s === '' || isNaN(+v) || isNaN(+s)) return '';
+  let d = Math.abs(+v - +s), tol;
+  if (key === 'ta') { if (!(+s > 0)) return ''; d = d / +s; tol = QC_TOL.taRel; } else tol = QC_TOL[key];
+  if (!(tol > 0)) return '';
+  return d <= tol + 1e-9 ? 'g' : d <= 2 * tol + 1e-9 ? 'y' : 'r';
+}
+function qcJudge(inst, sens, look, offs, std) {
+  const why = []; let red = false, yellow = false, off3 = 0;
+  if (offs && offs.length) { red = true; why.push('異味：' + offs.join('、')); }
+  QC_SENS.forEach(([k, lb]) => { const v = +sens[k]; if (v === 1 || v === 5) { red = true; why.push(lb + (v === 1 ? '明顯偏弱' : '明顯偏強')); } else if (v === 2 || v === 4) off3++; });
+  const col = +(look && look.color); if (col === 1 || col === 5) { red = true; why.push(col === 1 ? '色澤明顯偏淺' : '色澤明顯偏深'); }
+  if (off3 >= 3) { yellow = true; why.push('感官 ' + off3 + ' 項與標準略有差異'); }
+  const clar = (look && look.clarity) || '';
+  if ((clar === '混濁' || clar === '有沉澱') && !(std && std.look && std.look.clarity === clar)) { yellow = true; why.push('澄清度：' + clar); }
+  const lamps = {};
+  if (std) {
+    ['brix', 'ph', 'ta', 'abv'].forEach(k => {
+      const l = qcLamp(k, inst[k], std.inst && std.inst[k]); lamps[k] = l;
+      const lb = { brix: '糖度', ph: 'pH', ta: '總酸', abv: '酒精度' }[k];
+      if (l === 'r') { red = true; why.push(`${lb}超出容許差 2 倍（本批 ${inst[k]}／標準 ${std.inst[k]}）`); }
+      else if (l === 'y') { yellow = true; why.push(`${lb}略超容許差（本批 ${inst[k]}／標準 ${std.inst[k]}）`); }
+    });
+  } else { yellow = true; why.push('此酒款尚無標準樣，需主公／PM 試飲確認（核可後可設為標準）'); }
+  return { verdict: red ? '退回' : yellow ? '待試飲' : '放行', why, lamps };
+}
+// 雷達圖（inline SVG）：標準樣＝3 分正八邊形（灰虛線）；本批＝實線
+function qcRadarSvg(sens, opt) {
+  opt = opt || {};
+  const W = opt.size || 300, cx = W / 2, cy = W / 2 + 4, R = W * 0.32, n = QC_SENS.length;
+  const pt = (i, v) => { const a = -Math.PI / 2 + i * 2 * Math.PI / n, r = R * (v / 5); return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; };
+  const poly = (vals) => vals.map((v, i) => pt(i, v).map(x => x.toFixed(1)).join(',')).join(' ');
+  let g = '';
+  [1, 2, 3, 4, 5].forEach(l => { g += `<polygon points="${poly(Array(n).fill(l))}" fill="none" stroke="${l === 3 ? '#8a8a8a' : '#ddd'}" stroke-width="${l === 3 ? 1.6 : 1}" ${l === 3 ? 'stroke-dasharray="4 3"' : ''}/>`; });
+  QC_SENS.forEach((s, i) => {
+    const [x, y] = pt(i, 5); g += `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#e3e3e3"/>`;
+    const [lx, ly] = pt(i, 6.15); const anc = Math.abs(lx - cx) < 4 ? 'middle' : (lx > cx ? 'start' : 'end');
+    const v = +sens[s[0]] || 0, warn = v === 1 || v === 5 ? '#c0392b' : v === 2 || v === 4 ? '#b7791f' : '#555';
+    g += `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" text-anchor="${anc}" font-size="11" fill="${warn}" font-weight="${v && v !== 3 ? 700 : 400}">${s[1].replace('（茶）', '')}${v ? ' ' + v : ''}</text>`;
+  });
+  const vals = QC_SENS.map(s => +sens[s[0]] || 0);
+  if (vals.some(v => v > 0)) {
+    const col = opt.color || '#7a4f9b';
+    g += `<polygon points="${poly(vals.map(v => v || 0.0001))}" fill="${col}" fill-opacity=".18" stroke="${col}" stroke-width="2"/>`;
+    vals.forEach((v, i) => { if (v) { const [x, y] = pt(i, v); g += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${col}"/>`; } });
+  }
+  return `<svg viewBox="-40 0 ${W + 80} ${W + 8}" style="width:100%;max-width:${W + 80}px;display:block;margin:0 auto;" role="img" aria-label="感官雷達圖">${g}
+    <text x="${cx}" y="${W + 4}" text-anchor="middle" font-size="10" fill="#8a8a8a">灰虛線＝標準樣（3 分）　實線＝本批</text></svg>`;
+}
+// 照片：縮到長邊 720px、JPEG，壓到 ≤ 240K 字元；順便取中心 30% 平均色
+function qcCompress(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error('讀取照片失敗'));
+    fr.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('照片格式無法讀取'));
+      img.onload = () => {
+        let L = 720, data = '', w = 0, h = 0, c;
+        for (let round = 0; round < 4; round++) {
+          const sc = Math.min(1, L / Math.max(img.width, img.height)); w = Math.round(img.width * sc); h = Math.round(img.height * sc);
+          c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h);
+          for (const q of [0.72, 0.6, 0.5]) { data = c.toDataURL('image/jpeg', q); if (data.length <= 240000) break; }
+          if (data.length <= 240000) break; L = Math.round(L * 0.75);
+        }
+        // 並排照：本批放左、標準留樣放右 → 各取左右半邊中心色塊（同一張照片同一個燈光，色差才有意義）
+        const avg = (cxr) => {
+          try {
+            const ctx = c.getContext('2d'), bw = Math.max(1, Math.round(w * 0.14)), bh = Math.max(1, Math.round(h * 0.3));
+            const px = ctx.getImageData(Math.round(w * cxr - bw / 2), Math.round(h * 0.5 - bh / 2), bw, bh).data; let r = 0, g = 0, b = 0, k = 0;
+            for (let i = 0; i < px.length; i += 16) { r += px[i]; g += px[i + 1]; b += px[i + 2]; k++; }
+            return '#' + [r, g, b].map(v => Math.round(v / k).toString(16).padStart(2, '0')).join('');
+          } catch (e) { return ''; }
+        };
+        resolve({ data, w, h, hex: avg(0.25), hexStd: avg(0.75) });
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+function _qcFmt(v) { return (v == null || v === '') ? '—' : v; }
+function _qcLampDot(l) { return l === 'g' ? '<span title="容許差內" style="color:var(--green);">●</span>' : l === 'y' ? '<span title="略超容許差" style="color:#b7791f;">●</span>' : l === 'r' ? '<span title="超出容許差 2 倍" style="color:#c0392b;">●</span>' : '<span style="color:#ccc;">○</span>'; }
+function _qcVerdictBadge(v, small) { v = v || '待試飲'; return `<span style="display:inline-block;padding:${small ? '1px 6px' : '3px 10px'};border-radius:999px;font-size:${small ? 10 : 13}px;font-weight:700;color:${QC_VCOLOR[v]};background:${QC_VBG[v]};border:1px solid ${QC_VCOLOR[v]};">${QC_VICON[v]} ${v}</span>`; }
+
+// 入口：某單某款 → 品管單清單＋標準樣
+async function qcOpen(orderNo, ii) {
+  const o = (window._mgmtOrders || []).find(x => x.orderNo === orderNo);
+  if (!o) { toast('找不到訂單 ' + orderNo + '，請重新整理'); return; }
+  const it = (o.items || [])[ii]; if (!it || !it.product) { toast('此款尚未綁定酒款名稱'); return; }
+  const r = await apiBusy({ action: 'qcGet', orderNo: o.orderNo, product: it.product, client: o.client }, '讀取品管紀錄…');
+  if (!r || !r.ok) { toast('讀取失敗：' + ((r && r.error) || '')); return; }
+  document.querySelectorAll('.modal-bg.qc-modal').forEach(x => x.remove());
+  const std = r.std;
+  const stdBox = std
+    ? `<div style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#faf8f3;font-size:12px;">⭐ <b>標準樣</b>：${rcEsc(std.date)}（${rcEsc(std.orderNo)}${std.lot ? ' Lot' + rcEsc(std.lot) : ''}・${rcEsc(std.inspector)}）　Brix ${_qcFmt(std.inst.brix)}・pH ${_qcFmt(std.inst.ph)}・總酸 ${_qcFmt(std.inst.ta)}%
+        <a href="#" style="margin-left:6px;" onclick="event.preventDefault();qcView('${std.id}')">查看</a></div>`
+    : `<div style="padding:8px 10px;border:1px dashed #b7791f;border-radius:8px;background:#fbf1dc;font-size:12px;color:#7a5a12;">⚠ 此酒款<b>尚無標準樣</b>。第一張品管單會判「待試飲」；請在客戶核可的打樣（或主公試飲認可的批次）那張單按「⭐ 設為標準」，之後的批次才有東西可以比。</div>`;
+  const rows = (r.list || []).map(x => {
+    const v = x.final || x.sys;
+    return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:7px 8px;border:1px solid var(--border);border-radius:8px;margin-top:5px;font-size:12px;">
+      ${_qcVerdictBadge(v, true)}${x.isStd ? ' <span style="font-size:11px;color:var(--gold-dk);font-weight:700;">⭐標準</span>' : ''}
+      <span style="flex:1;min-width:150px;">${rcEsc(x.date)}・${rcEsc(x.inspector)}${x.lot ? '・Lot' + rcEsc(x.lot) : ''}<span style="color:var(--ink3);">　Brix ${_qcFmt(x.inst.brix)}・pH ${_qcFmt(x.inst.ph)}・總酸 ${_qcFmt(x.inst.ta)}</span>${x.final && x.final !== x.sys ? `<span style="color:#7a4f9b;">（系統 ${x.sys} → 主公覆寫）</span>` : ''}</span>
+      <button class="btn btn-ghost btn-sm" style="padding:2px 7px;font-size:11px;" onclick="qcView('${x.id}')">查看</button>
+      ${(qcIsAdmin() || (x.createdBy === curUser.username && !x.isStd)) ? `<button class="btn btn-ghost btn-sm" style="padding:2px 7px;font-size:11px;" onclick="qcEdit('${o.orderNo}',${ii},'${x.id}')">✏️ 修改</button>` : ''}
+      ${qcIsAdmin() && !x.isStd && v !== '退回' ? `<button class="btn btn-ghost btn-sm" style="padding:2px 7px;font-size:11px;color:var(--gold-dk);" onclick="qcSetStd('${o.orderNo}',${ii},'${x.id}',1)">⭐ 設為標準</button>` : ''}
+      ${qcIsAdmin() && x.isStd ? `<button class="btn btn-ghost btn-sm" style="padding:2px 7px;font-size:11px;" onclick="qcSetStd('${o.orderNo}',${ii},'${x.id}',0)">取消標準</button>` : ''}
+      ${qcIsAdmin() ? `<button class="btn btn-ghost btn-sm" style="padding:2px 7px;font-size:11px;color:var(--red);" onclick="qcDel('${o.orderNo}',${ii},'${x.id}')">🗑</button>` : ''}
+    </div>`;
+  }).join('');
+  const m = makeModal(`
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <div class="modal-title" style="margin:0;">🔬 出貨品管・${rcEsc(it.product)}</div>
+      <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">關閉</button>
+    </div>
+    <div style="font-size:12px;color:var(--ink3);margin:4px 0 8px;">${o.orderNo} · ${clientLabel(o.client)}${o.lot ? ' · Lot ' + rcEsc(o.lot) : ''} · ${it.qty} 瓶 × ${rcEsc(it.volume || '')}</div>
+    ${stdBox}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
+      <b style="font-size:13px;">本單品管紀錄（${(r.list || []).length}）</b>
+      <button class="btn btn-primary btn-sm" onclick="qcEdit('${o.orderNo}',${ii},'')">＋ 新增品管單</button>
+    </div>
+    ${rows || '<div style="color:var(--ink3);font-size:12px;padding:10px;text-align:center;">尚無品管單——出貨前請先做一張。</div>'}
+    <div style="font-size:11px;color:var(--ink3);margin-top:10px;line-height:1.6;">判定規則：任一異味／任一感官或色澤給 1、5 分／任一儀器超出容許差 2 倍 → <b style="color:#c0392b;">退回</b>；儀器略超、3 項以上感官 2 或 4 分、混濁沉澱、尚無標準樣 → <b style="color:#b7791f;">待試飲</b>；其餘 <b style="color:var(--green);">放行</b>。容許差：Brix ±${QC_TOL.brix}、pH ±${QC_TOL.ph}、總酸 ±${QC_TOL.taRel * 100}%、酒精度 ±${QC_TOL.abv}。</div>`);
+  m.classList.add('qc-modal');
+  m.querySelector('.modal-box').style.maxWidth = '720px';
+  window._qcCtx = { o, ii, it, std, list: r.list || [] };
+}
+async function qcSetStd(orderNo, ii, id, on) {
+  if (on && !confirm('把這張設為「' + ((window._qcCtx && window._qcCtx.it.product) || '') + '」的標準樣？\n同酒款原本的標準會被取代；之後的批次都會跟這張比。')) return;
+  const r = await api({ action: 'qcSetStd', id, on: on ? '1' : '0' });
+  if (!r || !r.ok) { reqWarn('設定失敗', (r && r.error) || ''); return; }
+  toast(on ? '⭐ 已設為標準樣' : '已取消標準'); await ensureQcIndex(true); qcOpen(orderNo, ii);
+}
+async function qcDel(orderNo, ii, id) {
+  if (!confirm('刪除這張品管單（含照片）？無法復原。')) return;
+  const r = await api({ action: 'qcDelete', id });
+  if (!r || !r.ok) { reqWarn('刪除失敗', (r && r.error) || ''); return; }
+  toast('已刪除'); await ensureQcIndex(true); if (window._mgmtOrders) renderMonthOrders(window._mgmtOrders); qcOpen(orderNo, ii);
+}
+// 查看（唯讀）：雷達圖＋儀器燈號＋照片
+async function qcView(id) {
+  const r = await apiBusy({ action: 'qcGet', id }, '讀取品管單…');
+  if (!r || !r.ok) { toast('讀取失敗：' + ((r && r.error) || '')); return; }
+  const x = r.report, ctx = window._qcCtx || {};
+  const std = ctx.std && ctx.std.id !== x.id ? ctx.std : null;
+  const j = qcJudge(x.inst, x.sens, x.look, x.offs, std);
+  const v = x.final || x.sys;
+  const instRows = QC_INST.map(([k, lb, u]) => `<tr><td style="padding:3px 6px;">${lb}</td><td style="padding:3px 6px;text-align:right;font-weight:700;">${_qcFmt(x.inst[k])}${x.inst[k] != null && u ? ' ' + u : ''}</td><td style="padding:3px 6px;text-align:right;color:var(--ink3);">${std ? _qcFmt(std.inst[k]) : '—'}</td><td style="padding:3px 6px;text-align:center;">${k === 'temp' ? '' : _qcLampDot(j.lamps[k])}</td></tr>`).join('');
+  const m = makeModal(`
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <div class="modal-title" style="margin:0;">🔬 品管單・${rcEsc(x.product)}</div>
+      <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">關閉</button>
+    </div>
+    <div style="font-size:12px;color:var(--ink3);margin:4px 0 8px;">${rcEsc(x.orderNo)}${x.lot ? ' · Lot' + rcEsc(x.lot) : ''} · ${rcEsc(x.date)} · 檢驗人 ${rcEsc(x.inspector)} · ${rcEsc(x.source || '')}${x.isStd ? ' · <b style="color:var(--gold-dk);">⭐ 標準樣</b>' : ''}</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">${_qcVerdictBadge(v)}${x.final && x.final !== x.sys ? `<span style="font-size:12px;color:#7a4f9b;">系統判定「${x.sys}」→ 主公覆寫：${rcEsc(x.reason)}</span>` : ''}</div>
+    ${(j.why || []).length ? `<ul style="font-size:12px;margin:6px 0 0 18px;padding:0;color:var(--ink);">${j.why.map(w => '<li>' + rcEsc(w) + '</li>').join('')}</ul>` : ''}
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;">
+      <div style="flex:1 1 300px;">${qcRadarSvg(x.sens, { size: 280, color: QC_VCOLOR[v] === 'var(--green)' ? '#2e7d4f' : QC_VCOLOR[v] })}</div>
+      <div style="flex:1 1 240px;font-size:12px;">
+        <table style="width:100%;border-collapse:collapse;"><tr style="color:var(--ink3);font-size:11px;"><td style="padding:3px 6px;">儀器</td><td style="padding:3px 6px;text-align:right;">本批</td><td style="padding:3px 6px;text-align:right;">標準</td><td></td></tr>${instRows}</table>
+        <div style="margin-top:8px;">色澤：<b>${QC_COLOR_SCALE[(+x.look.color || 3) - 1]}</b>（${x.look.color}）</div>${x.look.hex ? `<div>${qcSwatchHtml(x.look)}</div>` : ''}
+        <div>澄清度：<b>${rcEsc(x.look.clarity || '—')}</b></div>
+        <div>異味：<b style="color:${x.offs.length ? '#c0392b' : 'var(--green)'};">${x.offs.length ? rcEsc(x.offs.join('、')) : '無'}</b></div>
+        ${x.note ? `<div style="margin-top:4px;">備註：${rcEsc(x.note)}</div>` : ''}
+      </div>
+    </div>
+    <div id="qcvPhotos" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${(x.photos || []).map(() => '<div style="width:160px;height:120px;border-radius:6px;background:#eee;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--ink3);">照片讀取中…</div>').join('')}</div>`);
+  m.querySelector('.modal-box').style.maxWidth = '760px';
+  const box = m.querySelector('#qcvPhotos');
+  for (let i = 0; i < (x.photos || []).length; i++) {
+    const ph = await api({ action: 'qcPhoto', id: x.photos[i] }, true);
+    const slot = box.children[i]; if (!slot) continue;
+    if (ph && ph.ok) slot.outerHTML = `<a href="${ph.data}" target="_blank" title="${rcEsc(ph.caption || '')}"><img src="${ph.data}" style="max-width:320px;max-height:240px;border-radius:6px;border:1px solid var(--border);display:block;"></a>`;
+    else slot.textContent = '照片讀取失敗';
+  }
+}
+// 新增／修改表單
+function qcEdit(orderNo, ii, id) {
+  const ctx = window._qcCtx; if (!ctx || ctx.o.orderNo !== orderNo) { qcOpen(orderNo, ii); return; }
+  const { o, it } = ctx, cur = id ? (ctx.list || []).find(x => x.id === id) : null;
+  const std = ctx.std && (!cur || ctx.std.id !== cur.id) ? ctx.std : null;
+  const F = { inst: Object.assign({}, cur ? cur.inst : {}), sens: Object.assign({}, cur ? cur.sens : {}), look: Object.assign({ color: 0, clarity: '', hex: '' }, cur ? cur.look : {}), offs: cur ? cur.offs.slice() : [], photos: cur ? cur.photos.map(p => ({ keep: p })) : [] };
+  window._qcF = F;
+  const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+  const instHtml = QC_INST.map(([k, lb, u, step, hint]) => `
+    <div style="flex:1 1 150px;min-width:140px;">
+      <label style="font-size:12px;font-weight:600;">${lb}${u ? `（${u}）` : ''} <span style="font-weight:400;color:var(--ink3);font-size:10px;">${hint}</span></label>
+      <div style="display:flex;align-items:center;gap:4px;"><input class="inp qc-inst" data-k="${k}" type="number" inputmode="decimal" step="${step}" value="${F.inst[k] != null ? F.inst[k] : ''}" style="margin:0;" oninput="qcFormSync()"><span class="qc-lamp" data-k="${k}" style="flex:0 0 14px;"></span></div>
+      <div style="font-size:10px;color:var(--ink3);">${k === 'temp' ? '' : std ? ('標準 ' + _qcFmt(std.inst[k])) : '尚無標準'}</div>
+    </div>`).join('');
+  const seg = (name, k, val, labels) => `<div style="display:flex;gap:3px;">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="qc-seg" data-g="${name}" data-k="${k}" data-v="${n}" title="${labels[n - 1]}" onclick="qcPick(this)" style="flex:1;min-width:34px;padding:7px 0;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:${+val === n ? (n === 3 ? 'var(--green)' : (n === 1 || n === 5) ? '#c0392b' : '#b7791f') : 'var(--card)'};color:${+val === n ? '#fff' : 'var(--ink)'};">${n}</button>`).join('')}</div>`;
+  const sensHtml = QC_SENS.map(([k, lb, d]) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px dashed var(--border);">
+      <div style="flex:0 0 96px;font-size:12px;"><b>${lb}</b><div style="font-size:10px;color:var(--ink3);">${d}</div></div>
+      <div style="flex:1;">${seg('sens', k, F.sens[k], QC_SCALE)}</div>
+    </div>`).join('');
+  const m = makeModal(`
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <div class="modal-title" style="margin:0;">🔬 ${cur ? '修改' : '新增'}品管單・${rcEsc(it.product)}</div>
+      <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button>
+    </div>
+    <div style="font-size:12px;color:var(--ink3);margin:4px 0 6px;">${o.orderNo} · ${clientLabel(o.client)}　｜　${std ? `比對標準樣：${rcEsc(std.date)}（${rcEsc(std.orderNo)}）` : '<b style="color:#b7791f;">尚無標準樣</b>'}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <div class="fg" style="flex:1 1 130px;margin:0;"><label>檢驗日</label><input class="inp" type="date" id="qc_date" value="${cur ? cur.date : today}" style="margin:0;"></div>
+      <div class="fg" style="flex:1 1 110px;margin:0;"><label>檢驗人（調酒師）</label><input class="inp" id="qc_insp" value="${rcEsc(cur ? cur.inspector : curUser.username)}" style="margin:0;"></div>
+      <div class="fg" style="flex:0 1 80px;margin:0;"><label>Lot</label><input class="inp" id="qc_lot" value="${rcEsc(cur ? cur.lot : (o.lot || ''))}" style="margin:0;"></div>
+      <div class="fg" style="flex:1 1 140px;margin:0;"><label>樣品來源</label><select class="inp" id="qc_src" style="margin:0;">${QC_SOURCES.map(s => `<option ${cur && cur.source === s ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
+    </div>
+
+    <div style="font-weight:700;color:var(--gold-dk);margin:12px 0 4px;">① 儀器量測</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">${instHtml}</div>
+    <details style="font-size:11px;color:var(--ink3);margin-top:4px;"><summary style="cursor:pointer;">💡 酒液不透明怎麼量糖度？酒精會不會影響讀數？</summary>
+      <div style="line-height:1.7;padding:4px 0 0 4px;">・<b>不透明／有果肉</b>：取樣後靜置 10 分鐘取上層清液，或用咖啡濾紙、針筒濾頭過濾後再滴；糖度計看的是光的折射，懸浮顆粒會讓分界線模糊。<br>・<b>酒精也會推高 Brix 讀數</b>，所以這裡的 Brix 只拿來跟「同配方的標準樣」比差值，不能當真實含糖量。<br>・pH 與 Brix 都受溫度影響：冰的酒先回溫到 20°C 左右再量，標準樣與本批用同一台儀器。<br>・每次量完用清水沖探頭並擦乾；pH 計每週用緩衝液校正一次。</div></details>
+
+    <div style="font-weight:700;color:var(--gold-dk);margin:12px 0 2px;">② 感官（跟標準樣比：1 明顯偏弱｜2 略弱｜<span style="color:var(--green);">3 符合</span>｜4 略強｜5 明顯偏強）</div>
+    <div style="font-size:11px;color:var(--ink3);margin-bottom:4px;">標準樣與本批<b>同溫度、同杯型、並排盲喝</b>；先聞再喝，喝完漱口再喝下一杯。</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <div style="flex:1 1 330px;">${sensHtml}</div>
+      <div style="flex:1 1 250px;" id="qc_radar"></div>
+    </div>
+
+    <div style="font-weight:700;color:var(--gold-dk);margin:12px 0 4px;">③ 外觀</div>
+    <div style="display:flex;align-items:center;gap:8px;"><div style="flex:0 0 96px;font-size:12px;"><b>色澤</b><div style="font-size:10px;color:var(--ink3);">1 偏淺 → 5 偏深</div></div><div style="flex:1;">${seg('look', 'color', F.look.color, QC_COLOR_SCALE)}</div></div>
+    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;align-items:center;"><span style="flex:0 0 96px;font-size:12px;font-weight:700;">澄清度</span>${QC_CLARITY.map(c => `<button type="button" class="qc-chip" data-c="${c}" onclick="qcClarity(this)" style="padding:5px 10px;border-radius:999px;font-size:12px;cursor:pointer;border:1px solid var(--border);background:${F.look.clarity === c ? 'var(--gold-dk)' : 'var(--card)'};color:${F.look.clarity === c ? '#fff' : 'var(--ink)'};">${c}</button>`).join('')}</div>
+    <div style="margin-top:8px;font-size:12px;"><b>照片</b>（最多 2 張）<span style="color:var(--ink3);">——<b>本批放左、標準留樣放右，並排拍在同一張</b>，白底、同款杯、同一個位置與燈光；系統自動抓左右兩杯的色塊算色差。</span></div>
+    <div id="qc_photos" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;"></div>
+    <label class="btn btn-ghost btn-sm" style="margin-top:4px;display:inline-block;cursor:pointer;">📷 拍照／選照片<input type="file" accept="image/*" capture="environment" style="display:none;" onchange="qcAddPhoto(this)"></label>
+
+    <div style="font-weight:700;color:#c0392b;margin:12px 0 4px;">④ 異味（勾任一項＝直接退回）</div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;">${QC_OFFS.map(x => `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="qc-off" value="${x}" ${F.offs.includes(x) ? 'checked' : ''} onchange="qcFormSync()" style="width:16px;height:16px;margin:0;">${x}</label>`).join('')}</div>
+    <div class="fg" style="margin-top:8px;"><label>備註（處理方式、補正、客戶意見…）</label><input class="inp" id="qc_note" value="${rcEsc(cur ? cur.note : '')}" maxlength="500" style="margin:0;"></div>
+
+    <div id="qc_verdict" style="margin-top:10px;padding:10px;border-radius:10px;"></div>
+    ${qcIsAdmin() ? `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:12px;"><b>主公覆寫判定</b><select class="inp" id="qc_final" style="margin:0;width:auto;"><option value="">（照系統判定）</option>${['放行', '待試飲', '退回'].map(v => `<option ${cur && cur.final !== cur.sys && cur.final === v ? 'selected' : ''}>${v}</option>`).join('')}</select><input class="inp" id="qc_reason" placeholder="覆寫理由（必填）" value="${rcEsc(cur && cur.final !== cur.sys ? cur.reason : '')}" style="margin:0;flex:1;min-width:160px;"></div>` : ''}
+    <div class="fe" style="margin-top:10px;gap:6px;">
+      <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button>
+      <button class="btn btn-primary btn-sm" id="qc_save">💾 儲存品管單</button>
+    </div>`, { locked: true });
+  m.querySelector('.modal-box').style.maxWidth = '820px';
+  window._qcForm = { m, std, cur, o, it, ii };
+  qcRenderPhotos(); qcFormSync();
+  const b = m.querySelector('#qc_save');
+  b.onclick = () => lockRun(b, qcSubmit);
+  // 舊照片載入縮圖
+  F.photos.forEach(async (p, i) => { if (!p.keep) return; const ph = await api({ action: 'qcPhoto', id: p.keep }, true); if (ph && ph.ok) { p.preview = ph.data; qcRenderPhotos(); } });
+}
+function qcPick(btn) {
+  const F = window._qcF, g = btn.dataset.g, k = btn.dataset.k, v = +btn.dataset.v;
+  if (g === 'sens') F.sens[k] = v; else F.look[k] = v;
+  btn.parentNode.querySelectorAll('.qc-seg').forEach(x => { const on = +x.dataset.v === v; x.style.background = on ? (v === 3 ? 'var(--green)' : (v === 1 || v === 5) ? '#c0392b' : '#b7791f') : 'var(--card)'; x.style.color = on ? '#fff' : 'var(--ink)'; });
+  qcFormSync();
+}
+function qcClarity(btn) {
+  const F = window._qcF; F.look.clarity = btn.dataset.c;
+  btn.parentNode.querySelectorAll('.qc-chip').forEach(x => { const on = x === btn; x.style.background = on ? 'var(--gold-dk)' : 'var(--card)'; x.style.color = on ? '#fff' : 'var(--ink)'; });
+  qcFormSync();
+}
+async function qcAddPhoto(inp) {
+  const f = inp.files && inp.files[0]; inp.value = ''; if (!f) return;
+  const F = window._qcF; if (F.photos.length >= 2) { toast('最多 2 張，請先刪掉一張'); return; }
+  busyStart('照片壓縮中…');
+  try {
+    const r = await qcCompress(f);
+    F.photos.push({ data: r.data, w: r.w, h: r.h, preview: r.data, caption: f.name || '' });
+    if (r.hex && (!F.look.hex || F.photos.length === 1)) { F.look.hex = r.hex; F.look.hexStd = r.hexStd || ''; }
+    qcRenderPhotos(); qcFormSync();
+  } catch (e) { reqWarn('照片無法使用', e.message || String(e)); }
+  finally { busyEnd(); }
+}
+function qcDropPhoto(i) { const F = window._qcF; F.photos.splice(i, 1); if (!F.photos.length) { F.look.hex = ''; F.look.hexStd = ''; } qcRenderPhotos(); qcFormSync(); }
+// 色差 ΔE（CIE76，sRGB→Lab D65）：< 3 肉眼難辨｜3～6 仔細看得出｜> 6 明顯不同
+function qcDeltaE(h1, h2) {
+  const lab = (h) => {
+    const c = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255).map(v => v > 0.04045 ? Math.pow((v + 0.055) / 1.055, 2.4) : v / 12.92);
+    const X = (c[0] * 0.4124 + c[1] * 0.3576 + c[2] * 0.1805) / 0.95047, Y = c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722, Z = (c[0] * 0.0193 + c[1] * 0.1192 + c[2] * 0.9505) / 1.08883;
+    const f = t => t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
+    return [116 * f(Y) - 16, 500 * (f(X) - f(Y)), 200 * (f(Y) - f(Z))];
+  };
+  if (!/^#[0-9a-f]{6}$/i.test(h1 || '') || !/^#[0-9a-f]{6}$/i.test(h2 || '')) return null;
+  const a = lab(h1), b = lab(h2); return Math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2);
+}
+function qcSwatchHtml(look) {
+  if (!look || !look.hex) return '';
+  const sw = (h) => `<span style="display:inline-block;width:20px;height:20px;border-radius:4px;vertical-align:-5px;background:${h};border:1px solid #0002;"></span>`;
+  const dE = qcDeltaE(look.hex, look.hexStd);
+  const tag = dE == null ? '' : dE < 3 ? `<b style="color:var(--green);">ΔE ${dE.toFixed(1)} 肉眼難辨</b>` : dE <= 6 ? `<b style="color:#b7791f;">ΔE ${dE.toFixed(1)} 仔細看得出</b>` : `<b style="color:#c0392b;">ΔE ${dE.toFixed(1)} 明顯不同</b>`;
+  return `<span style="font-size:11px;">本批（左）${sw(look.hex)}${look.hexStd ? `　標準（右）${sw(look.hexStd)}　${tag}` : ''}</span>`;
+}
+function qcRenderPhotos() {
+  const F = window._qcF, box = document.getElementById('qc_photos'); if (!box) return;
+  const std = window._qcForm && window._qcForm.std;
+  box.innerHTML = F.photos.map((p, i) => `<div style="position:relative;">${p.preview ? `<img src="${p.preview}" style="height:110px;border-radius:6px;border:1px solid var(--border);display:block;">` : '<div style="width:140px;height:110px;border-radius:6px;background:#eee;display:flex;align-items:center;justify-content:center;font-size:11px;">讀取中…</div>'}<button type="button" onclick="qcDropPhoto(${i})" style="position:absolute;top:2px;right:2px;border:none;border-radius:50%;width:22px;height:22px;background:#000a;color:#fff;cursor:pointer;">✕</button></div>`).join('')
+    + (F.look.hex ? `<div style="align-self:center;max-width:260px;">${qcSwatchHtml(F.look)}<div style="font-size:10px;color:var(--ink3);margin-top:3px;">色票取自照片左右半邊中心；照片沒有並排時只供參考，以目視色澤分數為準。</div></div>` : '');
+}
+function qcCollect() {
+  const F = window._qcF, f = window._qcForm, m = f.m;
+  const inst = {}; m.querySelectorAll('.qc-inst').forEach(el => { const v = el.value.trim(); if (v !== '' && !isNaN(+v)) inst[el.dataset.k] = +v; });
+  F.inst = inst;
+  F.offs = Array.from(m.querySelectorAll('.qc-off')).filter(x => x.checked).map(x => x.value);
+  return F;
+}
+function qcFormSync() {
+  const f = window._qcForm; if (!f) return;
+  const F = qcCollect(), j = qcJudge(F.inst, F.sens, F.look, F.offs, f.std);
+  f.m.querySelectorAll('.qc-lamp').forEach(el => { el.innerHTML = el.dataset.k === 'temp' ? '' : _qcLampDot(j.lamps[el.dataset.k]); });
+  const rd = f.m.querySelector('#qc_radar'); if (rd) rd.innerHTML = qcRadarSvg(F.sens, { size: 250 });
+  const miss = QC_SENS.filter(([k]) => !F.sens[k]).map(s => s[1]);
+  if (!F.look.color) miss.push('色澤'); if (!F.look.clarity) miss.push('澄清度');
+  if (F.inst.brix == null) miss.push('Brix'); if (F.inst.ph == null && F.inst.ta == null) miss.push('pH 或總酸');
+  const vd = f.m.querySelector('#qc_verdict');
+  vd.style.background = miss.length ? '#f4f4f4' : QC_VBG[j.verdict]; vd.style.border = '1px solid ' + (miss.length ? '#ddd' : QC_VCOLOR[j.verdict]);
+  vd.innerHTML = miss.length
+    ? `<div style="font-size:12px;color:var(--ink3);">尚未填完：${miss.map(rcEsc).join('、')}</div>`
+    : `<div style="font-size:12px;">系統判定預覽：${_qcVerdictBadge(j.verdict)}</div>${j.why.length ? `<ul style="font-size:12px;margin:4px 0 0 18px;padding:0;">${j.why.map(w => '<li>' + rcEsc(w) + '</li>').join('')}</ul>` : '<div style="font-size:12px;color:var(--green);margin-top:3px;">各項皆在標準範圍內，可以出貨。</div>'}`;
+  return miss;
+}
+async function qcSubmit() {
+  const f = window._qcForm, m = f.m, miss = qcFormSync();
+  if (miss.length) { reqWarn('品管單還沒填完', '請補：' + miss.join('、')); return; }
+  const F = window._qcF;
+  const params = {
+    action: 'qcSave', id: f.cur ? f.cur.id : '', orderNo: f.o.orderNo, client: f.o.client, product: f.it.product,
+    lot: m.querySelector('#qc_lot').value, date: m.querySelector('#qc_date').value, inspector: m.querySelector('#qc_insp').value,
+    source: m.querySelector('#qc_src').value, note: m.querySelector('#qc_note').value,
+    inst: JSON.stringify(F.inst), sens: JSON.stringify(F.sens), look: JSON.stringify(F.look), offs: JSON.stringify(F.offs),
+    photos: JSON.stringify(F.photos.map(p => p.keep ? { keep: p.keep } : { data: p.data, w: p.w, h: p.h, caption: p.caption }))
+  };
+  if (qcIsAdmin()) {
+    const fin = m.querySelector('#qc_final').value, rs = m.querySelector('#qc_reason').value.trim();
+    if (fin) { if (!rs) { reqWarn('覆寫判定需要理由', '請在「覆寫理由」寫明為什麼（例如：客戶當面試飲接受）。', m.querySelector('#qc_reason')); return; } params.final = fin; params.reason = rs; }
+  }
+  const r = await api(params);
+  if (!r || !r.ok) { reqWarn('儲存失敗', (r && r.error) || '網路錯誤，請再按一次儲存'); return; }
+  m.remove();
+  const v = r.report.final || r.report.sys;
+  toast('🔬 品管單已存：' + v, 3000);
+  await ensureQcIndex(true);
+  if (window._mgmtOrders) renderMonthOrders(window._mgmtOrders);
+  qcOpen(f.o.orderNo, f.ii);
 }
 // ════════════════════════════════════════════════
 // v3.79 🧮 酸度補正試算＋一鍵生成「Lot{n}_調整酸度 Run Card」（主公 2026-10-29 指示）
