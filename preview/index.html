@@ -4649,9 +4649,23 @@ const QC_OFFS = ['氧化紙板味', '醋酸／發酵味', '硫味', '藥水味',
 const QC_CLARITY = ['清澈', '微霧', '混濁', '有沉澱', '與標準相同'];
 const QC_SOURCES = ['成品瓶抽樣', '桶內取樣', '打樣（客戶核可樣）', '其他'];
 const QC_TOL = { brix: 0.5, ph: 0.10, taRel: 0.10, abv: 0.5 };
+const QC_AREA_TOL = 0.10;   // v3.81 主公指示：感官雷達面積與前一批相差 ≤10% 才合格（無前批則與標準樣 3 分八邊形比）
+// 雷達面積（8 軸、相鄰兩軸夾 45°）＝½·sin45°·Σ rᵢ·rᵢ₊₁
+function qcArea(sens) { const v = QC_SENS.map(([k]) => +sens[k] || 0); let a = 0; for (let i = 0; i < v.length; i++) a += v[i] * v[(i + 1) % v.length]; return 0.5 * Math.sin(Math.PI / 4) * a; }
+function qcAreaDiff(sens, refSens) { const r = qcArea(refSens); return r > 0 ? (qcArea(sens) - r) / r : null; }
+const QC_STD_SENS = { alc: 3, tea: 3, fruit: 3, sour: 3, sweet: 3, bitter: 3, body: 3, finish: 3 };
+// 前一批＝同客戶同酒款、不同（訂單＋Lot）中最近的一批；該批有放行單取最新放行單，否則取最新一張（與後端 _qcPrevFor_ 同規則）
+function qcPickPrev(hist, orderNo, lot, exceptId) {
+  const key = String(orderNo) + '|' + String(lot || '');
+  const c = (hist || []).filter(x => x.id !== exceptId && (x.orderNo + '|' + (x.lot || '')) !== key);
+  if (!c.length) return null;
+  c.sort((a, b) => a.createdAt < b.createdAt ? 1 : -1);
+  const k0 = c[0].orderNo + '|' + (c[0].lot || ''), grp = c.filter(x => (x.orderNo + '|' + (x.lot || '')) === k0);
+  return grp.find(x => (x.final || x.sys) === '放行') || grp[0];
+}
 const QC_INST = [
-  ['brix', '糖度 Brix', '°Bx', '0.1', '必填'], ['ph', 'pH', '', '0.01', 'pH／總酸擇一必填'], ['ta', '總酸', '%', '0.01', '以檸檬酸計 g/100ml'],
-  ['abv', '實測酒精度', '%', '0.1', '選填'], ['temp', '樣品溫度', '°C', '0.1', '選填，建議回溫 20°C']
+  ['brix', '糖度 Brix', '°Bx', '0.1', '必填'], ['ph', 'pH', '', '0.01', 'pH／酸度擇一必填'], ['ta', '酸度', 'g/1000ml', '0.1', '檸檬酸／蘋果酸／抗壞血酸'],
+  ['abv', '透明基酒酒精度', '%', '0.1', '選填']   // v3.81 主公指示：總酸改 g/1000ml、酒精度改量透明基酒、刪樣品溫度
 ];
 const QC_VCOLOR = { '放行': 'var(--green)', '待試飲': '#b7791f', '退回': '#c0392b' };
 const QC_VBG = { '放行': '#e8f2ea', '待試飲': '#fbf1dc', '退回': '#fbe9e7' };
@@ -4696,24 +4710,29 @@ function qcLamp(key, v, s) {
   if (!(tol > 0)) return '';
   return d <= tol + 1e-9 ? 'g' : d <= 2 * tol + 1e-9 ? 'y' : 'r';
 }
-function qcJudge(inst, sens, look, offs, std) {
+function qcJudge(inst, sens, look, offs, std, prev) {
   const why = []; let red = false, yellow = false, off3 = 0;
   if (offs && offs.length) { red = true; why.push('異味：' + offs.join('、')); }
   QC_SENS.forEach(([k, lb]) => { const v = +sens[k]; if (v === 1 || v === 5) { red = true; why.push(lb + (v === 1 ? '明顯偏弱' : '明顯偏強')); } else if (v === 2 || v === 4) off3++; });
   const col = +(look && look.color); if (col === 1 || col === 5) { red = true; why.push(col === 1 ? '色澤明顯偏淺' : '色澤明顯偏深'); }
   if (off3 >= 3) { yellow = true; why.push('感官 ' + off3 + ' 項與標準略有差異'); }
+  let areaDiff = null;
+  if (QC_SENS.every(([k]) => +sens[k] >= 1)) {
+    areaDiff = qcAreaDiff(sens, prev ? prev.sens : QC_STD_SENS);
+    if (areaDiff != null && Math.abs(areaDiff) > QC_AREA_TOL + 1e-9) { red = true; why.push(`感官雷達面積與${prev ? '前一批（' + (prev.orderNo || '') + (prev.lot ? ' Lot' + prev.lot : '') + '）' : '標準樣'}相差 ${(areaDiff * 100).toFixed(1)}%（上限 ±${QC_AREA_TOL * 100}%）`); }
+  }
   const clar = (look && look.clarity) || '';
   if ((clar === '混濁' || clar === '有沉澱') && !(std && std.look && std.look.clarity === clar)) { yellow = true; why.push('澄清度：' + clar); }
   const lamps = {};
   if (std) {
     ['brix', 'ph', 'ta', 'abv'].forEach(k => {
       const l = qcLamp(k, inst[k], std.inst && std.inst[k]); lamps[k] = l;
-      const lb = { brix: '糖度', ph: 'pH', ta: '總酸', abv: '酒精度' }[k];
+      const lb = { brix: '糖度', ph: 'pH', ta: '酸度', abv: '基酒酒精度' }[k];
       if (l === 'r') { red = true; why.push(`${lb}超出容許差 2 倍（本批 ${inst[k]}／標準 ${std.inst[k]}）`); }
       else if (l === 'y') { yellow = true; why.push(`${lb}略超容許差（本批 ${inst[k]}／標準 ${std.inst[k]}）`); }
     });
   } else { yellow = true; why.push('此酒款尚無標準樣，需主公／PM 試飲確認（核可後可設為標準）'); }
-  return { verdict: red ? '退回' : yellow ? '待試飲' : '放行', why, lamps };
+  return { verdict: red ? '退回' : yellow ? '待試飲' : '放行', why, lamps, areaDiff };
 }
 // 雷達圖（inline SVG）：標準樣＝3 分正八邊形（灰虛線）；本批＝實線
 function qcRadarSvg(sens, opt) {
@@ -4729,6 +4748,10 @@ function qcRadarSvg(sens, opt) {
     const v = +sens[s[0]] || 0, warn = v === 1 || v === 5 ? '#c0392b' : v === 2 || v === 4 ? '#b7791f' : '#555';
     g += `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" text-anchor="${anc}" font-size="11" fill="${warn}" font-weight="${v && v !== 3 ? 700 : 400}">${s[1].replace('（茶）', '')}${v ? ' ' + v : ''}</text>`;
   });
+  if (opt.prev) {   // v3.81 前一批（藍虛線）
+    const pv = QC_SENS.map(s => +opt.prev[s[0]] || 0);
+    if (pv.every(v => v > 0)) g += `<polygon points="${poly(pv)}" fill="#2b6cb0" fill-opacity=".07" stroke="#2b6cb0" stroke-width="1.6" stroke-dasharray="6 3"/>`;
+  }
   const vals = QC_SENS.map(s => +sens[s[0]] || 0);
   if (vals.some(v => v > 0)) {
     const col = opt.color || '#7a4f9b';
@@ -4736,7 +4759,7 @@ function qcRadarSvg(sens, opt) {
     vals.forEach((v, i) => { if (v) { const [x, y] = pt(i, v); g += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${col}"/>`; } });
   }
   return `<svg viewBox="-40 0 ${W + 80} ${W + 8}" style="width:100%;max-width:${W + 80}px;display:block;margin:0 auto;" role="img" aria-label="感官雷達圖">${g}
-    <text x="${cx}" y="${W + 4}" text-anchor="middle" font-size="10" fill="#8a8a8a">灰虛線＝標準樣（3 分）　實線＝本批</text></svg>`;
+    <text x="${cx}" y="${W + 4}" text-anchor="middle" font-size="10" fill="#8a8a8a">灰虛線＝標準樣（3 分）${opt.prev ? '　<tspan fill="#2b6cb0">藍虛線＝前一批' + (opt.prevLabel ? '（' + opt.prevLabel + '）' : '') + '</tspan>' : ''}　實線＝本批</text></svg>`;
 }
 // 照片：縮到長邊 720px、JPEG，壓到 ≤ 240K 字元；順便取中心 30% 平均色
 function qcCompress(file) {
@@ -4784,14 +4807,14 @@ async function qcOpen(orderNo, ii) {
   document.querySelectorAll('.modal-bg.qc-modal').forEach(x => x.remove());
   const std = r.std;
   const stdBox = std
-    ? `<div style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#faf8f3;font-size:12px;">⭐ <b>標準樣</b>：${rcEsc(std.date)}（${rcEsc(std.orderNo)}${std.lot ? ' Lot' + rcEsc(std.lot) : ''}・${rcEsc(std.inspector)}）　Brix ${_qcFmt(std.inst.brix)}・pH ${_qcFmt(std.inst.ph)}・總酸 ${_qcFmt(std.inst.ta)}%
+    ? `<div style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#faf8f3;font-size:12px;">⭐ <b>標準樣</b>：${rcEsc(std.date)}（${rcEsc(std.orderNo)}${std.lot ? ' Lot' + rcEsc(std.lot) : ''}・${rcEsc(std.inspector)}）　Brix ${_qcFmt(std.inst.brix)}・pH ${_qcFmt(std.inst.ph)}・酸度 ${_qcFmt(std.inst.ta)} g/L
         <a href="#" style="margin-left:6px;" onclick="event.preventDefault();qcView('${std.id}')">查看</a></div>`
     : `<div style="padding:8px 10px;border:1px dashed #b7791f;border-radius:8px;background:#fbf1dc;font-size:12px;color:#7a5a12;">⚠ 此酒款<b>尚無標準樣</b>。第一張品管單會判「待試飲」；請在客戶核可的打樣（或主公試飲認可的批次）那張單按「⭐ 設為標準」，之後的批次才有東西可以比。</div>`;
   const rows = (r.list || []).map(x => {
     const v = x.final || x.sys;
     return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:7px 8px;border:1px solid var(--border);border-radius:8px;margin-top:5px;font-size:12px;">
       ${_qcVerdictBadge(v, true)}${x.isStd ? ' <span style="font-size:11px;color:var(--gold-dk);font-weight:700;">⭐標準</span>' : ''}
-      <span style="flex:1;min-width:150px;">${rcEsc(x.date)}・${rcEsc(x.inspector)}${x.lot ? '・Lot' + rcEsc(x.lot) : ''}<span style="color:var(--ink3);">　Brix ${_qcFmt(x.inst.brix)}・pH ${_qcFmt(x.inst.ph)}・總酸 ${_qcFmt(x.inst.ta)}</span>${x.final && x.final !== x.sys ? `<span style="color:#7a4f9b;">（系統 ${x.sys} → 主公覆寫）</span>` : ''}</span>
+      <span style="flex:1;min-width:150px;">${rcEsc(x.date)}・${rcEsc(x.inspector)}${x.lot ? '・Lot' + rcEsc(x.lot) : ''}<span style="color:var(--ink3);">　Brix ${_qcFmt(x.inst.brix)}・pH ${_qcFmt(x.inst.ph)}・酸度 ${_qcFmt(x.inst.ta)} g/L</span>${x.final && x.final !== x.sys ? `<span style="color:#7a4f9b;">（系統 ${x.sys} → 主公覆寫）</span>` : ''}</span>
       <button class="btn btn-ghost btn-sm" style="padding:2px 7px;font-size:11px;" onclick="qcView('${x.id}')">查看</button>
       ${(qcIsAdmin() || (x.createdBy === curUser.username && !x.isStd)) ? `<button class="btn btn-ghost btn-sm" style="padding:2px 7px;font-size:11px;" onclick="qcEdit('${o.orderNo}',${ii},'${x.id}')">✏️ 修改</button>` : ''}
       ${qcIsAdmin() && !x.isStd && v !== '退回' ? `<button class="btn btn-ghost btn-sm" style="padding:2px 7px;font-size:11px;color:var(--gold-dk);" onclick="qcSetStd('${o.orderNo}',${ii},'${x.id}',1)">⭐ 設為標準</button>` : ''}
@@ -4811,10 +4834,10 @@ async function qcOpen(orderNo, ii) {
       <button class="btn btn-primary btn-sm" onclick="qcEdit('${o.orderNo}',${ii},'')">＋ 新增品管單</button>
     </div>
     ${rows || '<div style="color:var(--ink3);font-size:12px;padding:10px;text-align:center;">尚無品管單——出貨前請先做一張。</div>'}
-    <div style="font-size:11px;color:var(--ink3);margin-top:10px;line-height:1.6;">判定規則：任一異味／任一感官或色澤給 1、5 分／任一儀器超出容許差 2 倍 → <b style="color:#c0392b;">退回</b>；儀器略超、3 項以上感官 2 或 4 分、混濁沉澱、尚無標準樣 → <b style="color:#b7791f;">待試飲</b>；其餘 <b style="color:var(--green);">放行</b>。容許差：Brix ±${QC_TOL.brix}、pH ±${QC_TOL.ph}、總酸 ±${QC_TOL.taRel * 100}%、酒精度 ±${QC_TOL.abv}。</div>`);
+    <div style="font-size:11px;color:var(--ink3);margin-top:10px;line-height:1.6;">判定規則：任一異味／任一感官或色澤給 1、5 分／<b>感官雷達面積與前一批（無前批則與標準樣）相差超過 ${QC_AREA_TOL * 100}%</b>／任一儀器超出容許差 2 倍 → <b style="color:#c0392b;">退回</b>；儀器略超、3 項以上感官 2 或 4 分、混濁沉澱、尚無標準樣 → <b style="color:#b7791f;">待試飲</b>；其餘 <b style="color:var(--green);">放行</b>。容許差：Brix ±${QC_TOL.brix}、pH ±${QC_TOL.ph}、酸度 ±${QC_TOL.taRel * 100}%、基酒酒精度 ±${QC_TOL.abv}。</div>`);
   m.classList.add('qc-modal');
   m.querySelector('.modal-box').style.maxWidth = '720px';
-  window._qcCtx = { o, ii, it, std, list: r.list || [] };
+  window._qcCtx = { o, ii, it, std, list: r.list || [], hist: r.hist || [] };
 }
 async function qcSetStd(orderNo, ii, id, on) {
   if (on && !confirm('把這張設為「' + ((window._qcCtx && window._qcCtx.it.product) || '') + '」的標準樣？\n同酒款原本的標準會被取代；之後的批次都會跟這張比。')) return;
@@ -4834,9 +4857,10 @@ async function qcView(id) {
   if (!r || !r.ok) { toast('讀取失敗：' + ((r && r.error) || '')); return; }
   const x = r.report, ctx = window._qcCtx || {};
   const std = ctx.std && ctx.std.id !== x.id ? ctx.std : null;
-  const j = qcJudge(x.inst, x.sens, x.look, x.offs, std);
+  const prev = x.prevId ? ((ctx.hist || []).find(h => h.id === x.prevId) || r.prev || null) : null;
+  const j = qcJudge(x.inst, x.sens, x.look, x.offs, std, prev);
   const v = x.final || x.sys;
-  const instRows = QC_INST.map(([k, lb, u]) => `<tr><td style="padding:3px 6px;">${lb}</td><td style="padding:3px 6px;text-align:right;font-weight:700;">${_qcFmt(x.inst[k])}${x.inst[k] != null && u ? ' ' + u : ''}</td><td style="padding:3px 6px;text-align:right;color:var(--ink3);">${std ? _qcFmt(std.inst[k]) : '—'}</td><td style="padding:3px 6px;text-align:center;">${k === 'temp' ? '' : _qcLampDot(j.lamps[k])}</td></tr>`).join('');
+  const instRows = QC_INST.map(([k, lb, u]) => `<tr><td style="padding:3px 6px;">${lb}</td><td style="padding:3px 6px;text-align:right;font-weight:700;">${_qcFmt(x.inst[k])}${x.inst[k] != null && u ? ' ' + u : ''}</td><td style="padding:3px 6px;text-align:right;color:var(--ink3);">${std ? _qcFmt(std.inst[k]) : '—'}</td><td style="padding:3px 6px;text-align:center;">${_qcLampDot(j.lamps[k])}</td></tr>`).join('');
   const m = makeModal(`
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <div class="modal-title" style="margin:0;">🔬 品管單・${rcEsc(x.product)}</div>
@@ -4846,7 +4870,7 @@ async function qcView(id) {
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">${_qcVerdictBadge(v)}${x.final && x.final !== x.sys ? `<span style="font-size:12px;color:#7a4f9b;">系統判定「${x.sys}」→ 主公覆寫：${rcEsc(x.reason)}</span>` : ''}</div>
     ${(j.why || []).length ? `<ul style="font-size:12px;margin:6px 0 0 18px;padding:0;color:var(--ink);">${j.why.map(w => '<li>' + rcEsc(w) + '</li>').join('')}</ul>` : ''}
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;">
-      <div style="flex:1 1 300px;">${qcRadarSvg(x.sens, { size: 280, color: QC_VCOLOR[v] === 'var(--green)' ? '#2e7d4f' : QC_VCOLOR[v] })}</div>
+      <div style="flex:1 1 300px;">${qcRadarSvg(x.sens, { size: 280, color: QC_VCOLOR[v] === 'var(--green)' ? '#2e7d4f' : QC_VCOLOR[v], prev: prev && prev.sens, prevLabel: prev ? (prev.orderNo + (prev.lot ? ' Lot' + prev.lot : '')) : '' })}${qcAreaLine(j.areaDiff, prev)}</div>
       <div style="flex:1 1 240px;font-size:12px;">
         <table style="width:100%;border-collapse:collapse;"><tr style="color:var(--ink3);font-size:11px;"><td style="padding:3px 6px;">儀器</td><td style="padding:3px 6px;text-align:right;">本批</td><td style="padding:3px 6px;text-align:right;">標準</td><td></td></tr>${instRows}</table>
         <div style="margin-top:8px;">色澤：<b>${QC_COLOR_SCALE[(+x.look.color || 3) - 1]}</b>（${x.look.color}）</div>${x.look.hex ? `<div>${qcSwatchHtml(x.look)}</div>` : ''}
@@ -4877,7 +4901,7 @@ function qcEdit(orderNo, ii, id) {
     <div style="flex:1 1 150px;min-width:140px;">
       <label style="font-size:12px;font-weight:600;">${lb}${u ? `（${u}）` : ''} <span style="font-weight:400;color:var(--ink3);font-size:10px;">${hint}</span></label>
       <div style="display:flex;align-items:center;gap:4px;"><input class="inp qc-inst" data-k="${k}" type="number" inputmode="decimal" step="${step}" value="${F.inst[k] != null ? F.inst[k] : ''}" style="margin:0;" oninput="qcFormSync()"><span class="qc-lamp" data-k="${k}" style="flex:0 0 14px;"></span></div>
-      <div style="font-size:10px;color:var(--ink3);">${k === 'temp' ? '' : std ? ('標準 ' + _qcFmt(std.inst[k])) : '尚無標準'}</div>
+      <div style="font-size:10px;color:var(--ink3);">${std ? ('標準 ' + _qcFmt(std.inst[k])) : '尚無標準'}</div>
     </div>`).join('');
   const seg = (name, k, val, labels) => `<div style="display:flex;gap:3px;">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="qc-seg" data-g="${name}" data-k="${k}" data-v="${n}" title="${labels[n - 1]}" onclick="qcPick(this)" style="flex:1;min-width:34px;padding:7px 0;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;border:1px solid var(--border);background:${+val === n ? (n === 3 ? 'var(--green)' : (n === 1 || n === 5) ? '#c0392b' : '#b7791f') : 'var(--card)'};color:${+val === n ? '#fff' : 'var(--ink)'};">${n}</button>`).join('')}</div>`;
   const sensHtml = QC_SENS.map(([k, lb, d]) => `
@@ -4894,14 +4918,14 @@ function qcEdit(orderNo, ii, id) {
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <div class="fg" style="flex:1 1 130px;margin:0;"><label>檢驗日</label><input class="inp" type="date" id="qc_date" value="${cur ? cur.date : today}" style="margin:0;"></div>
       <div class="fg" style="flex:1 1 110px;margin:0;"><label>檢驗人（調酒師）</label><input class="inp" id="qc_insp" value="${rcEsc(cur ? cur.inspector : curUser.username)}" style="margin:0;"></div>
-      <div class="fg" style="flex:0 1 80px;margin:0;"><label>Lot</label><input class="inp" id="qc_lot" value="${rcEsc(cur ? cur.lot : (o.lot || ''))}" style="margin:0;"></div>
+      <div class="fg" style="flex:0 1 80px;margin:0;"><label>Lot</label><input class="inp" id="qc_lot" value="${rcEsc(cur ? cur.lot : (o.lot || ''))}" oninput="qcFormSync()" style="margin:0;"></div>
       <div class="fg" style="flex:1 1 140px;margin:0;"><label>樣品來源</label><select class="inp" id="qc_src" style="margin:0;">${QC_SOURCES.map(s => `<option ${cur && cur.source === s ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
     </div>
 
     <div style="font-weight:700;color:var(--gold-dk);margin:12px 0 4px;">① 儀器量測</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">${instHtml}</div>
     <details style="font-size:11px;color:var(--ink3);margin-top:4px;"><summary style="cursor:pointer;">💡 酒液不透明怎麼量糖度？酒精會不會影響讀數？</summary>
-      <div style="line-height:1.7;padding:4px 0 0 4px;">・<b>不透明／有果肉</b>：取樣後靜置 10 分鐘取上層清液，或用咖啡濾紙、針筒濾頭過濾後再滴；糖度計看的是光的折射，懸浮顆粒會讓分界線模糊。<br>・<b>酒精也會推高 Brix 讀數</b>，所以這裡的 Brix 只拿來跟「同配方的標準樣」比差值，不能當真實含糖量。<br>・pH 與 Brix 都受溫度影響：冰的酒先回溫到 20°C 左右再量，標準樣與本批用同一台儀器。<br>・每次量完用清水沖探頭並擦乾；pH 計每週用緩衝液校正一次。</div></details>
+      <div style="line-height:1.7;padding:4px 0 0 4px;">・<b>不透明／有果肉</b>：取樣後靜置 10 分鐘取上層清液，或用咖啡濾紙、針筒濾頭過濾後再滴；糖度計看的是光的折射，懸浮顆粒會讓分界線模糊。<br>・<b>酒精也會推高 Brix 讀數</b>，所以這裡的 Brix 只拿來跟「同配方的標準樣」比差值，不能當真實含糖量。<br>・<b>透明基酒酒精度</b>：成品不透明或含糖時酒精計讀不準，改量調和前的透明基酒。<br>・pH 與 Brix 都受溫度影響：冰的酒先回溫到 20°C 左右再量，標準樣與本批用同一台儀器。<br>・每次量完用清水沖探頭並擦乾；pH 計每週用緩衝液校正一次。</div></details>
 
     <div style="font-weight:700;color:var(--gold-dk);margin:12px 0 2px;">② 感官（跟標準樣比：1 明顯偏弱｜2 略弱｜<span style="color:var(--green);">3 符合</span>｜4 略強｜5 明顯偏強）</div>
     <div style="font-size:11px;color:var(--ink3);margin-bottom:4px;">標準樣與本批<b>同溫度、同杯型、並排盲喝</b>；先聞再喝，喝完漱口再喝下一杯。</div>
@@ -4983,6 +5007,11 @@ function qcRenderPhotos() {
   box.innerHTML = F.photos.map((p, i) => `<div style="position:relative;">${p.preview ? `<img src="${p.preview}" style="height:110px;border-radius:6px;border:1px solid var(--border);display:block;">` : '<div style="width:140px;height:110px;border-radius:6px;background:#eee;display:flex;align-items:center;justify-content:center;font-size:11px;">讀取中…</div>'}<button type="button" onclick="qcDropPhoto(${i})" style="position:absolute;top:2px;right:2px;border:none;border-radius:50%;width:22px;height:22px;background:#000a;color:#fff;cursor:pointer;">✕</button></div>`).join('')
     + (F.look.hex ? `<div style="align-self:center;max-width:260px;">${qcSwatchHtml(F.look)}<div style="font-size:10px;color:var(--ink3);margin-top:3px;">色票取自照片左右半邊中心；照片沒有並排時只供參考，以目視色澤分數為準。</div></div>` : '');
 }
+function qcAreaLine(d, prev) {
+  if (d == null) return '';
+  const bad = Math.abs(d) > QC_AREA_TOL + 1e-9;
+  return `<div style="text-align:center;font-size:12px;margin-top:2px;">感官面積 vs ${prev ? '前一批 ' + rcEsc(prev.orderNo + (prev.lot ? ' Lot' + prev.lot : '')) : '標準樣（尚無前一批）'}：<b style="color:${bad ? '#c0392b' : 'var(--green)'};">${d >= 0 ? '+' : ''}${(d * 100).toFixed(1)}%</b>（±${QC_AREA_TOL * 100}% 內合格）</div>`;
+}
 function qcCollect() {
   const F = window._qcF, f = window._qcForm, m = f.m;
   const inst = {}; m.querySelectorAll('.qc-inst').forEach(el => { const v = el.value.trim(); if (v !== '' && !isNaN(+v)) inst[el.dataset.k] = +v; });
@@ -4992,12 +5021,14 @@ function qcCollect() {
 }
 function qcFormSync() {
   const f = window._qcForm; if (!f) return;
-  const F = qcCollect(), j = qcJudge(F.inst, F.sens, F.look, F.offs, f.std);
-  f.m.querySelectorAll('.qc-lamp').forEach(el => { el.innerHTML = el.dataset.k === 'temp' ? '' : _qcLampDot(j.lamps[el.dataset.k]); });
-  const rd = f.m.querySelector('#qc_radar'); if (rd) rd.innerHTML = qcRadarSvg(F.sens, { size: 250 });
+  const F = qcCollect(), ctx = window._qcCtx || {};
+  f.prev = qcPickPrev(ctx.hist, f.o.orderNo, (f.m.querySelector('#qc_lot') || {}).value || '', f.cur ? f.cur.id : '');
+  const j = qcJudge(F.inst, F.sens, F.look, F.offs, f.std, f.prev);
+  f.m.querySelectorAll('.qc-lamp').forEach(el => { el.innerHTML = _qcLampDot(j.lamps[el.dataset.k]); });
+  const rd = f.m.querySelector('#qc_radar'); if (rd) rd.innerHTML = qcRadarSvg(F.sens, { size: 250, prev: f.prev && f.prev.sens, prevLabel: f.prev ? (f.prev.orderNo + (f.prev.lot ? ' Lot' + f.prev.lot : '')) : '' }) + qcAreaLine(j.areaDiff, f.prev);
   const miss = QC_SENS.filter(([k]) => !F.sens[k]).map(s => s[1]);
   if (!F.look.color) miss.push('色澤'); if (!F.look.clarity) miss.push('澄清度');
-  if (F.inst.brix == null) miss.push('Brix'); if (F.inst.ph == null && F.inst.ta == null) miss.push('pH 或總酸');
+  if (F.inst.brix == null) miss.push('Brix'); if (F.inst.ph == null && F.inst.ta == null) miss.push('pH 或酸度');
   const vd = f.m.querySelector('#qc_verdict');
   vd.style.background = miss.length ? '#f4f4f4' : QC_VBG[j.verdict]; vd.style.border = '1px solid ' + (miss.length ? '#ddd' : QC_VCOLOR[j.verdict]);
   vd.innerHTML = miss.length

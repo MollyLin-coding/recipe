@@ -5965,8 +5965,8 @@ function mtgItemDelete(p) {
 //   ⚠️ 刻意不用 DriveApp：新 OAuth scope 須由部署帳號重新授權，否則全站掛（見 bootstrap 下方 v3.14.5 事故註記）。
 // ============================================================
 var QC_SHEET = '品管報告';
-var QC_HEADERS = ['報告ID', '訂單編號', '客戶', '酒款', 'Lot', '檢驗日', '檢驗人', '樣品來源', '儀器JSON', '感官JSON', '外觀JSON', '異味', '系統判定', '最終判定', '判定說明', '是否標準', '標準ID', '照片ID', '備註', '建立人', '建立時間', '更新人', '更新時間'];
-var QCC = { id: 0, orderNo: 1, client: 2, product: 3, lot: 4, date: 5, inspector: 6, source: 7, inst: 8, sens: 9, look: 10, offs: 11, sys: 12, final: 13, reason: 14, isStd: 15, stdId: 16, photos: 17, note: 18, createdBy: 19, createdAt: 20, updatedBy: 21, updatedAt: 22 };
+var QC_HEADERS = ['報告ID', '訂單編號', '客戶', '酒款', 'Lot', '檢驗日', '檢驗人', '樣品來源', '儀器JSON', '感官JSON', '外觀JSON', '異味', '系統判定', '最終判定', '判定說明', '是否標準', '標準ID', '照片ID', '備註', '建立人', '建立時間', '更新人', '更新時間', '前批ID'];
+var QCC = { id: 0, orderNo: 1, client: 2, product: 3, lot: 4, date: 5, inspector: 6, source: 7, inst: 8, sens: 9, look: 10, offs: 11, sys: 12, final: 13, reason: 14, isStd: 15, stdId: 16, photos: 17, note: 18, createdBy: 19, createdAt: 20, updatedBy: 21, updatedAt: 22, prevId: 23 };   // v3.81 +前批ID
 var QCP_SHEET = '品管照片';
 var QCP_CHUNKS = 6, QCP_CHUNK = 45000;
 var QCP_HEADERS = ['照片ID', '報告ID', '序號', '說明', '寬', '高', '建立時間', '資料1', '資料2', '資料3', '資料4', '資料5', '資料6'];
@@ -5976,12 +5976,25 @@ var QC_OFFS = ['氧化紙板味', '醋酸／發酵味', '硫味', '藥水味', '
 var QC_CLARITY = ['清澈', '微霧', '混濁', '有沉澱', '與標準相同'];
 var QC_VERDICTS = ['放行', '待試飲', '退回'];
 // 容許差（與標準樣比）：綠＝≤1 倍、黃＝≤2 倍、紅＝>2 倍；總酸用相對值
-var QC_TOL = { brix: 0.5, ph: 0.10, taRel: 0.10, abv: 0.5 };
+var QC_TOL = { brix: 0.5, ph: 0.10, taRel: 0.10, abv: 0.5 };   // ta＝酸度 g/1000ml（檸檬酸／蘋果酸／抗壞血酸，v3.81）；abv＝透明基酒酒精度
+var QC_AREA_TOL = 0.10;   // v3.81 感官雷達面積與前一批相差 ≤10% 才合格（無前批則與標準樣 3 分八邊形比）
+function _qcArea_(sens) { var v = QC_SENS_KEYS.map(function (k) { return Number(sens && sens[k]) || 0; }), a = 0; for (var i = 0; i < v.length; i++) a += v[i] * v[(i + 1) % v.length]; return 0.5 * Math.sin(Math.PI / 4) * a; }
+// 前一批＝同客戶同酒款、不同（訂單＋Lot）中最近的一批；該批有放行單取最新放行單，否則取最新一張（前端 qcPickPrev 同規則）
+function _qcPrevFor_(all, client, product, orderNo, lot, exceptId) {
+  var key = String(orderNo) + '|' + String(lot || '');
+  var c = all.filter(function (x) { return x.client === client && x.product === product && x.id !== exceptId && (x.orderNo + '|' + (x.lot || '')) !== key; });
+  if (!c.length) return null;
+  c.sort(function (a, b) { return a.createdAt < b.createdAt ? 1 : -1; });
+  var k0 = c[0].orderNo + '|' + (c[0].lot || ''), grp = c.filter(function (x) { return (x.orderNo + '|' + (x.lot || '')) === k0; });
+  for (var i = 0; i < grp.length; i++) if ((grp[i].final || grp[i].sys) === '放行') return grp[i];
+  return grp[0];
+}
 
 function _qcSheet_() {
   var ws = _consignSheet_(QC_SHEET, QC_HEADERS);
   if (ws.getMaxColumns() < QC_HEADERS.length) ws.insertColumnsAfter(ws.getMaxColumns(), QC_HEADERS.length - ws.getMaxColumns());
   ws.getRange(1, QCC.date + 1, ws.getMaxRows(), 1).setNumberFormat('@');
+  if (String(ws.getRange(1, QC_HEADERS.length).getValues()[0][0] || '') !== QC_HEADERS[QC_HEADERS.length - 1]) ws.getRange(1, 1, 1, QC_HEADERS.length).setValues([QC_HEADERS]);   // v3.81 舊表補新欄表頭
   return ws;
 }
 function _qcpSheet_() {
@@ -6002,12 +6015,13 @@ function _qcRowObj_(r, rowIdx) {
     isStd: _consignBool_(r[QCC.isStd]), stdId: String(r[QCC.stdId] || ''),
     photos: String(r[QCC.photos] || '').split(',').filter(function (x) { return x; }), note: String(r[QCC.note] || ''),
     createdBy: String(r[QCC.createdBy] || ''), createdAt: _fmtDateTime_(r[QCC.createdAt]), updatedBy: String(r[QCC.updatedBy] || ''), updatedAt: _fmtDateTime_(r[QCC.updatedAt]),
+    prevId: String(r[QCC.prevId] || ''),
     rowIdx: rowIdx
   };
 }
 function _qcRowArr_(o) {
   return [o.id, o.orderNo, o.client, o.product, o.lot, o.date, o.inspector, o.source, JSON.stringify(o.inst || {}), JSON.stringify(o.sens || {}), JSON.stringify(o.look || {}),
-    (o.offs || []).join('、'), o.sys, o.final, o.reason, o.isStd ? 'TRUE' : 'FALSE', o.stdId, (o.photos || []).join(','), o.note, o.createdBy, o.createdAt, o.updatedBy, o.updatedAt];
+    (o.offs || []).join('、'), o.sys, o.final, o.reason, o.isStd ? 'TRUE' : 'FALSE', o.stdId, (o.photos || []).join(','), o.note, o.createdBy, o.createdAt, o.updatedBy, o.updatedAt, o.prevId || ''];
 }
 function _qcAll_() { return _consignRowsRO_(QC_SHEET, QC_HEADERS).map(function (r, i) { return _qcRowObj_(r, i + 2); }).filter(function (o) { return o.id; }); }
 function _qcStdFor_(all, client, product, exceptId) {
@@ -6029,7 +6043,7 @@ function _qcLamp_(key, v, s) {
   return d <= tol + 1e-9 ? 'g' : d <= 2 * tol + 1e-9 ? 'y' : 'r';
 }
 // 判定（前端 qcJudge 為同一套規則的鏡像，只做預覽；寫入一律以此為準）
-function _qcJudge_(inst, sens, look, offs, std) {
+function _qcJudge_(inst, sens, look, offs, std, prev) {
   var why = [], red = false, yellow = false;
   if (offs && offs.length) { red = true; why.push('異味：' + offs.join('、')); }
   var off3 = 0;
@@ -6041,6 +6055,11 @@ function _qcJudge_(inst, sens, look, offs, std) {
   var col = Number(look && look.color);
   if (col === 1 || col === 5) { red = true; why.push(col === 1 ? '色澤明顯偏淺' : '色澤明顯偏深'); }
   if (off3 >= 3) { yellow = true; why.push('感官 ' + off3 + ' 項與標準略有差異'); }
+  var refA = _qcArea_(prev ? prev.sens : { alc: 3, tea: 3, fruit: 3, sour: 3, sweet: 3, bitter: 3, body: 3, finish: 3 }), areaDiff = null;
+  if (refA > 0) {
+    areaDiff = (_qcArea_(sens) - refA) / refA;
+    if (Math.abs(areaDiff) > QC_AREA_TOL + 1e-9) { red = true; why.push('感官雷達面積與' + (prev ? '前一批（' + prev.orderNo + (prev.lot ? ' Lot' + prev.lot : '') + '）' : '標準樣') + '相差 ' + (areaDiff * 100).toFixed(1) + '%（上限 ±' + (QC_AREA_TOL * 100) + '%）'); }
+  }
   var clar = String((look && look.clarity) || '');
   if ((clar === '混濁' || clar === '有沉澱') && !(std && std.look && std.look.clarity === clar)) { yellow = true; why.push('澄清度：' + clar); }
   var lamps = {};
@@ -6048,12 +6067,12 @@ function _qcJudge_(inst, sens, look, offs, std) {
     ['brix', 'ph', 'ta', 'abv'].forEach(function (k) {
       var l = _qcLamp_(k, _qcNum_(inst[k]), _qcNum_(std.inst && std.inst[k]));
       lamps[k] = l;
-      var lb = { brix: '糖度', ph: 'pH', ta: '總酸', abv: '酒精度' }[k];
+      var lb = { brix: '糖度', ph: 'pH', ta: '酸度', abv: '基酒酒精度' }[k];
       if (l === 'r') { red = true; why.push(lb + '超出容許差 2 倍（本批 ' + inst[k] + '／標準 ' + std.inst[k] + '）'); }
       else if (l === 'y') { yellow = true; why.push(lb + '略超容許差（本批 ' + inst[k] + '／標準 ' + std.inst[k] + '）'); }
     });
   } else { yellow = true; why.push('此酒款尚無標準樣，需主公／PM 試飲確認（核可後可設為標準）'); }
-  return { verdict: red ? '退回' : yellow ? '待試飲' : '放行', why: why, lamps: lamps };
+  return { verdict: red ? '退回' : yellow ? '待試飲' : '放行', why: why, lamps: lamps, areaDiff: areaDiff };
 }
 
 // 索引：每個「訂單編號||酒款」最新一張單的判定（訂單列表鈕三態用；不含 JSON 細節）
@@ -6072,14 +6091,21 @@ function qcGet(p) {
   p = p || {};
   var orderNo = _qcStr_(p.orderNo, 40), product = _qcStr_(p.product, 120), client = _qcStr_(p.client, 80);
   var all = _qcAll_();
-  if (p.id) { var one = null; all.forEach(function (x) { if (x.id === String(p.id)) one = x; }); if (!one) return { ok: false, error: '找不到品管單：' + p.id }; delete one.rowIdx; return { ok: true, report: one }; }
+  var lite = function (x) { return { id: x.id, orderNo: x.orderNo, lot: x.lot, date: x.date, sens: x.sens, sys: x.sys, final: x.final, createdAt: x.createdAt }; };
+  if (p.id) {
+    var one = null; all.forEach(function (x) { if (x.id === String(p.id)) one = x; });
+    if (!one) return { ok: false, error: '找不到品管單：' + p.id };
+    var pv = null; if (one.prevId) all.forEach(function (x) { if (x.id === one.prevId) pv = lite(x); });
+    delete one.rowIdx; return { ok: true, report: one, prev: pv };
+  }
   if (!product) return { ok: false, error: '缺少酒款' };
   var list = all.filter(function (x) { return x.product === product && (!orderNo || x.orderNo === orderNo); })
     .sort(function (a, b) { return a.createdAt < b.createdAt ? 1 : -1; })
     .map(function (x) { delete x.rowIdx; return x; });
   var std = _qcStdFor_(all, client, product, '');
   if (std) delete std.rowIdx;
-  return { ok: true, list: list, std: std, tol: QC_TOL, offs: QC_OFFS, clarity: QC_CLARITY };
+  var hist = all.filter(function (x) { return x.product === product && (!client || x.client === client); }).map(lite);   // v3.81 前批比對用（輕量，不含儀器／照片）
+  return { ok: true, list: list, std: std, hist: hist, tol: QC_TOL, areaTol: QC_AREA_TOL, offs: QC_OFFS, clarity: QC_CLARITY };
 }
 function _qcSavePhotos_(reportId, photos, now) {
   var ws = _qcpSheet_(), ids = [];
@@ -6122,9 +6148,9 @@ function qcSave(p) {
   if (!orderNo || !product) return { ok: false, error: '缺少訂單編號或酒款' };
   var inst0 = _qcJson_(p.inst), sens0 = _qcJson_(p.sens), look0 = _qcJson_(p.look);
   var inst = {};
-  ['brix', 'ph', 'ta', 'abv', 'temp'].forEach(function (k) { var n = _qcNum_(inst0[k]); if (n != null) inst[k] = n; });
+  ['brix', 'ph', 'ta', 'abv'].forEach(function (k) { var n = _qcNum_(inst0[k]); if (n != null) inst[k] = n; });   // v3.81 刪樣品溫度
   if (inst.brix == null) return { ok: false, error: '糖度 Brix 為必填' };
-  if (inst.ph == null && inst.ta == null) return { ok: false, error: 'pH 與總酸至少填一項（酸度是這張單存在的理由）' };
+  if (inst.ph == null && inst.ta == null) return { ok: false, error: 'pH 與酸度至少填一項（酸度是這張單存在的理由）' };
   if (inst.ph != null && (inst.ph < 1 || inst.ph > 8)) return { ok: false, error: 'pH 數值不合理：' + inst.ph };
   var sens = {}, miss = [];
   QC_SENS_KEYS.forEach(function (k) { var v = Number(sens0[k]); if (v >= 1 && v <= 5 && Math.round(v) === v) sens[k] = v; else miss.push(QC_SENS_LABELS[k]); });
@@ -6153,7 +6179,9 @@ function qcSave(p) {
       if (cur.isStd) return { ok: false, error: '標準樣品管單只有 admin 可修改' };
     }
     var std = _qcStdFor_(all, client || (cur && cur.client) || '', product, cur ? cur.id : '');
-    var j = _qcJudge_(inst, sens, look, offs, std);
+    var lotNow = _qcStr_(p.lot, 20);
+    var prev = _qcPrevFor_(all, client || (cur && cur.client) || '', product, orderNo, lotNow, cur ? cur.id : '');
+    var j = _qcJudge_(inst, sens, look, offs, std, prev);
     var final = j.verdict, reason = '';
     if (p._role === 'admin' && QC_VERDICTS.indexOf(String(p.final || '')) >= 0 && String(p.final) !== j.verdict) {
       reason = _qcStr_(p.reason, 300);
@@ -6164,7 +6192,7 @@ function qcSave(p) {
     o.orderNo = orderNo; o.client = client || o.client || ''; o.product = product; o.lot = _qcStr_(p.lot, 20);
     o.date = _mtgDateStr_(p.date) || now.slice(0, 10); o.inspector = _qcStr_(p.inspector, 30) || op; o.source = _qcStr_(p.source, 60);
     o.inst = inst; o.sens = sens; o.look = look; o.offs = offs; o.sys = j.verdict; o.final = final; o.reason = reason;
-    o.stdId = std ? std.id : ''; o.note = _qcStr_(p.note, 500); o.updatedBy = op; o.updatedAt = now;
+    o.stdId = std ? std.id : ''; o.prevId = prev ? prev.id : ''; o.note = _qcStr_(p.note, 500); o.updatedBy = op; o.updatedAt = now;
     var newIds = _qcSavePhotos_(o.id, photos, now);
     var dropped = (o.photos || []).filter(function (x) { return newIds.indexOf(x) < 0; });
     o.photos = newIds;
@@ -6173,7 +6201,7 @@ function qcSave(p) {
     if (cur) { _forceTextCell_(ws, cur.rowIdx, QCC.updatedAt + 1, now); }
     _qcDeletePhotos_(dropped);
     delete o.rowIdx;
-    return { ok: true, report: o, judge: j, std: std ? { id: std.id, date: std.date, orderNo: std.orderNo } : null };
+    return { ok: true, report: o, judge: j, std: std ? { id: std.id, date: std.date, orderNo: std.orderNo } : null, prev: prev ? { id: prev.id, orderNo: prev.orderNo, lot: prev.lot } : null };
   } finally { lock.releaseLock(); }
 }
 // ⭐ 設為／取消標準樣（admin）：同客戶同酒款只留一張標準
