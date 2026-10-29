@@ -3283,7 +3283,7 @@ function renderMonthOrders(orders) {
       if (!rcSt) return `<button class="btn btn-sm" style="${common}border:1px dashed var(--ink3);background:transparent;color:var(--ink3);opacity:.65;" onclick="event.stopPropagation();rcShowHistoryByNo('${o.orderNo}',${i})">⚠ ${nm} 尚待PM建立Run Card</button>`;
       if (rcSt.done) return `<button class="btn btn-sm" style="${common}border:1px solid var(--green);background:#e8f2ea;color:var(--green);font-weight:600;" onclick="event.stopPropagation();rcShowHistoryByNo('${o.orderNo}',${i})">✔ ${nm}（已完成）</button>`;
       return `<button class="btn btn-sm" style="${common}border:1px solid var(--yellow);background:#faf0dc;color:var(--yellow);font-weight:600;" onclick="event.stopPropagation();rcShowHistoryByNo('${o.orderNo}',${i})">📋 ${nm}（進行中）</button>`;
-    }).join('') : '';
+    }).join('') + accBtnsFor(o) : '';
     return `<div onclick="showOrderDetail('${o.orderNo}')" style="cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;background:var(--card);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <div style="flex:1;min-width:0;">
@@ -3364,6 +3364,7 @@ function showOrderDetail(orderNo) {
       <span style="flex:1;">${it.product || '（未綁酒譜）'} · ${it.volume || ''} × ${it.qty} 瓶${it.bottleType ? (' · ' + it.bottleType) : ''}${it.sample && it.sample.qty ? `<div style="font-size:11px;color:var(--gold-dk);">🧪 試飲：${it.sample.bottleType || '—'} × ${it.sample.qty}${it.sample.note ? ('（' + it.sample.note + '）') : ''}</div>` : ''}${it.shipped != null ? `<div style="font-size:11px;font-weight:600;color:${(+it.remainStock || 0) > 0 ? 'var(--gold-dk)' : 'var(--green)'};">🚚 已出 ${+it.shipped || 0} / ${+it.qty || 0} 瓶${(+it.remainStock || 0) > 0 ? ('・寄倉 ' + (+it.remainStock || 0) + ' 瓶') : '・已出清'}</div>` : ''}</span>
       <span class="badge ${it.status === '完成' ? 'bg-green' : 'bg-yellow'}" style="font-size:9px;">${it.status || '待製作'}</span>
       ${_isOwnStockOutType(o.orderType) ? '' : `<button class="btn btn-ghost btn-sm" style="padding:3px 7px;font-size:11px;" onclick="rcShowHistory(${idx},${i})">📋 Run Card</button>`}
+      ${accMatch(o, it) && accCanUse() ? `<button class="btn btn-sm" style="padding:3px 7px;font-size:11px;border:1px solid #7a4f9b;background:#f3ecf8;color:#7a4f9b;font-weight:600;" onclick="accOpen('${o.orderNo}',${i})">🧮 酸度補正試算</button>` : ''}
       ${canAct && it.status !== '完成' && it.sheet ? `<button class="btn btn-success btn-sm" style="padding:3px 7px;font-size:11px;" onclick="this.closest('.modal-bg').remove();showCompleteModal(${idx},${i})">完成回報</button>` : ''}
       ${isAdmin && (o.items || []).length > 1 && !(it.shipped > 0) && it.status !== '完成' && !it.batchId ? `<button class="btn btn-ghost btn-sm" title="刪除此款（僅限尚未出貨、未完成、無 Run Card 的款）" style="padding:3px 7px;font-size:11px;color:var(--red);border-color:var(--red);" onclick="removeOrderItemUi(${idx},${i})">🗑 刪除此款</button>` : ''}
       ${canAct && isConsignOrder(o) && ((it.remainStock == null ? it.qty : it.remainStock) > 0) ? `<label title="勾選後可用下方「一次寄出勾選款」" style="display:flex;align-items:center;cursor:pointer;margin:0;"><input type="checkbox" class="cs_pick" data-ii="${i}" onchange="consignPickSum()" style="width:17px;height:17px;margin:0;"></label><button class="btn btn-sm" style="padding:3px 7px;font-size:11px;background:var(--gold-dk);color:#fff;font-weight:700;" onclick="consignShipItem(${idx},${i})">📦 寄出給經銷商</button>` : ''}
@@ -4627,6 +4628,116 @@ async function rcNewFromOrder(oi, ii){
   const it=(o.items||[])[ii]; if(!it) return;
   const st=await rcFillFromOrderItem(rcNewState(), o, it, ii);
   rcOpenEditor(st);
+}
+// ════════════════════════════════════════════════
+// v3.79 🧮 酸度補正試算＋一鍵生成「Lot{n}_調整酸度 Run Card」（主公 2026-10-29 指示）
+// 情境：全客製-酒肉朋友「午後蜜蘋小葉紅調酒」Lot2 放量批酸度偏高 → 客戶試飲定案 F 版；
+//   整批拆瓶回桶，原始酒液一步補到 F 版。試算器＝離線版 v2.1 原檔（calc/jrp_acid_calc_v2.1.html，一字不改）
+//   以 iframe 嵌入；「一鍵生成」讀 iframe 內 #volAF／#ratioAF，用與離線版 renderAF() 相同公式組 Run Card，
+//   交給既有 rcOpenEditor()（儲存仍走 saveRunCard，後端零改動）。日後他款要做，往 ACC_TARGETS 加一列。
+// ════════════════════════════════════════════════
+const ACC_TARGETS = [
+  { client: '全客製-酒肉朋友', productRe: /蜜蘋小葉紅/, calc: 'calc/jrp_acid_calc_v2.1.html', calcVer: 'v2.1' }
+];
+// 原始配方占比（與離線版 ORIG 相同）＋第一段補正液每 100 ml 組成（與離線版 BASE 相同）
+const ACC_ORIG = { rum: .20, tea: .35, juice: .25, apple: .10, passion: .05, acid: .05 };
+const ACC_BASE = { rum: 20, tea: 60, apple: 13, passion: 7 };
+function accTarget(o, it) { return ACC_TARGETS.find(t => o && it && o.client === t.client && t.productRe.test(it.product || '')) || null; }
+function accMatch(o, it) { return !!accTarget(o, it); }
+function accCanUse() { return !!(curUser && (curUser.role === 'admin' || curUser.role === 'PM')); }
+function accBtnsFor(o) {
+  if (!accCanUse()) return '';
+  return (o.items || []).map((it, i) => accMatch(o, it)
+    ? `<button class="btn btn-sm" style="padding:3px 8px;font-size:11px;border-radius:6px;cursor:pointer;border:1px solid #7a4f9b;background:#f3ecf8;color:#7a4f9b;font-weight:600;" onclick="event.stopPropagation();accOpen('${o.orderNo}',${i})">🧮 ${it.product}・酸度補正試算</button>` : '').join('');
+}
+function accVolMl(it) { const m = String((it && it.volume) || (it && it.bottleType) || '').match(/(\d+(?:\.\d+)?)\s*ml/i); return m ? +m[1] : 0; }
+function accCalcUrl(t) { return new URL((location.pathname.indexOf('/preview/') >= 0 ? '../' : '') + t.calc, location.href).href; }
+// 公式＝離線版 renderAF()：第一段 C 版補正液 20%；第二段濃縮茶湯＝C 版 10%＋補蘭姆＝濃縮茶湯 25%（鎖 8 度）
+function accCompute(V, ratio) {
+  const corr = V * 0.20, rum1 = corr * ACC_BASE.rum / 100, tea1 = corr * ACC_BASE.tea / 100;
+  const apple1 = corr * ACC_BASE.apple / 100, passion1 = corr * ACC_BASE.passion / 100;
+  const VC = V + corr, conc = VC * 0.10, rum2 = 0.25 * conc, T = VC + conc + rum2;
+  const fin = { rum: V * ACC_ORIG.rum + rum1 + rum2, tea: V * ACC_ORIG.tea + tea1, conc: conc, juice: V * ACC_ORIG.juice,
+    apple: V * ACC_ORIG.apple + apple1, passion: V * ACC_ORIG.passion + passion1, acid: V * ACC_ORIG.acid };
+  return { V, ratio, corr, rum1, tea1, apple1, passion1, VC, conc, rum2, T, fin, abv: fin.rum * 0.4 / T * 100 };
+}
+async function accOpen(orderNo, ii) {
+  const list = window._mgmtOrders || [];
+  const oi = list.findIndex(x => x.orderNo === orderNo); if (oi < 0) { toast('找不到訂單 ' + orderNo + '，請重新整理'); return; }
+  const o = list[oi], it = (o.items || [])[ii], t = accTarget(o, it);
+  if (!t) { toast('此酒款沒有對應的試算器'); return; }
+  const ml = accVolMl(it), defV = ml && it.qty ? ml * (+it.qty) : 10000;
+  const lotTxt = o.lot ? ('Lot' + o.lot) : 'Lot?';
+  const modal = makeModal(`
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+      <div class="modal-title" style="margin:0;">🧮 酸度補正試算・${rcEsc(it.product)}</div>
+      <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">關閉</button>
+    </div>
+    <div style="font-size:12px;color:var(--ink3);margin:4px 0 8px;">${o.orderNo} · ${clientLabel(o.client)} · ${lotTxt} · ${it.qty} 瓶 × ${rcEsc(it.volume || '')}${it.bottleType ? '（' + rcEsc(it.bottleType) + '）' : ''}　｜　試算器 ${t.calcVer}（與離線版同一份檔）</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px;border:2px solid #7a4f9b;border-radius:10px;background:#f8f3fb;margin-bottom:8px;">
+      <div style="flex:1;min-width:220px;font-size:13px;line-height:1.6;">在下方「⭐ 一步到位」卡填好<b>桶內原始酒液體積</b>（已預填整張訂單 ${defV.toLocaleString()} ml，請改成實際回桶量），確認數字後按右邊按鈕。<div id="accPeek" style="font-size:12px;color:#7a4f9b;font-weight:700;"></div></div>
+      <button class="btn btn-primary" id="accGenBtn" style="background:#7a4f9b;border-color:#7a4f9b;">📋 一鍵生成「${lotTxt}_調整酸度」Run Card</button>
+    </div>
+    <iframe id="accFrame" src="${accCalcUrl(t)}" style="width:100%;height:68vh;border:1px solid var(--border);border-radius:8px;background:#f6f3ee;"></iframe>`, { locked: true });
+  const box = modal.querySelector('.modal-box'); if (box) { box.style.maxWidth = '1180px'; box.style.width = '96vw'; }
+  const fr = modal.querySelector('#accFrame');
+  const peek = () => { const d = accReadFrame(fr); const el = modal.querySelector('#accPeek'); if (el) el.textContent = d ? ('目前：原始酒液 ' + Math.round(d.V).toLocaleString() + ' ml → 加 ' + Math.round(d.T - d.V).toLocaleString() + ' ml 物料 → F 版 ' + Math.round(d.T).toLocaleString() + ' ml・' + d.abv.toFixed(2) + ' 度') : ''; };
+  fr.addEventListener('load', () => {
+    try {
+      const doc = fr.contentDocument, v = doc.getElementById('volAF');
+      if (v) { v.value = defV; v.dispatchEvent(new Event('input', { bubbles: true })); v.addEventListener('input', peek); }
+      const r = doc.getElementById('ratioAF'); if (r) r.addEventListener('input', peek);
+      const card = v && v.closest('.card'); if (card) card.scrollIntoView({ block: 'start' });
+    } catch (e) { }
+    peek();
+  });
+  modal.querySelector('#accGenBtn').onclick = () => {
+    const d = accReadFrame(fr);
+    if (!d) { reqWarn('試算器尚未載入完成', '請稍候一秒再按「一鍵生成」。'); return; }
+    if (!(d.V > 0)) { toast('請先填原始酒液體積'); return; }
+    if (!confirm('以原始酒液 ' + Math.round(d.V).toLocaleString() + ' ml 生成「' + lotTxt + '_調整酸度」Run Card？\n（開啟編輯頁後要按「儲存」才會存進系統）')) return;
+    const st = accBuildRunCard(o, it, d, lotTxt, t);
+    modal.remove();
+    rcOpenEditor(st);
+  };
+}
+function accReadFrame(fr) {
+  try {
+    const doc = fr && fr.contentDocument; if (!doc) return null;
+    const v = doc.getElementById('volAF'), r = doc.getElementById('ratioAF'); if (!v) return null;
+    return accCompute(Math.max(0, parseFloat(v.value) || 0), Math.max(1, parseFloat(r && r.value) || 6));
+  } catch (e) { return null; }
+}
+function accBuildRunCard(o, it, d, lotTxt, t) {
+  const st = rcNewState();
+  st.orderNo = o.orderNo; st.client = o.client; st.product = it.product || ''; st.sheet = it.sheet || '';
+  st.bottleType = it.bottleType || ''; st.pm = o.pm || st.pm; st.lot = o.lot || '';
+  st.version = lotTxt + '_調整酸度';
+  st.totalVol = Math.round(d.T);
+  const ml = accVolMl(it); st.bottles = ml ? Math.floor(d.T / ml) : '';
+  const f = x => Math.round(x).toLocaleString();
+  const L = (name, vol, abv, note, method) => { const pct = d.T > 0 ? Math.round(vol / d.T * 1000) / 10 : 0;
+    return { name, pct, abv, vol: Math.round(vol), fed: false, ordered: false, note, subs: [], hasLoss: false, method: method || '',
+      locked: true, origPct: pct, origName: name }; };
+  const s1 = d.rum1 + d.tea1 + d.apple1 + d.passion1, s2 = d.conc + d.rum2;
+  st.liquids = [
+    L('原始酒液（' + lotTxt + ' 拆瓶回桶）', d.V, 8, '先量實際回桶體積；與試算填的數字不同就回試算器重算再建卡', ''),
+    L("Myers's Dark Rum（第一段補正液）", d.rum1, 40, '第一段：與下三項在小桶先調勻再入大桶', ''),
+    L('全祥蜜香紅茶茶湯（第一段補正液）', d.tea1, 0, '第一段', '(茶葉 : 水 = 5g : 100ml)'),
+    L('一海香紅蘋果糖漿（第一段補正液）', d.apple1, 0, '第一段', ''),
+    L('齊貝百香果糖漿（第一段補正液）', d.passion1, 0, '第一段', ''),
+    L('濃縮蜜香紅茶茶湯 1:' + d.ratio + '（第二段）', d.conc, 0, '第二段：冷過濾去茶乳後，與下一項蘭姆先拌在一起', '(茶葉 : 熱水 = 1g : ' + d.ratio + 'ml，4°C 靜置過夜後冷過濾)'),
+    L("Myers's Dark Rum（第二段補蘭姆，鎖 8 度）", d.rum2, 40, '第二段', '')
+  ];
+  st.processNote = [
+    '【' + lotTxt + '_調整酸度｜原始酒液 → F 版（客戶 10/28 試飲定案）】試算器 ' + t.calcVer + '，原始酒液 ' + f(d.V) + ' ml → 總量 ' + f(d.T) + ' ml（+' + Math.round((d.T / d.V - 1) * 100) + '%），酒精度 ' + d.abv.toFixed(2) + ' 度。',
+    '① 第一段補正液 ' + f(s1) + ' ml（蘭姆 ' + f(d.rum1) + '＋茶湯 ' + f(d.tea1) + '＋蘋果糖漿 ' + f(d.apple1) + '＋百香果糖漿 ' + f(d.passion1) + '）：小桶先調勻 → 先加七成 ' + f(s1 * 0.7) + ' ml，試喝確認酸度回到 C 版 → 補 ' + f(s1 * 0.3) + ' ml。此時＝C 版 ' + f(d.VC) + ' ml。',
+    '② 第二段：冷過濾後濃縮茶湯 ' + f(d.conc) + ' ml＋蘭姆 ' + f(d.rum2) + ' ml 先拌 → 先加七成 ' + f(s2 * 0.7) + ' ml，試喝 → 補 ' + f(s2 * 0.3) + ' ml。',
+    '③ 量 pH／Brix、實測酒精度記批次表；瓶數與酒標數依總量重算。拆瓶回桶這一輪不再補抗壞血酸。全程冷鏈、頭隙最小，有巴殺／熱充填則重做。'
+  ].join('\n');
+  st.stations = [{ no: 1, name: '拆瓶回桶（量體積）', note: '', operator: '', done: false }].concat(
+    st.stations.map((s, i) => Object.assign({}, s, { no: i + 2 })));
+  return st;
 }
 // ── 自動暫存（v2.7.3）：每 4 秒把未儲存的卡寫進 localStorage，當機/斷線不掉資料 ──
 let _rcDraftTimer=null,_rcLastSnap='';

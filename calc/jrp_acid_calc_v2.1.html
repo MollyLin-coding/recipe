@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>蜜蘋小葉紅茶 酸度補正試算</title>
+<style>
+  :root{--bg:#f6f3ee;--card:#fff;--ink:#2b2622;--muted:#7a716a;--line:#e3ddd4;--a:#4f7d5d;--b:#8a5a2b;--c:#9b3f3f;--d:#3b6ea5;--e:#2f7a6b;--f:#7a4f9b;--z:#8a8a8a;--warn:#fff4e0;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;line-height:1.55;padding:16px}
+  .wrap{max-width:1100px;margin:0 auto}
+  h1{font-size:22px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+  .card h2{font-size:16px;margin:0 0 10px}
+  label{display:block;font-size:13px;color:var(--muted);margin-bottom:4px}
+  input[type=number]{font-size:20px;padding:6px 10px;width:100%;max-width:220px;border:1px solid var(--line);border-radius:8px}
+  input.sm{font-size:14px;padding:3px 6px;width:72px;text-align:right}
+  .row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end}
+  .chk{display:flex;align-items:center;gap:8px;font-size:14px;margin-top:8px}
+  .plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+  .plan{border-top:5px solid;border-radius:12px}
+  .plan h3{margin:0;font-size:17px}
+  .plan .tag{font-size:12px;color:var(--muted);margin-bottom:10px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
+  td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  tr.total td{font-weight:700;border-bottom:none}
+  .kpi{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:13px;margin-top:10px;color:var(--muted)}
+  .kpi b{color:var(--ink);font-variant-numeric:tabular-nums}
+  .note{background:var(--warn);border-radius:8px;padding:10px 12px;font-size:13px;margin-top:10px}
+  ol,ul{padding-left:20px;font-size:14px;margin:6px 0}
+  .small{font-size:12px;color:var(--muted)}
+  details summary{cursor:pointer;font-size:14px;font-weight:700}
+  .vmap td:first-child{font-weight:700;white-space:nowrap}
+  @media print{body{background:#fff;padding:0}.card{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>蜜蘋小葉紅茶（酒肉朋友）酸度補正試算</h1>
+  <div class="sub">v2.1｜2026-10-28｜版本梳理：A／B／C＝第一輪酸度補正（C 版驗收通過）；D／E／F＝第二輪以 C 版為基底的茶香與甜度微調；Z＝茶乾冷萃備用版（未試作）。<b>客戶定案：F 版。</b>每版都附「要加的物料」與「反推的最終配方」。<b>⭐ 一步到位卡＝原始酒液直接補到 F 版，建單用這張。</b></div>
+
+  <div class="card">
+    <h2>版本總表</h2>
+    <table class="vmap">
+      <tr><th>版本</th><th>基底</th><th>做法</th><th>狀態</th></tr>
+      <tr><td>原始</td><td>—</td><td>打樣配方（酒譜 APP 全客製-酒肉朋友）</td><td>放量批酸度偏高（客訴）</td></tr>
+      <tr><td>A</td><td>原酒液</td><td>補正液 10%</td><td>試杯</td></tr>
+      <tr><td>B</td><td>原酒液</td><td>補正液 15% ＋ 蘋果糖漿 1.5%</td><td>試杯</td></tr>
+      <tr><td>C</td><td>原酒液</td><td>補正液 20%</td><td>第一輪最接近打樣，作為第二輪基底（最終定案為 F）</td></tr>
+      <tr><td>D</td><td>C 版</td><td>濃縮茶湯 3% ＋ 蘋果糖漿補到 14% ＋ 補蘭姆</td><td>客戶試飲：蘋果 OK，茶香要再強</td></tr>
+      <tr><td>E</td><td>C 版</td><td>濃縮茶湯 10%（250 ml 加 25 ml）＋ 蘋果糖漿補到 14% ＋ 補蘭姆</td><td>試飲，未採用</td></tr>
+      <tr><td>F</td><td>C 版</td><td>濃縮茶湯 10% ＋ 補蘭姆，<b>不加</b>蘋果糖漿</td><td><b>✅ 客戶接受，定案版</b></td></tr>
+      <tr><td>Z</td><td>C 版</td><td>茶乾冷萃 24 h ＋ 蘋果糖漿</td><td>備用，未試作</td></tr>
+    </table>
+  </div>
+
+  <div class="card" style="border:2px solid var(--f)">
+    <h2>⭐ 一步到位｜原始酒液 → F 版（阿軒建單用這一張）</h2>
+    <div class="row">
+      <div><label>桶內原始酒液體積（ml）</label><input type="number" id="volAF" value="10000" min="0" step="100"></div>
+      <div><label>濃縮茶湯投葉比（1 g 茶 : __ ml 熱水）</label><input type="number" id="ratioAF" value="6" min="3" max="20" step="1" style="max-width:120px"></div>
+    </div>
+    <div class="small" style="margin-top:6px">🔒 本卡鎖定為客戶接受的 F 版配方（含齊貝百香果糖漿），不提供替換選項。</div>
+    <div class="plans" style="margin-top:12px">
+      <div class="card plan" style="border-top-color:var(--f)">
+        <h3>要加進原始酒液的物料（一次列齊）</h3>
+        <div class="tag">＝ C 版補正液 20% ＋ F 版濃縮茶湯 10%（以 C 版計）＋ 補蘭姆鎖 8 度，三步合併成一張單。</div>
+        <table id="afAddTbl"></table>
+        <div class="kpi" id="afKpi"></div>
+      </div>
+      <div class="card plan" style="border-top-color:var(--f)">
+        <h3>加入順序（照做，不要一次全倒）</h3>
+        <ol id="afSteps"></ol>
+        <details style="margin-top:10px"><summary>F 版最終配方（下一批重新調和）</summary>
+          <table style="margin-top:6px" id="afFinTbl"></table>
+          <div class="small" id="afFinNote"></div>
+        </details>
+      </div>
+    </div>
+    <div class="note">
+      <b>為什麼分兩段：</b>補正液（蘭姆＋茶湯＋糖漿）是稀釋酸度，濃縮茶湯是補茶香；先把第一段加完試喝確認酸度回到 C 版水準，再下濃縮茶湯，萬一前段有偏差還救得回來。濃縮茶湯一樣先 4°C 靜置過夜、冷過濾去茶乳。拆瓶回桶那一輪<b>不再補抗壞血酸</b>。
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>參考｜原始配方（打樣版）</h2>
+    <table>
+      <tr><th>#</th><th>物料</th><th class="n">占比</th><th class="n">每 1,000 ml</th></tr>
+      <tr><td>1</td><td>Myers's Dark Rum</td><td class="n">20%</td><td class="n">200 ml</td></tr>
+      <tr><td>2</td><td>全祥蜜香紅茶茶湯（5:100）</td><td class="n">35%</td><td class="n">350 ml</td></tr>
+      <tr><td>3</td><td>樹頂蘋果汁</td><td class="n">25%</td><td class="n">250 ml</td></tr>
+      <tr><td>4</td><td>一海香紅蘋果糖漿</td><td class="n">10%</td><td class="n">100 ml</td></tr>
+      <tr><td>5</td><td>齊貝百香果糖漿</td><td class="n">5%</td><td class="n">50 ml</td></tr>
+      <tr><td>6</td><td>檸檬酸蘋果酸水</td><td class="n">5%</td><td class="n">50 ml</td></tr>
+      <tr class="total"><td></td><td>合計</td><td class="n">100%</td><td class="n">1,000 ml</td></tr>
+    </table>
+    <div class="small" style="margin-top:6px">本批放量另加抗壞血酸 0.1%（1 g/L），打樣時是否有加：待確認。酒精度 40%×20% ＝ 8 度。</div>
+  </div>
+
+  <div class="card">
+    <h2>① 第一輪｜酸度補正 A／B／C（以原酒液為基底）</h2>
+    <div class="row">
+      <div><label>桶內原酒液體積（ml）</label><input type="number" id="vol" value="10000" min="0" step="100"></div>
+      <div class="small">例：10 公升輸入 10000。</div>
+    </div>
+    <div class="chk"><input type="checkbox" id="pfAcid"><label for="pfAcid" style="margin:0;color:var(--ink)">齊貝百香果糖漿成分表含檸檬酸（勾選後補正液改全用一海香紅蘋果糖漿）</label></div>
+    <div class="plans" id="plans" style="margin-top:12px"></div>
+    <div class="note">
+      <b>共同原則：</b>不加檸檬酸、不加抗壞血酸、不加鹼。補正液的蘭姆酒比例固定 20%，加多少都不動酒精度（8 度）。<br>
+      <b>怎麼選：</b>成品倒 5 杯各 100 ml，分別加 0／10／15／20／25 ml 補正液，對著打樣杯盲排。<b>本批客戶驗收：C 版最接近。</b>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>② 第二輪｜D／E／F（以 C 版為基底：濃縮茶湯 ＋ 蘋果糖漿 ＋ 補蘭姆鎖 8 度）</h2>
+    <div class="row">
+      <div><label>C 版酒液體積（ml）</label><input type="number" id="volC" value="250" min="0" step="10"></div>
+      <div><label>濃縮茶湯投葉比（1 g 茶 : __ ml 熱水）</label><input type="number" id="ratio" value="6" min="3" max="20" step="1" style="max-width:120px"></div>
+    </div>
+    <div class="chk"><input type="checkbox" id="hold" checked><label for="hold" style="margin:0;color:var(--ink)">補蘭姆酒把酒精度鎖在 8.0 度（不勾＝接受酒精度略降）</label></div>
+    <div class="small" style="margin-top:6px">每張卡的「濃縮茶湯 %」「蘋果糖漿目標 %」可直接改；F 版固定不加糖漿。</div>
+    <div class="plans" id="plansDEF" style="margin-top:12px"></div>
+    <div class="note">
+      <b>解法：</b>蘋果糖漿要到目標占比，加進去的糖漿本身也會把總量撐大，所以用聯立解：糖漿加量 ＝（目標×C 版 − C 版原有糖漿 ＋ 目標×濃縮茶湯×1.25）÷（1 − 目標×1.25）；補蘭姆＝新增液的 20%（1.25 係數由此而來）。<br>
+      <b>濃縮茶湯：</b>依阿軒實際投葉比（預設 1 g : 6 ml）；熱萃濃縮液冷卻必出茶乳，加入前先 4°C 靜置過夜、冷過濾。E／F 的茶葉當量比 C 版高六成以上，單寧同步上升，試杯冷藏過夜再喝一次看澀感與濁度。<br>
+      <b>結論：</b>客戶接受 F 版。E 與 F 只差糖漿，客戶選 F 代表茶拉高之後甜度不必再補；下一批以 F 版最終配方（展開可見）重新調和。
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>③ Z 版（備用，未試作）｜C 版 ＋ 茶乾冷萃 24 h ＋ 蘋果糖漿</h2>
+    <div class="row">
+      <div><label>C 版酒液體積（ml）</label><input type="number" id="volZ" value="12000" min="0" step="100"></div>
+      <div><label>茶乾投入量（g／L）</label><input type="number" id="leafZ" value="4" min="0" max="10" step="0.5" style="max-width:120px"></div>
+      <div><label>蘋果糖漿加量（% of C 版）</label><input type="number" id="syrZ" value="2" min="0" max="5" step="0.5" style="max-width:120px"></div>
+    </div>
+    <div class="plans" id="plansZ" style="margin-top:12px"></div>
+    <div class="note">
+      <b>為什麼留著：</b>4°C 冷萃 24 小時拿到的是蜜香頂香（芳樟醇、hotrienol 類），單寧少、不稀釋；如果 E／F 的熱萃濃縮茶湯澀感過不了關，這條路是替代方案。<br>
+      <b>操作：</b>茶乾放濾袋投入 C 版酒液，4°C 靜置 24 小時，不攪不壓、輕瀝；茶乾每克吸走約 3 ml 酒液。之後再加蘋果糖漿與補正蘭姆。萃出效率 70% 為估算，茶乾量以 1 L 小試 3／4／6 g 定案。
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>④ 桶槽操作順序（各版通用）</h2>
+    <ol>
+      <li>補正液、濃縮茶湯、糖漿都先在小桶調好或拌開，<b>不要</b>直接倒進大桶。</li>
+      <li>分兩段加：先加總量的 70%，攪勻試喝；再決定加完剩下的 30% 或停。</li>
+      <li>量 pH 與 Brix 記錄到批次表，目標是回到打樣杯的數字。</li>
+      <li>全程冷鏈、動作快、頭隙最小；有氮氣或 CO₂ 先沖桶。原本若有巴氏殺菌或熱充填，重做一次。拆瓶回桶那一輪<b>不再補抗壞血酸</b>（RD_Master 速查 9）。</li>
+      <li>補正後體積變多，瓶數、酒標數、酒精度實測值重新核對。</li>
+    </ol>
+    <div class="small">本試算的酸度降幅、糖度、茶葉當量皆為估算（依原配方比例推算，未實測糖漿 Brix 與蘋果汁總酸）。實際以 pH／Brix 讀數與盲測為準。</div>
+  </div>
+</div>
+
+<script>
+const fmt = x => Math.round(x).toLocaleString('zh-Hant');
+const ORIG = {rum:.20, tea:.35, juice:.25, apple:.10, passion:.05, acid:.05};
+const BASE = {rum:20, tea:60, apple:13, passion:7};            // 第一輪補正液每 100 ml
+const CBASE = {rum:200, tea:391.7, juice:208.3, apple:105, passion:53.3, acid:41.7}; // C 版每 1000 ml
+
+// ---------- 第一輪 A／B／C ----------
+const PLANS1 = [
+  {key:'a', name:'A 版｜輕度稀釋', tag:'加補正液 10%。', ratio:0.10, extraApple:0},
+  {key:'b', name:'B 版｜稀釋＋補甜', tag:'加補正液 15%，另加 1.5% 蘋果糖漿。', ratio:0.15, extraApple:0.015},
+  {key:'c', name:'C 版｜重度稀釋', tag:'加補正液 20%。第一輪最接近打樣，作為第二輪基底。', ratio:0.20, extraApple:0},
+];
+function finalRows1(V, corr, extra, pfAcid){
+  let apple = V*ORIG.apple + corr*BASE.apple/100 + extra;
+  let passion = V*ORIG.passion + corr*BASE.passion/100;
+  if(pfAcid){ apple += corr*BASE.passion/100; passion -= corr*BASE.passion/100; }
+  const f = [["Myers's Dark Rum", V*ORIG.rum + corr*BASE.rum/100],['全祥蜜香紅茶茶湯（5:100）', V*ORIG.tea + corr*BASE.tea/100],['樹頂蘋果汁', V*ORIG.juice],['一海香紅蘋果糖漿', apple],['齊貝百香果糖漿', passion],['檸檬酸蘋果酸水', V*ORIG.acid]];
+  const T = f.reduce((s,r)=>s+r[1],0);
+  return f.map(r=>`<tr><td>${r[0]}</td><td class="n">${(r[1]/T*100).toFixed(1)}%</td><td class="n">${(r[1]/T*1000).toFixed(0)} ml</td></tr>`).join('') + `<tr class="total"><td>合計</td><td class="n">100%</td><td class="n">1,000 ml</td></tr>`;
+}
+function render1(){
+  const V = Math.max(0, parseFloat(document.getElementById('vol').value)||0);
+  const pfAcid = document.getElementById('pfAcid').checked;
+  const el = document.getElementById('plans'); el.innerHTML='';
+  PLANS1.forEach(p=>{
+    const corr = V*p.ratio, rum = corr*BASE.rum/100, tea = corr*BASE.tea/100;
+    let apple = corr*BASE.apple/100, passion = corr*BASE.passion/100;
+    if(pfAcid){ apple += passion; passion = 0; }
+    const extra = V*p.extraApple, total = V + corr + extra;
+    const rows = [["Myers's Dark Rum", rum],['全祥蜜香紅茶茶湯（5:100）', tea],['一海香紅蘋果糖漿', apple + extra],['齊貝百香果糖漿', passion]];
+    el.insertAdjacentHTML('beforeend', `
+      <div class="card plan" style="border-top-color:var(--${p.key})">
+        <h3>${p.name}</h3><div class="tag">${p.tag}</div>
+        <table><tr><th>要加的物料</th><th class="n">ml</th></tr>
+          ${rows.map(r=>`<tr><td>${r[0]}</td><td class="n">${fmt(r[1])} ml</td></tr>`).join('')}
+          <tr class="total"><td>合計加入</td><td class="n">${fmt(corr+extra)} ml</td></tr></table>
+        <div class="kpi">
+          <span>補正後總量 <b>${fmt(total)} ml</b></span><span>酸度估降 <b>−${Math.round((1-V/total)*100)}%</b></span>
+          <span>蘋果汁占比 <b>${(V*ORIG.juice/total*100).toFixed(1)}%</b></span><span>酒精度 <b>不變（8 度）</b></span>
+          <span style="grid-column:1/-1">分兩段：先加 ${fmt((corr+extra)*0.7)} ml，試喝後再加 ${fmt((corr+extra)*0.3)} ml。</span>
+        </div>
+        <details style="margin-top:10px"><summary>補正後的最終配方</summary>
+          <table style="margin-top:6px"><tr><th>物料</th><th class="n">占比</th><th class="n">每 1,000 ml</th></tr>${finalRows1(V, corr, extra, pfAcid)}</table>
+          <div class="small">抗壞血酸若沿用本批劑量，換算後 ${(0.1*V/total).toFixed(3)}%。</div>
+        </details>
+      </div>`);
+  });
+}
+
+// ---------- 第二輪 D／E／F ----------
+const PLANS2 = [
+  {key:'d', name:'D 版｜濃縮茶湯 3% ＋ 蘋果糖漿補到 14%', tag:'客戶已試：蘋果 OK，茶香要再強。', conc:3, tgt:14, syrup:true},
+  {key:'e', name:'E 版｜濃縮茶湯 10% ＋ 蘋果糖漿補到 14%', tag:'250 ml 加 25 ml 濃縮茶湯，蘋果甜度維持 D 版調性。試飲，未採用。', conc:10, tgt:14, syrup:true},
+  {key:'f', name:'F 版｜濃縮茶湯 10%，不加蘋果糖漿 ✅ 定案', tag:'客戶接受。只加茶湯＋補蘭姆鎖 8 度；下一批照 F 版最終配方重新調和。', conc:10, tgt:null, syrup:false},
+];
+function render2(){
+  const V = Math.max(0, parseFloat(document.getElementById('volC').value)||0);
+  const ratio = Math.max(1, parseFloat(document.getElementById('ratio').value)||6);
+  const hold = document.getElementById('hold').checked;
+  PLANS2.forEach(p=>{
+    const ec=document.getElementById('conc_'+p.key); if(ec) p.conc=parseFloat(ec.value)||0;
+    const et=document.getElementById('tgt_'+p.key); if(et && p.syrup) p.tgt=parseFloat(et.value)||0;
+  });
+  const k=V/1000, c={}; for(const key in CBASE) c[key]=CBASE[key]*k;
+  const el = document.getElementById('plansDEF'); el.innerHTML='';
+  PLANS2.forEach(p=>{
+    const conc = V*p.conc/100, rf = hold?0.25:0, tgt=(p.tgt||0)/100;
+    const s = p.syrup ? Math.max(0, (tgt*V - c.apple + tgt*conc*(1+rf)) / (1 - tgt*(1+rf))) : 0;
+    const r = rf*(conc+s), T = V+conc+s+r;
+    const fin = {rum:c.rum+r, tea:c.tea, conc:conc, juice:c.juice, apple:c.apple+s, passion:c.passion, acid:c.acid};
+    const leafEq = (fin.tea*5/100 + fin.conc/ratio)/T*1000, abv = fin.rum*0.4/T*100;
+    const addRows=[['濃縮蜜香紅茶茶湯（1:'+ratio+'）',conc]].concat(p.syrup?[['一海香紅蘋果糖漿',s]]:[]).concat([["Myers's Dark Rum"+(hold?'':'（未補）'),r]]);
+    const finRows=[["Myers's Dark Rum",fin.rum],['蜜香紅茶茶湯（5:100）',fin.tea],['濃縮蜜香紅茶茶湯（1:'+ratio+'）',fin.conc],['樹頂蘋果汁',fin.juice],['一海香紅蘋果糖漿',fin.apple],['齊貝百香果糖漿',fin.passion],['檸檬酸蘋果酸水',fin.acid]];
+    el.insertAdjacentHTML('beforeend', `
+      <div class="card plan" style="border-top-color:var(--${p.key})">
+        <h3>${p.name}</h3><div class="tag">${p.tag}</div>
+        <div class="row" style="margin-bottom:8px;gap:10px">
+          <div><label>濃縮茶湯 %</label><input class="sm" type="number" id="conc_${p.key}" value="${p.conc}" step="0.5" min="0" max="20"></div>
+          ${p.syrup?`<div><label>蘋果糖漿目標 %</label><input class="sm" type="number" id="tgt_${p.key}" value="${p.tgt}" step="0.5" min="10.5" max="18"></div>`:''}
+        </div>
+        <table><tr><th>要加的物料</th><th class="n">ml</th></tr>
+          ${addRows.map(x=>`<tr><td>${x[0]}</td><td class="n">${x[1].toFixed(1)} ml</td></tr>`).join('')}
+          <tr class="total"><td>合計加入</td><td class="n">${(conc+s+r).toFixed(1)} ml（+${((T/V-1)*100).toFixed(1)}%）</td></tr></table>
+        <div class="kpi">
+          <span>補正後總量 <b>${fmt(T)} ml</b></span><span>酒精度 <b>${abv.toFixed(2)} 度</b></span>
+          <span>茶葉當量 <b>${leafEq.toFixed(1)} g/L（C 版 19.6）</b></span><span>茶味提升 <b>+${(leafEq/19.6*100-100).toFixed(0)}%</b></span>
+          <span>蘋果糖漿占比 <b>${(fin.apple/T*100).toFixed(1)}%（C 版 10.5）</b></span><span>百香果／酸水 <b>${(fin.passion/T*100).toFixed(1)}%／${(fin.acid/T*100).toFixed(1)}%</b></span>
+          <span style="grid-column:1/-1">放大到 12 L：${addRows.map(x=>x[0].replace(/（.*?）/g,'')+' '+fmt(x[1]*12000/Math.max(V,1))).join('／')} ml</span>
+        </div>
+        <details style="margin-top:10px"><summary>${p.key.toUpperCase()} 版最終配方（下一批重新調和）</summary>
+          <table style="margin-top:6px"><tr><th>物料</th><th class="n">占比</th><th class="n">每 1,000 ml</th></tr>
+          ${finRows.map(x=>`<tr><td>${x[0]}</td><td class="n">${(x[1]/T*100).toFixed(1)}%</td><td class="n">${(x[1]/T*1000).toFixed(0)} ml</td></tr>`).join('')}
+          <tr class="total"><td>合計</td><td class="n">100%</td><td class="n">1,000 ml</td></tr></table>
+          <div class="small">不另熬濃縮茶湯的等價做法：單一茶湯 ${((fin.tea+fin.conc)/T*100).toFixed(1)}%，投葉比 ${((leafEq*T/1000)/(fin.tea+fin.conc)*100).toFixed(1)} g : 100 ml（RD_Master 1.7）。抗壞血酸若沿用本批 0.1%，補完後約 ${(0.1*V/T).toFixed(3)}%。</div>
+        </details>
+      </div>`);
+  });
+  PLANS2.forEach(p=>['conc_','tgt_'].forEach(pre=>{const e=document.getElementById(pre+p.key); if(e) e.addEventListener('change', render2);}));
+}
+
+// ---------- Z 版 ----------
+function renderZ(){
+  const V = Math.max(0, parseFloat(document.getElementById('volZ').value)||0);
+  const leafG = parseFloat(document.getElementById('leafZ').value)||0;
+  const syrP = (parseFloat(document.getElementById('syrZ').value)||0)/100;
+  const hold = document.getElementById('hold').checked;
+  const k=V/1000, c={}; for(const key in CBASE) c[key]=CBASE[key]*k;
+  const leaf = leafG*V/1000, absorb = leaf*3, V1 = V-absorb, syr = V*syrP, rum = hold?0.2*syr/0.8:0, total = V1+syr+rum;
+  const abv = (c.rum+rum)*0.4/total*100, leafEq = c.tea*5/100 + leaf*0.7;
+  const fin = {rum:c.rum+rum, tea:c.tea, juice:c.juice, apple:c.apple+syr, passion:c.passion, acid:c.acid};
+  const finT = Object.values(fin).reduce((a,b)=>a+b,0);
+  document.getElementById('plansZ').innerHTML = `
+      <div class="card plan" style="border-top-color:var(--z)">
+        <h3>Z 版｜茶乾冷萃 24 h ＋ 蘋果糖漿</h3><div class="tag">備用。拿頂香不拿單寧；不稀釋，酸度靠甜度遮蔽。</div>
+        <table><tr><th>要加的物料</th><th class="n">量</th></tr>
+          <tr><td>全祥蜜香紅茶茶乾（濾袋，4°C 24 h，輕瀝）</td><td class="n">${leaf.toFixed(0)} g</td></tr>
+          <tr><td>一海香紅蘋果糖漿（冷萃後加）</td><td class="n">${fmt(syr)} ml</td></tr>
+          <tr><td>Myers's Dark Rum${hold?'':'（未補）'}</td><td class="n">${fmt(rum)} ml</td></tr>
+          <tr class="total"><td>茶乾吸走酒液（估）</td><td class="n">−${fmt(absorb)} ml</td></tr></table>
+        <div class="kpi">
+          <span>補正後總量 <b>${fmt(total)} ml</b></span><span>酒精度 <b>${abv.toFixed(2)} 度</b></span>
+          <span>茶葉當量（估） <b>${(leafEq/total*1000).toFixed(1)} g/L（C 版 19.6）</b></span><span>茶味提升（估） <b>+${((leafEq/total*1000)/19.6*100-100).toFixed(0)}%</b></span>
+          <span>蘋果糖漿占比 <b>${(fin.apple/total*100).toFixed(1)}%（C 版 10.5）</b></span><span>酸度 <b>不稀釋，靠甜度遮蔽</b></span>
+        </div>
+        <details style="margin-top:10px"><summary>Z 版最終配方（下一批重新調和）</summary>
+          <table style="margin-top:6px"><tr><th>物料</th><th class="n">占比</th><th class="n">每 1,000 ml</th></tr>
+          ${[["Myers's Dark Rum",fin.rum],['蜜香紅茶茶湯（5:100）',fin.tea],['樹頂蘋果汁',fin.juice],['一海香紅蘋果糖漿',fin.apple],['齊貝百香果糖漿',fin.passion],['檸檬酸蘋果酸水',fin.acid]].map(r=>`<tr><td>${r[0]}</td><td class="n">${(r[1]/finT*100).toFixed(1)}%</td><td class="n">${(r[1]/finT*1000).toFixed(0)} ml</td></tr>`).join('')}
+          <tr class="total"><td>合計（調和後再投茶乾 ${leafG} g/L 冷萃 24 h）</td><td class="n">100%</td><td class="n">1,000 ml</td></tr></table>
+        </details>
+      </div>`;
+}
+
+// ---------- 一步到位：原始酒液 → F 版 ----------
+function renderAF(){
+  const V = Math.max(0, parseFloat(document.getElementById('volAF').value)||0);
+  const ratio = Math.max(1, parseFloat(document.getElementById('ratioAF').value)||6);
+  const pfAcid = false;   // 鎖定定案配方：百香果糖漿照用
+  // 第一段：C 版補正液 20%
+  const corr = V*0.20, rum1 = corr*BASE.rum/100, tea1 = corr*BASE.tea/100;
+  let apple1 = corr*BASE.apple/100, passion1 = corr*BASE.passion/100;
+  if(pfAcid){ apple1 += passion1; passion1 = 0; }
+  const VC = V + corr;                                  // C 版體積
+  // 第二段：F 版 ＝ 濃縮茶湯 10% of C ＋ 補蘭姆 25% of 濃縮茶湯
+  const conc = VC*0.10, rum2 = 0.25*conc;
+  const T = VC + conc + rum2;
+  const rumAll = rum1 + rum2;
+  const fin = {rum:V*ORIG.rum+rumAll, tea:V*ORIG.tea+tea1, conc:conc, juice:V*ORIG.juice, apple:V*ORIG.apple+apple1, passion:V*ORIG.passion+passion1, acid:V*ORIG.acid};
+  const leafEq = (fin.tea*5/100 + fin.conc/ratio)/T*1000, abv = fin.rum*0.4/T*100;
+  const rows=[["Myers's Dark Rum（第一段 "+fmt(rum1)+" ＋ 第二段 "+fmt(rum2)+"）",rumAll],['全祥蜜香紅茶茶湯（5:100）',tea1],['濃縮蜜香紅茶茶湯（1:'+ratio+'）',conc],['一海香紅蘋果糖漿',apple1],['齊貝百香果糖漿',passion1]];
+  document.getElementById('afAddTbl').innerHTML = `<tr><th>物料</th><th class="n">ml</th></tr>` +
+    rows.map(r=>`<tr><td>${r[0]}</td><td class="n">${fmt(r[1])} ml</td></tr>`).join('') +
+    (pfAcid?`<tr><td colspan="2" style="color:#9b3f3f;font-weight:700">⚠ 已勾選「百香果糖漿含檸檬酸」：百香果糖漿 0 ml、蘋果糖漿多加 ${fmt(corr*BASE.passion/100)} ml 替代。若不是刻意要這樣，請取消勾選。</td></tr>`:'') +
+    `<tr class="total"><td>合計加入</td><td class="n">${fmt(T-V)} ml（+${((T/V-1)*100).toFixed(0)}%）</td></tr>`;
+  document.getElementById('afKpi').innerHTML =
+    `<span>補正後總量 <b>${fmt(T)} ml</b></span><span>酒精度 <b>${abv.toFixed(2)} 度</b></span>` +
+    `<span>茶葉當量 <b>${leafEq.toFixed(1)} g/L（原始 17.5）</b></span><span>酸水占比 <b>${(fin.acid/T*100).toFixed(1)}%（原始 5.0）</b></span>` +
+    `<span>蘋果糖漿占比 <b>${(fin.apple/T*100).toFixed(1)}%</b></span><span>蘋果汁占比 <b>${(fin.juice/T*100).toFixed(1)}%</b></span>`;
+  document.getElementById('afSteps').innerHTML =
+    `<li><b>第一段｜補正液</b>（小桶先調勻再入大桶）：蘭姆 ${fmt(rum1)} ＋ 茶湯 ${fmt(tea1)} ＋ 蘋果糖漿 ${fmt(apple1)}${passion1>0?' ＋ 百香果糖漿 '+fmt(passion1):''} ＝ ${fmt(corr)} ml。先加七成 ${fmt(corr*0.7)}，試喝後補 ${fmt(corr*0.3)}。此時酒液 ＝ C 版 ${fmt(VC)} ml。</li>` +
+    `<li><b>第二段｜濃縮茶湯</b>：冷過濾後的濃縮茶湯 ${fmt(conc)} ml ＋ 蘭姆 ${fmt(rum2)} ml（先拌在一起），先加七成 ${fmt((conc+rum2)*0.7)}，試喝後補 ${fmt((conc+rum2)*0.3)}。</li>` +
+    `<li>量 pH／Brix、實測酒精度，記批次表；總量 ${fmt(T)} ml，瓶數與酒標數重算。</li>`;
+  const finRows=[["Myers's Dark Rum",fin.rum],['蜜香紅茶茶湯（5:100）',fin.tea],['濃縮蜜香紅茶茶湯（1:'+ratio+'）',fin.conc],['樹頂蘋果汁',fin.juice],['一海香紅蘋果糖漿',fin.apple],['齊貝百香果糖漿',fin.passion],['檸檬酸蘋果酸水',fin.acid]];
+  document.getElementById('afFinTbl').innerHTML = `<tr><th>物料</th><th class="n">占比</th><th class="n">每 1,000 ml</th></tr>` +
+    finRows.map(r=>`<tr><td>${r[0]}</td><td class="n">${(r[1]/T*100).toFixed(1)}%</td><td class="n">${(r[1]/T*1000).toFixed(0)} ml</td></tr>`).join('') +
+    `<tr class="total"><td>合計</td><td class="n">100%</td><td class="n">1,000 ml</td></tr>`;
+  document.getElementById('afFinNote').textContent = `不另熬濃縮茶湯的等價做法：單一茶湯 ${((fin.tea+fin.conc)/T*100).toFixed(1)}%，投葉比 ${((leafEq*T/1000)/(fin.tea+fin.conc)*100).toFixed(1)} g : 100 ml（RD_Master 1.7）。抗壞血酸若沿用本批 0.1%，補完後約 ${(0.1*V/T).toFixed(3)}%；下一批建議 0.02〜0.05%。`;
+}
+['volAF','ratioAF'].forEach(id=>document.getElementById(id).addEventListener('input', renderAF));
+renderAF();
+document.getElementById('vol').addEventListener('input', render1);
+document.getElementById('pfAcid').addEventListener('change', render1);
+['volC','ratio'].forEach(id=>document.getElementById(id).addEventListener('input', render2));
+document.getElementById('hold').addEventListener('change', ()=>{render2();renderZ();});
+['volZ','leafZ','syrZ'].forEach(id=>document.getElementById(id).addEventListener('input', renderZ));
+render1(); render2(); renderZ();
+</script>
+</body>
+</html>
