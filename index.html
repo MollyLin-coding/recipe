@@ -526,7 +526,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.81';
+const APP_VERSION='v3.82';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -4664,8 +4664,8 @@ function qcPickPrev(hist, orderNo, lot, exceptId) {
   return grp.find(x => (x.final || x.sys) === '放行') || grp[0];
 }
 const QC_INST = [
-  ['brix', '糖度 Brix', '°Bx', '0.1', '必填'], ['ph', 'pH', '', '0.01', 'pH／酸度擇一必填'], ['ta', '酸度', 'g/1000ml', '0.1', '檸檬酸／蘋果酸／抗壞血酸'],
-  ['abv', '透明基酒酒精度', '%', '0.1', '選填']   // v3.81 主公指示：總酸改 g/1000ml、酒精度改量透明基酒、刪樣品溫度
+  ['brix', '糖度 Brix', '°Bx', '0.1', '必填'], ['ph', 'pH', '', '0.01', '必填'],
+  ['abv', '相對酒精度（以樣品為基準）', '%', '0.1', '選填；密度型酒精計，樣品＝8%']   // v3.82 主公指示：取消酸度欄（留 pH）、酒精度改相對值   // v3.81 主公指示：總酸改 g/1000ml、酒精度改量透明基酒、刪樣品溫度
 ];
 const QC_VCOLOR = { '放行': 'var(--green)', '待試飲': '#b7791f', '退回': '#c0392b' };
 const QC_VBG = { '放行': '#e8f2ea', '待試飲': '#fbf1dc', '退回': '#fbe9e7' };
@@ -4727,7 +4727,7 @@ function qcJudge(inst, sens, look, offs, std, prev) {
   if (std) {
     ['brix', 'ph', 'ta', 'abv'].forEach(k => {
       const l = qcLamp(k, inst[k], std.inst && std.inst[k]); lamps[k] = l;
-      const lb = { brix: '糖度', ph: 'pH', ta: '酸度', abv: '基酒酒精度' }[k];
+      const lb = { brix: '糖度', ph: 'pH', ta: '酸度', abv: '相對酒精度' }[k];
       if (l === 'r') { red = true; why.push(`${lb}超出容許差 2 倍（本批 ${inst[k]}／標準 ${std.inst[k]}）`); }
       else if (l === 'y') { yellow = true; why.push(`${lb}略超容許差（本批 ${inst[k]}／標準 ${std.inst[k]}）`); }
     });
@@ -4807,14 +4807,14 @@ async function qcOpen(orderNo, ii) {
   document.querySelectorAll('.modal-bg.qc-modal').forEach(x => x.remove());
   const std = r.std;
   const stdBox = std
-    ? `<div style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#faf8f3;font-size:12px;">⭐ <b>標準樣</b>：${rcEsc(std.date)}（${rcEsc(std.orderNo)}${std.lot ? ' Lot' + rcEsc(std.lot) : ''}・${rcEsc(std.inspector)}）　Brix ${_qcFmt(std.inst.brix)}・pH ${_qcFmt(std.inst.ph)}・酸度 ${_qcFmt(std.inst.ta)} g/L
+    ? `<div style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#faf8f3;font-size:12px;">⭐ <b>標準樣</b>：${rcEsc(std.date)}（${rcEsc(std.orderNo)}${std.lot ? ' Lot' + rcEsc(std.lot) : ''}・${rcEsc(std.inspector)}）　Brix ${_qcFmt(std.inst.brix)}・pH ${_qcFmt(std.inst.ph)}
         <a href="#" style="margin-left:6px;" onclick="event.preventDefault();qcView('${std.id}')">查看</a></div>`
     : `<div style="padding:8px 10px;border:1px dashed #b7791f;border-radius:8px;background:#fbf1dc;font-size:12px;color:#7a5a12;">⚠ 此酒款<b>尚無標準樣</b>。第一張品管單會判「待試飲」；請在客戶核可的打樣（或主公試飲認可的批次）那張單按「⭐ 設為標準」，之後的批次才有東西可以比。</div>`;
   const rows = (r.list || []).map(x => {
     const v = x.final || x.sys;
     return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:7px 8px;border:1px solid var(--border);border-radius:8px;margin-top:5px;font-size:12px;">
       ${_qcVerdictBadge(v, true)}${x.isStd ? ' <span style="font-size:11px;color:var(--gold-dk);font-weight:700;">⭐標準</span>' : ''}
-      <span style="flex:1;min-width:150px;">${rcEsc(x.date)}・${rcEsc(x.inspector)}${x.lot ? '・Lot' + rcEsc(x.lot) : ''}<span style="color:var(--ink3);">　Brix ${_qcFmt(x.inst.brix)}・pH ${_qcFmt(x.inst.ph)}・酸度 ${_qcFmt(x.inst.ta)} g/L</span>${x.final && x.final !== x.sys ? `<span style="color:#7a4f9b;">（系統 ${x.sys} → 主公覆寫）</span>` : ''}</span>
+      <span style="flex:1;min-width:150px;">${rcEsc(x.date)}・${rcEsc(x.inspector)}${x.lot ? '・Lot' + rcEsc(x.lot) : ''}<span style="color:var(--ink3);">　Brix ${_qcFmt(x.inst.brix)}・pH ${_qcFmt(x.inst.ph)}</span>${x.final && x.final !== x.sys ? `<span style="color:#7a4f9b;">（系統 ${x.sys} → 主公覆寫）</span>` : ''}</span>
       <button class="btn btn-ghost btn-sm" style="padding:2px 7px;font-size:11px;" onclick="qcView('${x.id}')">查看</button>
       ${(qcIsAdmin() || (x.createdBy === curUser.username && !x.isStd)) ? `<button class="btn btn-ghost btn-sm" style="padding:2px 7px;font-size:11px;" onclick="qcEdit('${o.orderNo}',${ii},'${x.id}')">✏️ 修改</button>` : ''}
       ${qcIsAdmin() && !x.isStd && v !== '退回' ? `<button class="btn btn-ghost btn-sm" style="padding:2px 7px;font-size:11px;color:var(--gold-dk);" onclick="qcSetStd('${o.orderNo}',${ii},'${x.id}',1)">⭐ 設為標準</button>` : ''}
@@ -4834,7 +4834,7 @@ async function qcOpen(orderNo, ii) {
       <button class="btn btn-primary btn-sm" onclick="qcEdit('${o.orderNo}',${ii},'')">＋ 新增品管單</button>
     </div>
     ${rows || '<div style="color:var(--ink3);font-size:12px;padding:10px;text-align:center;">尚無品管單——出貨前請先做一張。</div>'}
-    <div style="font-size:11px;color:var(--ink3);margin-top:10px;line-height:1.6;">判定規則：任一異味／任一感官或色澤給 1、5 分／<b>感官雷達面積與前一批（無前批則與標準樣）相差超過 ${QC_AREA_TOL * 100}%</b>／任一儀器超出容許差 2 倍 → <b style="color:#c0392b;">退回</b>；儀器略超、3 項以上感官 2 或 4 分、混濁沉澱、尚無標準樣 → <b style="color:#b7791f;">待試飲</b>；其餘 <b style="color:var(--green);">放行</b>。容許差：Brix ±${QC_TOL.brix}、pH ±${QC_TOL.ph}、酸度 ±${QC_TOL.taRel * 100}%、基酒酒精度 ±${QC_TOL.abv}。</div>`);
+    <div style="font-size:11px;color:var(--ink3);margin-top:10px;line-height:1.6;">判定規則：任一異味／任一感官或色澤給 1、5 分／<b>感官雷達面積與前一批（無前批則與標準樣）相差超過 ${QC_AREA_TOL * 100}%</b>／任一儀器超出容許差 2 倍 → <b style="color:#c0392b;">退回</b>；儀器略超、3 項以上感官 2 或 4 分、混濁沉澱、尚無標準樣 → <b style="color:#b7791f;">待試飲</b>；其餘 <b style="color:var(--green);">放行</b>。容許差：Brix ±${QC_TOL.brix}、pH ±${QC_TOL.ph}、相對酒精度 ±${QC_TOL.abv}。</div>`);
   m.classList.add('qc-modal');
   m.querySelector('.modal-box').style.maxWidth = '720px';
   window._qcCtx = { o, ii, it, std, list: r.list || [], hist: r.hist || [] };
@@ -4925,7 +4925,7 @@ function qcEdit(orderNo, ii, id) {
     <div style="font-weight:700;color:var(--gold-dk);margin:12px 0 4px;">① 儀器量測</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">${instHtml}</div>
     <details style="font-size:11px;color:var(--ink3);margin-top:4px;"><summary style="cursor:pointer;">💡 酒液不透明怎麼量糖度？酒精會不會影響讀數？</summary>
-      <div style="line-height:1.7;padding:4px 0 0 4px;">・<b>不透明／有果肉</b>：取樣後靜置 10 分鐘取上層清液，或用咖啡濾紙、針筒濾頭過濾後再滴；糖度計看的是光的折射，懸浮顆粒會讓分界線模糊。<br>・<b>酒精也會推高 Brix 讀數</b>，所以這裡的 Brix 只拿來跟「同配方的標準樣」比差值，不能當真實含糖量。<br>・<b>透明基酒酒精度</b>：成品不透明或含糖時酒精計讀不準，改量調和前的透明基酒。<br>・pH 與 Brix 都受溫度影響：冰的酒先回溫到 20°C 左右再量，標準樣與本批用同一台儀器。<br>・每次量完用清水沖探頭並擦乾；pH 計每週用緩衝液校正一次。</div></details>
+      <div style="line-height:1.7;padding:4px 0 0 4px;">・<b>不透明／有果肉</b>：取樣後靜置 10 分鐘取上層清液，或用咖啡濾紙、針筒濾頭過濾後再滴；糖度計看的是光的折射，懸浮顆粒會讓分界線模糊。<br>・<b>酒精也會推高 Brix 讀數</b>，所以這裡的 Brix 只拿來跟「同配方的標準樣」比差值，不能當真實含糖量。<br>・<b>相對酒精度</b>：密度型酒精計會被糖、果汁、茶多酚干擾，讀數不是真實酒精度；以客戶核可樣品當 8% 為基準，比較批次之間的相對值。標準樣與本批要用同一台、同溫度量。<br>・pH 與 Brix 都受溫度影響：冰的酒先回溫到 20°C 左右再量，標準樣與本批用同一台儀器。<br>・每次量完用清水沖探頭並擦乾；pH 計每週用緩衝液校正一次。</div></details>
 
     <div style="font-weight:700;color:var(--gold-dk);margin:12px 0 2px;">② 感官（跟標準樣比：1 明顯偏弱｜2 略弱｜<span style="color:var(--green);">3 符合</span>｜4 略強｜5 明顯偏強）</div>
     <div style="font-size:11px;color:var(--ink3);margin-bottom:4px;">標準樣與本批<b>同溫度、同杯型、並排盲喝</b>；先聞再喝，喝完漱口再喝下一杯。</div>
@@ -5028,7 +5028,7 @@ function qcFormSync() {
   const rd = f.m.querySelector('#qc_radar'); if (rd) rd.innerHTML = qcRadarSvg(F.sens, { size: 250, prev: f.prev && f.prev.sens, prevLabel: f.prev ? (f.prev.orderNo + (f.prev.lot ? ' Lot' + f.prev.lot : '')) : '' }) + qcAreaLine(j.areaDiff, f.prev);
   const miss = QC_SENS.filter(([k]) => !F.sens[k]).map(s => s[1]);
   if (!F.look.color) miss.push('色澤'); if (!F.look.clarity) miss.push('澄清度');
-  if (F.inst.brix == null) miss.push('Brix'); if (F.inst.ph == null && F.inst.ta == null) miss.push('pH 或酸度');
+  if (F.inst.brix == null) miss.push('Brix'); if (F.inst.ph == null) miss.push('pH');
   const vd = f.m.querySelector('#qc_verdict');
   vd.style.background = miss.length ? '#f4f4f4' : QC_VBG[j.verdict]; vd.style.border = '1px solid ' + (miss.length ? '#ddd' : QC_VCOLOR[j.verdict]);
   vd.innerHTML = miss.length
