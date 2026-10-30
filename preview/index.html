@@ -625,7 +625,7 @@ async function api(params, silent) {
   const url = API + '?' + Object.entries(send).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
   // v3.38 大 payload 走 POST（後端 doPost 同流程）：GET 網址超過 ~10KB Google 直接回 400 HTML → 前端誤判「系統忙碌」而資料沒存。
   //   經銷商設定（授權酒款 JSON＋多段長文字）固定走 POST；其餘 action 網址超過 6000 字元自動改 POST。text/plain 免 preflight。
-  const _post = /^(consignSaveDealer|perfSave|expImport|mtgItemSave|mtgUpdate|qcSave)$/.test(_act) || url.length > 6000;   // v3.80 品管單含照片固定 POST   // v3.58 會議長文字固定 POST   // v3.40 +expImport   // v3.39 perfSave 整包 params/months 物件固定 POST
+  const _post = /^(consignSaveDealer|perfSave|expImport|mtgItemSave|mtgUpdate|qcSave|tastingSave)$/.test(_act) || url.length > 6000;   // v3.80 品管單含照片固定 POST   // v3.58 會議長文字固定 POST   // v3.40 +expImport   // v3.39 perfSave 整包 params/months 物件固定 POST
   let _lastErr = '';
   try {
     for (let _try = 0; ; _try++) {
@@ -3283,7 +3283,7 @@ function renderMonthOrders(orders) {
       if (!rcSt) return `<button class="btn btn-sm" style="${common}border:1px dashed var(--ink3);background:transparent;color:var(--ink3);opacity:.65;" onclick="event.stopPropagation();rcShowHistoryByNo('${o.orderNo}',${i})">⚠ ${nm} 尚待PM建立Run Card</button>`;
       if (rcSt.done) return `<button class="btn btn-sm" style="${common}border:1px solid var(--green);background:#e8f2ea;color:var(--green);font-weight:600;" onclick="event.stopPropagation();rcShowHistoryByNo('${o.orderNo}',${i})">✔ ${nm}（已完成）</button>`;
       return `<button class="btn btn-sm" style="${common}border:1px solid var(--yellow);background:#faf0dc;color:var(--yellow);font-weight:600;" onclick="event.stopPropagation();rcShowHistoryByNo('${o.orderNo}',${i})">📋 ${nm}（進行中）</button>`;
-    }).join('') + accBtnsFor(o) + qcBtnsFor(o) : '';   // v3.80 🔬 出貨品管鈕
+    }).join('') + accBtnsFor(o) + qcBtnsFor(o) + tsBtnHtml(o) : '';   // v3.80 🔬 出貨品管鈕   // v3.83 🥃 基酒品評鈕
     return `<div onclick="showOrderDetail('${o.orderNo}')" style="cursor:pointer;padding:10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;background:var(--card);">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <div style="flex:1;min-width:0;">
@@ -3369,7 +3369,8 @@ function showOrderDetail(orderNo) {
       ${canAct && it.status !== '完成' && it.sheet ? `<button class="btn btn-success btn-sm" style="padding:3px 7px;font-size:11px;" onclick="this.closest('.modal-bg').remove();showCompleteModal(${idx},${i})">完成回報</button>` : ''}
       ${isAdmin && (o.items || []).length > 1 && !(it.shipped > 0) && it.status !== '完成' && !it.batchId ? `<button class="btn btn-ghost btn-sm" title="刪除此款（僅限尚未出貨、未完成、無 Run Card 的款）" style="padding:3px 7px;font-size:11px;color:var(--red);border-color:var(--red);" onclick="removeOrderItemUi(${idx},${i})">🗑 刪除此款</button>` : ''}
       ${canAct && isConsignOrder(o) && ((it.remainStock == null ? it.qty : it.remainStock) > 0) ? `<label title="勾選後可用下方「一次寄出勾選款」" style="display:flex;align-items:center;cursor:pointer;margin:0;"><input type="checkbox" class="cs_pick" data-ii="${i}" onchange="consignPickSum()" style="width:17px;height:17px;margin:0;"></label><button class="btn btn-sm" style="padding:3px 7px;font-size:11px;background:var(--gold-dk);color:#fff;font-weight:700;" onclick="consignShipItem(${idx},${i})">📦 寄出給經銷商</button>` : ''}
-    </div>`).join('') + consignBatchBarHtml(o, idx, canAct);   // v3.46 勾選多款一次寄出
+    </div>`).join('') + consignBatchBarHtml(o, idx, canAct)   // v3.46 勾選多款一次寄出
+    + (tsMatch(o) ? `<div style="margin-top:6px;">${tsBtnHtml(o)}</div>` : '');   // v3.83 🥃 基酒品評
   const row = (k, val) => `<div style="display:flex;gap:8px;font-size:12px;margin-top:3px;"><span style="flex:0 0 92px;color:var(--ink3);">${k}</span><span style="flex:1;">${val}</span></div>`;
   const finShown = o.finalAdjusted && o.finalAdjustedAmount !== '' && o.finalAdjustedAmount != null
     ? `<s style="opacity:.6;">NT$${o.finalAmount !== '' ? o.finalAmount : (o.balance || 0)}</s> → NT$${o.finalAdjustedAmount}（特殊調整）`
@@ -4695,6 +4696,147 @@ function qcBtnHtml(o, it, i, compact) {
   return `<button class="btn btn-sm" style="${common}border:1px solid ${QC_VCOLOR[v]};background:${QC_VBG[v]};color:${QC_VCOLOR[v]};font-weight:600;" onclick="${click}">🔬 ${nm}${QC_VICON[v]} ${v}${st.date ? ' ' + String(st.date).slice(5) : ''}${st.n > 1 ? '（' + st.n + '張）' : ''}</button>`;
 }
 function qcBtnsFor(o) { return (o.items || []).map((it, i) => qcBtnHtml(o, it, i, false)).join(''); }
+// ════════════════════════════════════════════════
+// v3.83 🥃 基酒品評（主公 2026-10-30 指示）
+// Babyface 261027-002（鳳梨／芒果高粱冰茶）要在金門高粱 58° 與皇家高粱之間選基酒 → 阿軒、Vic 各自試喝勾雷達。
+// 與 🔬 出貨品管不同：兩支酒互比、絕對分數 0～10、不做放行判定。一單一人一筆（再存＝覆寫自己的）。
+// 出現條件：訂單任一款酒名含「高粱」，或列在 TS_TARGETS。
+// ════════════════════════════════════════════════
+const TS_AXES = [['jiang', '醬香／糧糟香'], ['ester', '果香酯類'], ['alc', '酒精感'], ['sweet', '甜潤感'], ['floral', '花香'], ['finish', '餘韻長度']];
+const TS_DEF = { A: '金門高粱 58°', B: '皇家高粱（白沙屯媽祖 2026）' };
+const TS_COL = { A: '#2b6cb0', B: '#d9622b' };
+const TS_TARGETS = ['261027-002'];
+function tsMatch(o) { return qcCanUse() && (TS_TARGETS.includes(o.orderNo) || (o.items || []).some(it => /高粱/.test(it.product || ''))); }
+function tsBtnHtml(o) {
+  if (!tsMatch(o)) return '';
+  return `<button class="btn btn-sm" style="padding:3px 8px;font-size:11px;border-radius:6px;cursor:pointer;border:1px solid #d9622b;background:#fbeee6;color:#a8471b;font-weight:600;" onclick="event.stopPropagation();tsOpen('${o.orderNo}')">🥃 基酒品評（金門 vs 皇家）</button>`;
+}
+function tsAvg(rows) {
+  const out = { A: {}, B: {} };
+  ['A', 'B'].forEach(s => TS_AXES.forEach(([k]) => {
+    const v = rows.map(r => +((r.scores || {})[s] || {})[k]).filter(x => isFinite(x));
+    out[s][k] = v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0;
+  }));
+  return out;
+}
+function tsRadarSvg(sc, labels) {
+  const W = 260, cx = W / 2, cy = W / 2 + 2, R = W * 0.33, n = TS_AXES.length;
+  const pt = (i, v) => { const a = -Math.PI / 2 + i * 2 * Math.PI / n, r = R * (v / 10); return [cx + r * Math.cos(a), cy + r * Math.sin(a)]; };
+  const poly = vals => vals.map((v, i) => pt(i, v).map(x => x.toFixed(1)).join(',')).join(' ');
+  let g = '';
+  [2, 4, 6, 8, 10].forEach(l => { g += `<polygon points="${poly(Array(n).fill(l))}" fill="none" stroke="${l === 10 ? '#cfcfcf' : '#e6e6e6'}" stroke-width="1"/>`; });
+  TS_AXES.forEach(([k, lb], i) => {
+    const [x, y] = pt(i, 10); g += `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#e6e6e6"/>`;
+    const [lx, ly] = pt(i, 12.3); const anc = Math.abs(lx - cx) < 4 ? 'middle' : (lx > cx ? 'start' : 'end');
+    const a = sc.A[k], b = sc.B[k];
+    g += `<text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" text-anchor="${anc}" font-size="11" fill="#555">${lb}<tspan fill="${TS_COL.A}" font-weight="700"> ${(+a).toFixed(a % 1 ? 1 : 0)}</tspan><tspan fill="#999">／</tspan><tspan fill="${TS_COL.B}" font-weight="700">${(+b).toFixed(b % 1 ? 1 : 0)}</tspan></text>`;
+  });
+  ['A', 'B'].forEach(s => {
+    const vals = TS_AXES.map(([k]) => +sc[s][k] || 0);
+    g += `<polygon points="${poly(vals.map(v => v || 0.0001))}" fill="${TS_COL[s]}" fill-opacity=".12" stroke="${TS_COL[s]}" stroke-width="2" ${s === 'B' ? 'stroke-dasharray="6 4"' : ''}/>`;
+    vals.forEach((v, i) => { const [x, y] = pt(i, v); g += s === 'A' ? `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.2" fill="${TS_COL.A}"/>` : `<rect x="${(x - 3).toFixed(1)}" y="${(y - 3).toFixed(1)}" width="6" height="6" fill="${TS_COL.B}"/>`; });
+  });
+  return `<svg viewBox="-70 0 ${W + 140} ${W + 26}" style="width:100%;max-width:${W + 140}px;display:block;margin:0 auto;" role="img" aria-label="基酒品評雷達圖">${g}
+    <text x="${cx}" y="${W + 20}" text-anchor="middle" font-size="11"><tspan fill="${TS_COL.A}">● 實線＝${rcEsc(labels.A)}</tspan><tspan fill="#999">　</tspan><tspan fill="${TS_COL.B}">■ 虛線＝${rcEsc(labels.B)}</tspan></text></svg>`;
+}
+async function tsOpen(orderNo) {
+  const o = (window._mgmtOrders || []).find(x => x.orderNo === orderNo) || { orderNo, client: '' };
+  const r = await apiBusy({ action: 'tastingGet', orderNo, fresh: '1' }, '讀取基酒品評…');
+  if (!r || !r.ok) { toast('讀取失敗：' + ((r && r.error) || '')); return; }
+  const rows = r.rows || [], me = (curUser && curUser.username) || r.me || '';
+  const mine = rows.find(x => x.taster === me);
+  const labels = { A: (mine && mine.a) || (rows[0] && rows[0].a) || TS_DEF.A, B: (mine && mine.b) || (rows[0] && rows[0].b) || TS_DEF.B };
+  const F = { A: {}, B: {}, touched: {} };
+  ['A', 'B'].forEach(s => TS_AXES.forEach(([k]) => { const v = mine && mine.scores && mine.scores[s] ? mine.scores[s][k] : null; F[s][k] = v == null ? 5 : +v; if (mine) F.touched[s + k] = true; }));
+  let view = rows.length ? 'avg' : 'me';
+  const chips = () => {
+    const b = (id, lb) => `<button class="btn btn-sm" data-v="${rcEsc(id)}" style="padding:3px 9px;font-size:11px;border-radius:12px;${view === id ? 'background:var(--ink);color:#fff;border-color:var(--ink);' : ''}">${lb}</button>`;
+    return (rows.length ? b('avg', '全員平均（' + rows.length + '人）') : '') + rows.map(x => b('p:' + x.taster, rcEsc(x.taster) + (x.pref ? '・偏好' + (x.pref === 'A' ? '金門' : x.pref === 'B' ? '皇家' : x.pref) : ''))).join('') + b('me', '我（編輯中）');
+  };
+  const scoresOf = () => {
+    if (view === 'avg') return tsAvg(rows);
+    if (view.startsWith('p:')) { const x = rows.find(y => 'p:' + y.taster === view); return x ? x.scores : { A: {}, B: {} }; }
+    return { A: F.A, B: F.B };
+  };
+  const summary = () => {
+    if (!rows.length) return '還沒有人存過。打完分按「💾 儲存我的品評」。';
+    const av = tsAvg(rows), d = TS_AXES.map(([k, lb]) => ({ lb, diff: av.A[k] - av.B[k] })).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+    const big = d.filter(x => Math.abs(x.diff) >= 1).map(x => `${x.lb}${x.diff > 0 ? '金門' : '皇家'}高 ${Math.abs(x.diff).toFixed(1)}`);
+    const pc = { A: 0, B: 0, '都可以': 0 }; rows.forEach(x => { if (pc[x.pref] != null) pc[x.pref]++; });
+    return `已評：${rows.map(x => rcEsc(x.taster)).join('、')}。差距 ≥1 分：${big.length ? big.join('；') : '沒有'}。偏好：金門 ${pc.A}、皇家 ${pc.B}、都可以 ${pc['都可以']}。`;
+  };
+  const slider = (s, k, lb) => `<div style="display:flex;align-items:center;gap:6px;font-size:12px;margin:3px 0;">
+      <span style="width:30px;color:${TS_COL[s]};font-weight:700;">${s === 'A' ? '金門' : '皇家'}</span>
+      <input type="range" min="0" max="10" step="1" value="${F[s][k]}" data-s="${s}" data-k="${k}" style="flex:1;">
+      <span data-o="${s}${k}" style="width:46px;text-align:right;${F.touched[s + k] ? '' : 'color:var(--ink3);'}">${F[s][k]}${F.touched[s + k] ? '' : ' 未動'}</span></div>`;
+  const m = makeModal(`
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <div class="modal-title" style="margin:0;">🥃 基酒品評・${rcEsc(clientLabel ? clientLabel(o.client) : o.client)} ${rcEsc(orderNo)}</div>
+      <button class="btn btn-ghost btn-sm" data-x="close">✕</button></div>
+    <div style="font-size:11px;color:var(--ink3);margin:4px 0 8px;">兩支高粱各自打 0～10 分（絕對強度，不是跟標準樣比）。每人一筆，再存會覆寫自己那筆；別人看得到。</div>
+    <div id="ts_chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>
+    <div id="ts_radar"></div>
+    <div id="ts_sum" style="font-size:12px;color:var(--ink2);background:var(--bg2,#f6f4ef);border-radius:8px;padding:8px 10px;margin:8px 0;line-height:1.6;"></div>
+    <div style="border-top:1px solid var(--border);padding-top:8px;margin-top:4px;">
+      <div style="font-weight:700;font-size:13px;margin-bottom:6px;">我的品評（${rcEsc(me)}）${mine ? '<span style="font-weight:400;font-size:11px;color:var(--ink3);">　上次存：' + rcEsc(mine.updatedAt || '') + '</span>' : ''}</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px;font-size:12px;">
+        <label style="flex:1;">樣品 A<input id="ts_a" value="${rcEsc(labels.A)}" style="width:100%;font-size:12px;"></label>
+        <label style="flex:1;">樣品 B<input id="ts_b" value="${rcEsc(labels.B)}" style="width:100%;font-size:12px;"></label></div>
+      ${TS_AXES.map(([k, lb]) => `<div style="padding:4px 0;border-top:1px dashed var(--border);"><div style="font-size:12px;font-weight:600;">${lb}</div>${slider('A', k, lb)}${slider('B', k, lb)}</div>`).join('')}
+      <div style="font-size:12px;margin:8px 0 4px;">這張單的酒，你比較想用哪一支當基底？</div>
+      <div id="ts_pref" style="display:flex;gap:6px;flex-wrap:wrap;">${[['A', '金門'], ['B', '皇家'], ['都可以', '都可以']].map(([v, lb]) => `<button class="btn btn-sm" data-p="${v}" style="padding:4px 12px;${mine && mine.pref === v ? 'background:var(--ink);color:#fff;border-color:var(--ink);' : ''}">${lb}</button>`).join('')}</div>
+      <textarea id="ts_note" rows="2" placeholder="例如：金門加冰茶後糧香蓋過鳳梨；皇家跟芒果比較搭" style="width:100%;margin-top:8px;font-size:12px;">${rcEsc((mine && mine.note) || '')}</textarea>
+      <div id="ts_err" style="font-size:12px;color:#c0392b;min-height:16px;"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+        ${(curUser && curUser.role === 'admin' && rows.length) ? '<button class="btn btn-ghost btn-sm" data-x="del">🗑 刪除某人的品評</button>' : ''}
+        <button class="btn btn-primary btn-sm" data-x="save">💾 儲存我的品評</button></div>
+    </div>`, { locked: true });
+  let pref = (mine && mine.pref) || '';
+  const draw = () => {
+    m.querySelector('#ts_chips').innerHTML = chips();
+    const lb = view.startsWith('p:') ? (() => { const x = rows.find(y => 'p:' + y.taster === view) || {}; return { A: x.a || labels.A, B: x.b || labels.B }; })() : { A: m.querySelector('#ts_a').value || TS_DEF.A, B: m.querySelector('#ts_b').value || TS_DEF.B };
+    m.querySelector('#ts_radar').innerHTML = tsRadarSvg(scoresOf(), lb);
+    m.querySelector('#ts_sum').innerHTML = summary();
+  };
+  m.querySelector('#ts_chips').addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (!b) return; view = b.dataset.v; draw(); });
+  m.querySelectorAll('input[type=range]').forEach(el => el.addEventListener('input', () => {
+    const s = el.dataset.s, k = el.dataset.k, v = Math.round(+el.value);
+    F[s][k] = v; F.touched[s + k] = true;
+    const o2 = m.querySelector(`[data-o="${s}${k}"]`); o2.textContent = v; o2.style.color = '';
+    if (view !== 'me') view = 'me';
+    m.querySelector('#ts_err').textContent = ''; draw();
+  }));
+  ['#ts_a', '#ts_b'].forEach(id => m.querySelector(id).addEventListener('input', draw));
+  m.querySelector('#ts_pref').addEventListener('click', e => {
+    const b = e.target.closest('[data-p]'); if (!b) return; pref = b.dataset.p;
+    m.querySelectorAll('#ts_pref [data-p]').forEach(x => { const on = x.dataset.p === pref; x.style.background = on ? 'var(--ink)' : ''; x.style.color = on ? '#fff' : ''; x.style.borderColor = on ? 'var(--ink)' : ''; });
+    m.querySelector('#ts_err').textContent = '';
+  });
+  m.addEventListener('click', async e => {
+    const b = e.target.closest('[data-x]'); if (!b) return;
+    if (b.dataset.x === 'close') { m.remove(); return; }
+    if (b.dataset.x === 'del') {
+      const who = prompt('要刪除誰的品評？請輸入帳號名稱：\n' + rows.map(x => x.taster).join('、'));
+      const x = rows.find(y => y.taster === (who || '').trim()); if (!x) { if (who) toast('找不到：' + who); return; }
+      if (!confirm('刪除 ' + x.taster + ' 的品評？無法復原。')) return;
+      const d = await apiBusy({ action: 'tastingDelete', id: x.id }, '刪除中…');
+      if (!d || !d.ok) { toast('刪除失敗：' + ((d && d.error) || '')); return; }
+      m.remove(); toast('已刪除'); tsOpen(orderNo); return;
+    }
+    if (b.dataset.x === 'save') {
+      const err = m.querySelector('#ts_err');
+      if (!pref) { err.textContent = '請先選「比較想用哪一支」'; return; }
+      const untouched = [];
+      ['A', 'B'].forEach(s => TS_AXES.forEach(([k, lb]) => { if (!F.touched[s + k]) untouched.push((s === 'A' ? '金門' : '皇家') + lb); }));
+      if (untouched.length && !confirm('這幾項還停在預設 5 分：\n' + untouched.join('、') + '\n\n確定就是 5 分嗎？')) return;
+      const res = await apiBusy({ action: 'tastingSave', orderNo, client: o.client || '', a: m.querySelector('#ts_a').value.trim(), b: m.querySelector('#ts_b').value.trim(),
+        scores: JSON.stringify({ A: F.A, B: F.B }), pref, note: m.querySelector('#ts_note').value.trim() }, '儲存中…');
+      if (!res || !res.ok) { err.textContent = '儲存失敗：' + ((res && res.error) || '請稍後再試'); return; }
+      m.remove(); toast(res.updated ? '✅ 已更新你的品評' : '✅ 已儲存你的品評'); tsOpen(orderNo);
+    }
+  });
+  draw();
+}
 // 出貨登記時的提醒（不硬擋）：寄倉中且最新品管不是「放行」的款
 function qcShipWarnHtml(o, products) {
   if (!window._qcIdx || !qcCanUse()) return '';

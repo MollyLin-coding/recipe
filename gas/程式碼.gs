@@ -206,7 +206,9 @@ var ROLE_MATRIX = {
   //   getRdApplies 同類資料（研發申請清單含配方），只有 admin 審核頁會呼叫，一併上鎖
   getRdRecords: ['admin'], saveRdRecord: ['admin'], submitRdApply: ['admin'], getRdApplies: ['admin'],
   // v3.80 出貨品管：填單／看單＝任何廠內登入者（調酒師可能是 user／倉管／PM）；設標準樣與刪單僅 admin
-  qcSetStd: ['admin'], qcDelete: ['admin']
+  qcSetStd: ['admin'], qcDelete: ['admin'],
+  // v3.83 基酒品評：填／看＝任何廠內登入者（經銷商、FB觀看 已被前面的閘門擋掉）；刪除僅 admin
+  tastingDelete: ['admin']
 };
 // v3.38 POST 入口：大 payload（經銷商設定含授權酒款 JSON／長文字、建單明細…）走 POST，免 GET 網址過長被 Google 回 400 HTML 頁。
 //   前端以 text/plain 送 JSON body（免 CORS preflight）；解析後與 doGet 走完全相同的流程（token 閘門／角色／派發）。
@@ -277,7 +279,7 @@ function doGet(e) {
         //   使用者幾乎永遠打到冷路徑（getOrders 熱狀態就要 4.7 秒）。改成只有明確帶 bust=1 才清。
         if (String((p && p.bust) || '') === '1') { try { CacheService.getScriptCache().removeAll(V3144_CACHE_KEYS); } catch (e) {} }
         result = getEnvInfo();
-        result.modules = { consign: (typeof consignMe === 'function'), perf: (typeof perfGet === 'function'), expense: (typeof expList === 'function'), meeting: (typeof mtgList === 'function'), rdBackup: (typeof _rdBackup_ === 'function'), qc: (typeof qcSave === 'function') };   // v3.80 qc 探針   // v3.58 meeting 探針   // v3.40 expense 探針   // v3.39 perf 探針   // v3.28 免登入探針：consign.gs 是否真的在部署版本裡（2026-09-03 Action 漏檔事故）
+        result.modules = { consign: (typeof consignMe === 'function'), perf: (typeof perfGet === 'function'), expense: (typeof expList === 'function'), meeting: (typeof mtgList === 'function'), rdBackup: (typeof _rdBackup_ === 'function'), qc: (typeof qcSave === 'function'), tasting: (typeof tastingSave === 'function') };   // v3.80 qc 探針   // v3.58 meeting 探針   // v3.40 expense 探針   // v3.39 perf 探針   // v3.28 免登入探針：consign.gs 是否真的在部署版本裡（2026-09-03 Action 漏檔事故）
         // v3.14.5 診斷：CacheService 到底能不能用（put→get→remove 全程回報例外）
         result.cacheDiag = (function () {
           var d = {};
@@ -410,6 +412,9 @@ function doGet(e) {
       case 'qcSave':                 result = qcSave(p); break;                 // v3.80 新增／覆寫品管單（POST；後端判定）
       case 'qcSetStd':               result = qcSetStd(p); break;               // v3.80 ⭐ 設為／取消標準樣（admin）
       case 'qcDelete':               result = qcDelete(p); break;               // v3.80 刪品管單（admin）
+      case 'tastingGet':             result = tastingGet(p); break;             // v3.83 某單基酒品評（全員分數＋平均）
+      case 'tastingSave':            result = tastingSave(p); break;            // v3.83 新增／覆寫自己的基酒品評
+      case 'tastingDelete':          result = tastingDelete(p); break;          // v3.83 刪一筆品評（admin）
       case 'perfReset':              result = perfReset(p); break;              // v3.39 業績模型：恢復種子預設(admin；confirm=業績模型)
       case 'deleteShipment':         result = deleteShipment(p); break;          // 實際出貨紀錄：刪除某一次出貨(v3.26, admin 限定)
       case 'removeOrderItem':        result = removeOrderItem(p); break;         // v3.51 刪除訂單單一酒款列（admin；無出貨紀錄／未完成才可）
@@ -475,7 +480,8 @@ var AUDIT_ACTIONS = {
   perfSave:1, perfReset:1,   // v3.39 業績模型寫入（摘要只收白名單參數，整包 JSON 不入紀錄）
   expSave:1, expDelete:1, expImport:1, fixedSave:1,   // v3.40 廠務支出／固定成本寫入
   mtgCreate:1, mtgUpdate:1, mtgItemSave:1, mtgItemDelete:1,   // v3.58 工務/業務會議寫入
-  qcSave:1, qcSetStd:1, qcDelete:1,   // v3.80 出貨品管寫入（照片與 JSON 不入摘要）
+  qcSave:1, qcSetStd:1, qcDelete:1, tastingSave:1, tastingDelete:1,   // v3.83 基酒品評
+    // v3.80 出貨品管寫入（照片與 JSON 不入摘要）
   saveRunCard:1, deleteRunCard:1, saveProcessNote:1,
   addBatchRecord:1, updateBatchRecord:1, deleteBatchRecord:1,
   submitApply:1, reviewApply:1, saveRdRecord:1, deleteRdRecord:1, submitRdApply:1, reviewRdApply:1,
@@ -6243,6 +6249,80 @@ function qcDelete(p) {
     if (!tgt) return { ok: false, error: '找不到品管單：' + id };
     ws.deleteRow(tgt.rowIdx);
     _qcDeletePhotos_(tgt.photos);
+    return { ok: true, id: id, deleted: true };
+  } finally { lock.releaseLock(); }
+}
+
+// ============================================================
+// v3.83 🥃 基酒品評（主公 2026-10-30 指示）
+//   緣由：Babyface 261027-002（鳳梨／芒果高粱冰茶）要在「金門高粱 58°」與「皇家高粱」之間選基酒。
+//   主公初評：金門醬香／糧糟香明顯、皇家果香酯類明顯、酒精感接近 → 請阿軒、Vic 各自試喝打分。
+//   與 v3.80 出貨品管單不同：這裡是「兩支酒互比、絕對分數 0～10」，不做放行判定。
+//   主表新分頁「基酒品評」：一單一人一列（同人再存＝覆寫自己那列）。
+// ============================================================
+var TS_SHEET = '基酒品評';
+var TS_HEADERS = ['品評ID', '訂單編號', '客戶', '品評人', '樣品A', '樣品B', '分數JSON', '偏好', '備註', '建立時間', '更新時間'];
+var TSC = { id: 0, orderNo: 1, client: 2, taster: 3, a: 4, b: 5, scores: 6, pref: 7, note: 8, createdAt: 9, updatedAt: 10 };
+var TS_AXES = ['jiang', 'ester', 'alc', 'sweet', 'floral', 'finish'];
+var TS_PREFS = ['A', 'B', '都可以', ''];
+function _tsSheet_() {
+  var ws = _consignSheet_(TS_SHEET, TS_HEADERS);
+  if (ws.getMaxColumns() < TS_HEADERS.length) ws.insertColumnsAfter(ws.getMaxColumns(), TS_HEADERS.length - ws.getMaxColumns());
+  return ws;
+}
+function _tsAll_(orderNo) {
+  var ws = _tsSheet_(), last = ws.getLastRow(), out = [];
+  if (last < 2) return out;
+  ws.getRange(2, 1, last - 1, TS_HEADERS.length).getValues().forEach(function (r, i) {
+    if (!r[TSC.id]) return;
+    if (orderNo && String(r[TSC.orderNo]) !== String(orderNo)) return;
+    out.push({ id: String(r[TSC.id]), orderNo: String(r[TSC.orderNo]), client: String(r[TSC.client]), taster: String(r[TSC.taster]),
+      a: String(r[TSC.a]), b: String(r[TSC.b]), scores: _qcJson_(r[TSC.scores]), pref: String(r[TSC.pref] || ''), note: String(r[TSC.note] || ''),
+      createdAt: String(r[TSC.createdAt] || ''), updatedAt: String(r[TSC.updatedAt] || ''), rowIdx: i + 2 });
+  });
+  return out;
+}
+function tastingGet(p) {
+  var orderNo = _qcStr_(p && p.orderNo, 40);
+  if (!orderNo) return { ok: false, error: '缺少訂單編號' };
+  var rows = _tsAll_(orderNo).map(function (x) { delete x.rowIdx; return x; });
+  return { ok: true, orderNo: orderNo, rows: rows, me: String(p._user || '') };
+}
+function tastingSave(p) {
+  p = p || {};
+  var orderNo = _qcStr_(p.orderNo, 40);
+  if (!orderNo) return { ok: false, error: '缺少訂單編號' };
+  var raw = _qcJson_(p.scores), scores = { A: {}, B: {} }, miss = [];
+  ['A', 'B'].forEach(function (s) {
+    TS_AXES.forEach(function (k) {
+      var rv = raw[s] ? raw[s][k] : null, v = Number(rv);
+      if (rv !== '' && rv != null && v >= 0 && v <= 10 && Math.round(v) === v) scores[s][k] = v; else miss.push(s + '.' + k);
+    });
+  });
+  if (miss.length) return { ok: false, error: '還有分數沒打：' + miss.join('、') };
+  var pref = String(p.pref || ''); if (TS_PREFS.indexOf(pref) < 0) pref = '';
+  var op = String(p._user || ''), now = _consignNow_();
+  if (!op) return { ok: false, error: '請先登入' };
+  var lock = LockService.getScriptLock(); lock.waitLock(15000);
+  try {
+    var ws = _tsSheet_(), cur = null;
+    _tsAll_(orderNo).forEach(function (x) { if (x.taster === op) cur = x; });
+    var row = [cur ? cur.id : _consignGenId_('TS'), orderNo, _qcStr_(p.client, 80), op,
+      _qcStr_(p.a, 60) || '金門高粱 58°', _qcStr_(p.b, 60) || '皇家高粱', JSON.stringify(scores), pref, _qcStr_(p.note, 500),
+      cur ? cur.createdAt : now, now];
+    if (cur) ws.getRange(cur.rowIdx, 1, 1, TS_HEADERS.length).setValues([row]);
+    else { ws.appendRow(row); var rr = ws.getLastRow(); _forceTextCell_(ws, rr, TSC.createdAt + 1, now); _forceTextCell_(ws, rr, TSC.updatedAt + 1, now); }
+    return { ok: true, id: row[0], updated: !!cur };
+  } finally { lock.releaseLock(); }
+}
+function tastingDelete(p) {
+  var id = _qcStr_(p && p.id, 60);
+  if (!id) return { ok: false, error: '缺少品評ID' };
+  var lock = LockService.getScriptLock(); lock.waitLock(15000);
+  try {
+    var tgt = null; _tsAll_('').forEach(function (x) { if (x.id === id) tgt = x; });
+    if (!tgt) return { ok: false, error: '找不到品評：' + id };
+    _tsSheet_().deleteRow(tgt.rowIdx);
     return { ok: true, id: id, deleted: true };
   } finally { lock.releaseLock(); }
 }
