@@ -6263,7 +6263,7 @@ function qcDelete(p) {
 var TS_SHEET = '基酒品評';
 var TS_HEADERS = ['品評ID', '訂單編號', '客戶', '品評人', '樣品A', '樣品B', '分數JSON', '偏好', '備註', '建立時間', '更新時間'];
 var TSC = { id: 0, orderNo: 1, client: 2, taster: 3, a: 4, b: 5, scores: 6, pref: 7, note: 8, createdAt: 9, updatedAt: 10 };
-var TS_AXES = ['jiang', 'ester', 'alc', 'sweet', 'floral', 'finish'];
+var TS_AXES = ['jiang', 'ester', 'alc', 'sweet', 'balance', 'finish'];   // v3.84 花香→平衡感
 var TS_PREFS = ['A', 'B', '都可以', ''];
 function _tsSheet_() {
   var ws = _consignSheet_(TS_SHEET, TS_HEADERS);

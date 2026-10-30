@@ -4702,10 +4702,10 @@ function qcBtnsFor(o) { return (o.items || []).map((it, i) => qcBtnHtml(o, it, i
 // 與 🔬 出貨品管不同：兩支酒互比、絕對分數 0～10、不做放行判定。一單一人一筆（再存＝覆寫自己的）。
 // 出現條件：訂單任一款酒名含「高粱」，或列在 TS_TARGETS。
 // ════════════════════════════════════════════════
-const TS_AXES = [['jiang', '醬香／糧糟香'], ['ester', '果香酯類'], ['alc', '酒精感'], ['sweet', '甜潤感'], ['floral', '花香'], ['finish', '餘韻長度']];
+const TS_AXES = [['jiang', '糧糟香'], ['ester', '果香酯類'], ['alc', '酒精感'], ['sweet', '甜潤感'], ['balance', '平衡感'], ['finish', '餘韻長度']];
 const TS_DEF = { A: '金門高粱 58°', B: '皇家高粱（白沙屯媽祖 2026）' };
 const TS_COL = { A: '#2b6cb0', B: '#d9622b' };
-const TS_TARGETS = ['261027-002'];
+const TS_TARGETS = ['261027-002', '260818-001'];   // v3.84 主公指示：Babyface Lot17 也掛
 function tsMatch(o) { return qcCanUse() && (TS_TARGETS.includes(o.orderNo) || (o.items || []).some(it => /高粱/.test(it.product || ''))); }
 function tsBtnHtml(o) {
   if (!tsMatch(o)) return '';
