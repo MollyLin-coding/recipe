@@ -526,7 +526,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.85';
+const APP_VERSION='v3.86';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -4702,7 +4702,7 @@ function qcBtnsFor(o) { return (o.items || []).map((it, i) => qcBtnHtml(o, it, i
 // 與 🔬 出貨品管不同：兩支酒互比、絕對分數 0～10、不做放行判定。一單一人一筆（再存＝覆寫自己的）。
 // 出現條件：訂單任一款酒名含「高粱」，或列在 TS_TARGETS。
 // ════════════════════════════════════════════════
-const TS_AXES = [['jiang', '糧糟香'], ['ester', '果香酯類'], ['alc', '酒精感'], ['sweet', '甜潤感'], ['balance', '平衡感'], ['finish', '餘韻長度']];
+const TS_AXES = [['jiang', '糧糟香'], ['ester', '果香酯類'], ['alc', '酒精滑順感'], ['sweet', '甜潤感'], ['balance', '平衡感'], ['finish', '餘韻長度']];
 const TS_DEF = { A: '金門高粱 58°', B: '皇家高粱（白沙屯媽祖 2026）' };
 const TS_COL = { A: '#2b6cb0', B: '#d9622b' };
 const TS_TARGETS = ['261027-002'];   // v3.85 主公指示：只掛 Babyface Lot19（Lot17 撤掉）
@@ -4773,7 +4773,7 @@ async function tsOpen(orderNo) {
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
       <div class="modal-title" style="margin:0;">🥃 基酒品評・${rcEsc(clientLabel ? clientLabel(o.client) : o.client)} ${rcEsc(orderNo)}</div>
       <button class="btn btn-ghost btn-sm" data-x="close">✕</button></div>
-    <div style="font-size:11px;color:var(--ink3);margin:4px 0 8px;">兩支高粱各自打 0～10 分（絕對強度，不是跟標準樣比）。每人一筆，再存會覆寫自己那筆；別人看得到。</div>
+    <div style="font-size:11px;color:var(--ink3);margin:4px 0 8px;">兩支高粱各自打 0～10 分（絕對強度，不是跟標準樣比；酒精滑順感越高＝越不刺口）。每人一筆，再存會覆寫自己那筆；別人看得到。</div>
     <div id="ts_chips" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;"></div>
     <div id="ts_radar"></div>
     <div id="ts_sum" style="font-size:12px;color:var(--ink2);background:var(--bg2,#f6f4ef);border-radius:8px;padding:8px 10px;margin:8px 0;line-height:1.6;"></div>
