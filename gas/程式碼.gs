@@ -5976,7 +5976,7 @@ var QC_OFFS = ['氧化紙板味', '醋酸／發酵味', '硫味', '藥水味', '
 var QC_CLARITY = ['清澈', '微霧', '混濁', '有沉澱', '與標準相同'];
 var QC_VERDICTS = ['放行', '待試飲', '退回'];
 // 容許差（與標準樣比）：綠＝≤1 倍、黃＝≤2 倍、紅＝>2 倍；總酸用相對值
-var QC_TOL = { brix: 0.5, ph: 0.10, taRel: 0.10, abv: 0.5 };   // ta＝酸度 g/1000ml（檸檬酸／蘋果酸／抗壞血酸，v3.81）；abv＝透明基酒酒精度
+var QC_TOL = { brix: 0.5, ph: 0.10, taRel: 0.10, abv: 0.5 };   // ta＝酸度（v3.82 起前端不再填，舊單有值仍會比）；abv＝相對酒精度（密度型酒精計、以核可樣品＝8% 為基準，v3.82）
 var QC_AREA_TOL = 0.10;   // v3.81 感官雷達面積與前一批相差 ≤10% 才合格（無前批則與標準樣 3 分八邊形比）
 function _qcArea_(sens) { var v = QC_SENS_KEYS.map(function (k) { return Number(sens && sens[k]) || 0; }), a = 0; for (var i = 0; i < v.length; i++) a += v[i] * v[(i + 1) % v.length]; return 0.5 * Math.sin(Math.PI / 4) * a; }
 // 前一批＝同客戶同酒款、不同（訂單＋Lot）中最近的一批；該批有放行單取最新放行單，否則取最新一張（前端 qcPickPrev 同規則）
@@ -6067,7 +6067,7 @@ function _qcJudge_(inst, sens, look, offs, std, prev) {
     ['brix', 'ph', 'ta', 'abv'].forEach(function (k) {
       var l = _qcLamp_(k, _qcNum_(inst[k]), _qcNum_(std.inst && std.inst[k]));
       lamps[k] = l;
-      var lb = { brix: '糖度', ph: 'pH', ta: '酸度', abv: '基酒酒精度' }[k];
+      var lb = { brix: '糖度', ph: 'pH', ta: '酸度', abv: '相對酒精度' }[k];
       if (l === 'r') { red = true; why.push(lb + '超出容許差 2 倍（本批 ' + inst[k] + '／標準 ' + std.inst[k] + '）'); }
       else if (l === 'y') { yellow = true; why.push(lb + '略超容許差（本批 ' + inst[k] + '／標準 ' + std.inst[k] + '）'); }
     });
@@ -6150,7 +6150,7 @@ function qcSave(p) {
   var inst = {};
   ['brix', 'ph', 'ta', 'abv'].forEach(function (k) { var n = _qcNum_(inst0[k]); if (n != null) inst[k] = n; });   // v3.81 刪樣品溫度
   if (inst.brix == null) return { ok: false, error: '糖度 Brix 為必填' };
-  if (inst.ph == null && inst.ta == null) return { ok: false, error: 'pH 與酸度至少填一項（酸度是這張單存在的理由）' };
+  if (inst.ph == null) return { ok: false, error: 'pH 為必填（酸度是這張單存在的理由）' };   // v3.82 取消酸度欄，pH 改必填
   if (inst.ph != null && (inst.ph < 1 || inst.ph > 8)) return { ok: false, error: 'pH 數值不合理：' + inst.ph };
   var sens = {}, miss = [];
   QC_SENS_KEYS.forEach(function (k) { var v = Number(sens0[k]); if (v >= 1 && v <= 5 && Math.round(v) === v) sens[k] = v; else miss.push(QC_SENS_LABELS[k]); });
