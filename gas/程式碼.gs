@@ -279,6 +279,8 @@ function doGet(e) {
         //   使用者幾乎永遠打到冷路徑（getOrders 熱狀態就要 4.7 秒）。改成只有明確帶 bust=1 才清。
         if (String((p && p.bust) || '') === '1') { try { CacheService.getScriptCache().removeAll(V3144_CACHE_KEYS); } catch (e) {} }
         result = getEnvInfo();
+        // v3.87 酒譜常駐索引探針（免登入、只回筆數與年齡，不回內容）
+        try { var _ri = _recipeIdxLoad_(); result.recipeIdx = _ri ? { n: _ri.list.length, ageMin: Math.round(((new Date()).getTime() - (_ri.builtAt || 0)) / 60000), failed: (_ri.failedClients || []).length } : null; } catch (e) { result.recipeIdx = { error: String(e) }; }
         result.modules = { consign: (typeof consignMe === 'function'), perf: (typeof perfGet === 'function'), expense: (typeof expList === 'function'), meeting: (typeof mtgList === 'function'), rdBackup: (typeof _rdBackup_ === 'function'), qc: (typeof qcSave === 'function'), tasting: (typeof tastingSave === 'function') };   // v3.80 qc 探針   // v3.58 meeting 探針   // v3.40 expense 探針   // v3.39 perf 探針   // v3.28 免登入探針：consign.gs 是否真的在部署版本裡（2026-09-03 Action 漏檔事故）
         // v3.14.5 診斷：CacheService 到底能不能用（put→get→remove 全程回報例外）
         result.cacheDiag = (function () {
@@ -650,7 +652,9 @@ function login(p) {
       const finalRole = _normRole_(role);   // v3.66 角色欄防呆（見 _normRole_）
       const token = Utilities.getUuid();
       _sessPut_(token, { username: String(username).trim(), role: finalRole, dealer: String(dealerKey == null ? '' : dealerKey).trim() });
-      _sessSweep_();   // 順手清掉過期的 Properties session
+      // v3.87 清過期 session 改為最多每 6 小時一次（原本每次登入都 getProperties 全掃＋逐筆刪，拖慢登入；Properties 不會因此爆量）
+      var _swc = null; try { _swc = CacheService.getScriptCache(); } catch (e) {}
+      if (!_swc || !_swc.get('sessSweepAt')) { _sessSweep_(); try { if (_swc) _swc.put('sessSweepAt', '1', 21600); } catch (e) {} }
       _logLogin_(username, finalRole, '成功');
       return { ok: true, role: finalRole, token: token, dealer: String(dealerKey == null ? '' : dealerKey).trim(), sessExp: (new Date()).getTime() + SESSION_TTL_SEC * 1000 };   // v3.77 +sessExp
     }
@@ -758,13 +762,57 @@ function changePassword(p) {
 }
 
 // ── 酒譜清單 ─────────────────────────────────────────────────
-function getRecipeList(p) {
-  const role = p && p._role;
-  const cache = CacheService.getScriptCache();
-  const cached = cache.get('recipeList_v1');
-  // v2.1 FB觀看：過濾一律在讀 cache「之後」做，且過濾結果絕不寫回共用 cache
-  if (cached) return _filterRecipeListByRole_(JSON.parse(cached), role);
-  const list = [];
+// v3.87 酒譜清單常駐索引（主公 2026-11-03 拍板 A 方案：「廠務APP 登入越來越久」）
+//   根因（沙盒實測 11/3）：冷路徑要逐本打開 11 本客戶酒譜表、逐分頁讀 Row2 → 97 款共 22 秒，
+//   bootstrap 冷啟 37 秒；且快取只有 600 秒、保溫觸發器 8/26 已拔除 → 閒置 10 分鐘後下一個登入的人就付全額，
+//   每多一個代工客戶就再慢一截。
+//   做法：三層讀取 ① CacheService（TTL 6h）② ScriptProperties 常駐索引（無 TTL，分塊存，單值上限 9KB）③ 冷掃。
+//   新鮮度：回傳 builtAt；前端開機後若索引超過 30 分鐘，背景帶 fresh=1 重建（不擋畫面）；
+//   審核核准建新分頁時直接把新酒款補進索引；按 ↻ 照舊 fresh=1 強制重建。
+//   韌性：重建時某本客戶表讀取失敗 → 沿用上一份索引裡該客戶的酒款（不會整批消失），並記在 failedClients。
+var RECIPE_IDX_KEY = 'recipeIdx_v1';          // Properties 分塊：recipeIdx_v1_n＝塊數、recipeIdx_v1_0..n-1
+var RECIPE_LIST_CACHE_TTL = 21600;              // CacheService 上限 6 小時
+function _recipeIdxLoad_() {
+  try {
+    var pr = PropertiesService.getScriptProperties();
+    var n = parseInt(pr.getProperty(RECIPE_IDX_KEY + '_n') || '0', 10);
+    if (!(n > 0)) return null;
+    var keys = []; for (var i = 0; i < n; i++) keys.push(RECIPE_IDX_KEY + '_' + i);
+    var all = pr.getProperties();
+    var str = '';
+    for (var j = 0; j < keys.length; j++) { if (all[keys[j]] == null) return null; str += all[keys[j]]; }
+    var o = JSON.parse(str);
+    return (o && o.ok && Array.isArray(o.list)) ? o : null;
+  } catch (e) { return null; }
+}
+function _recipeIdxSave_(result) {
+  try {
+    var str = JSON.stringify(result);
+    // 以「字元」切但確保每塊 UTF-8 不超過 8KB（Properties 單值上限 9KB）：逐字累加 byte 數
+    var chunks = [], cur = '', bytes = 0;
+    for (var i = 0; i < str.length; i++) {
+      var ch = str.charAt(i), c = str.charCodeAt(i);
+      // 代理對（emoji 等）整組處理，避免切半
+      if (c >= 0xD800 && c <= 0xDBFF && i + 1 < str.length) { ch = str.substr(i, 2); i++; }
+      var b = (c < 0x80) ? 1 : (c < 0x800) ? 2 : (c >= 0xD800 && c <= 0xDBFF) ? 4 : 3;
+      if (bytes + b > 8000) { chunks.push(cur); cur = ''; bytes = 0; }
+      cur += ch; bytes += b;
+    }
+    if (cur) chunks.push(cur);
+    var pr = PropertiesService.getScriptProperties();
+    var oldN = parseInt(pr.getProperty(RECIPE_IDX_KEY + '_n') || '0', 10) || 0;
+    var obj = {};
+    for (var k = 0; k < chunks.length; k++) obj[RECIPE_IDX_KEY + '_' + k] = chunks[k];
+    obj[RECIPE_IDX_KEY + '_n'] = String(chunks.length);
+    pr.setProperties(obj, false);
+    for (var d = chunks.length; d < oldN; d++) { try { pr.deleteProperty(RECIPE_IDX_KEY + '_' + d); } catch (e) {} }
+    return chunks.length;
+  } catch (e) { return 0; }
+}
+function _recipeIdxScan_(prev) {
+  var list = [], failed = [];
+  var prevBy = {};
+  ((prev && prev.list) || []).forEach(function (x) { (prevBy[x.client] = prevBy[x.client] || []).push(x); });
   for (const client of Object.keys(CLIENTS)) {
     try {
       const ss = getClientSS(client);
@@ -779,23 +827,55 @@ function getRecipeList(p) {
           // Row2 通常 E欄是酒款名稱，或 D欄
           recipeName = String(row2[4] || row2[3] || '').trim();
         } catch(e) {}
-        if (!recipeName) {
-          // 從分頁名稱去掉前綴
-          recipeName = stripRecipePrefix(name);
-        }
+        if (!recipeName) recipeName = stripRecipePrefix(name);   // 從分頁名稱去掉前綴
         list.push({ client, sheet: name, recipeName });
       }
     } catch(e) {
-      // 單一客戶錯誤不影響其他
+      // 單一客戶錯誤不影響其他；v3.87 沿用上一份索引的該客戶酒款，避免一次讀取失敗就讓酒款從清單消失 6 小時
+      failed.push(client);
+      (prevBy[client] || []).forEach(function (x) { list.push(x); });
     }
   }
-  const result = { ok: true, list };
-  cache.put('recipeList_v1', JSON.stringify(result), 600); // v3.14.4 TTL 600＋保溫每5分鐘刷新＝使用者永遠打不到冷路徑(實測冷啟 20 秒)
+  return { ok: true, list: list, builtAt: (new Date()).getTime(), failedClients: failed };
+}
+function _recipeListPut_(result) {
+  try { CacheService.getScriptCache().put('recipeList_v1', JSON.stringify(result), RECIPE_LIST_CACHE_TTL); } catch (e) {}
+}
+function getRecipeList(p) {
+  const role = p && p._role;
+  const fresh = String((p && p.fresh) || '') === '1';
+  if (!fresh) {
+    // ① 快取
+    try {
+      const cached = CacheService.getScriptCache().get('recipeList_v1');
+      // v2.1 FB觀看：過濾一律在讀 cache「之後」做，且過濾結果絕不寫回共用 cache
+      if (cached) return _filterRecipeListByRole_(JSON.parse(cached), role);
+    } catch (e) {}
+    // ② 常駐索引
+    const idx = _recipeIdxLoad_();
+    if (idx) { _recipeListPut_(idx); return _filterRecipeListByRole_(idx, role); }
+  }
+  // ③ 冷掃（↻ 強制、背景重建、或索引尚未建立）
+  const result = _recipeIdxScan_(_recipeIdxLoad_());
+  _recipeListPut_(result);
+  _recipeIdxSave_(result);
   return _filterRecipeListByRole_(result, role);
+}
+// v3.87 審核核准建新分頁後：把新酒款直接補進索引（免整批重掃 22 秒）
+function _recipeIdxAppend_(client, sheet, recipeName) {
+  try {
+    var idx = _recipeIdxLoad_();
+    try { CacheService.getScriptCache().remove('recipeList_v1'); } catch (e) {}
+    if (!idx) return;   // 尚無索引 → 下次讀取自然冷掃
+    var exists = idx.list.some(function (x) { return x.client === client && x.sheet === sheet; });
+    if (!exists) idx.list.push({ client: client, sheet: sheet, recipeName: recipeName || stripRecipePrefix(sheet) });
+    _recipeIdxSave_(idx);
+    _recipeListPut_(idx);
+  } catch (e) {}
 }
 function _filterRecipeListByRole_(result, role) {
   if (role !== 'FB觀看') return result;
-  return { ok: true, list: (result.list || []).filter(function (x) { return x.client === 'Feeling Bar'; }) };
+  return { ok: true, builtAt: result.builtAt, list: (result.list || []).filter(function (x) { return x.client === 'Feeling Bar'; }) };
 }
 
 // ── 單一酒譜 ─────────────────────────────────────────────────
@@ -2851,8 +2931,8 @@ function createRecipeSheet(row) {
   ns.getRange(PROC_NOTE_ROW, 1).setValue('製程備註');
   ns.getRange(PROC_NOTE_ROW + 1, 1).setValue('');
 
-  // ── 清除 recipeList 快取（新分頁須出現在酒譜清單）──
-  CacheService.getScriptCache().remove('recipeList_v1');
+  // ── 新分頁補進酒譜清單（v3.87：直接補進常駐索引，免整批重掃）──
+  _recipeIdxAppend_(client, newSheetName, recipeName);
 
   return newSheetName;
 }
@@ -4189,18 +4269,23 @@ function bootstrap(p) {
   var out = { ok: true, role: role || '' };
   function safe(fn) { try { return fn(); } catch (e) { return { ok: false, error: String((e && e.message) || e) }; } }
   if (role === CONSIGN_ROLE) return out;   // v3.28 經銷商角色走 dealer.html／consignMe，不回廠務資料
-  out.recipeList = safe(function () { return getRecipeList(p); });
+  // v3.87 開機一律不帶 fresh 讀酒譜（走快取／常駐索引）；索引新鮮度由前端背景 fresh=1 重建負責，絕不讓登入等冷掃
+  var _t0 = Date.now(), _ms = {};
+  out.recipeList = safe(function () { var q = {}; for (var k in p) if (k !== 'fresh') q[k] = p[k]; return getRecipeList(q); });
+  _ms.recipe = Date.now() - _t0;
   // v3.28 經銷商設定（建單判斷寄售客戶用）＋結帳日提醒（admin/財務 登入一天一次）
-  if (role === 'admin' || role === '財務' || role === 'PM') out.consignDealers = safe(function () { return consignDealers(p); });
-  if (role === 'admin' || role === '財務') out.consignAlerts = safe(function () { return consignAlerts(p); });
+  function timed(name, fn) { var t = Date.now(); var r = safe(fn); _ms[name] = Date.now() - t; return r; }   // v3.87 各段耗時（診斷用，前端不讀）
+  out._ms = _ms;
+  if (role === 'admin' || role === '財務' || role === 'PM') out.consignDealers = timed('consignDealers', function () { return consignDealers(p); });
+  if (role === 'admin' || role === '財務') out.consignAlerts = timed('consignAlerts', function () { return consignAlerts(p); });
   if (role === 'FB觀看') return out;   // FB觀看 只看酒譜，其餘一律不回
   // v3.19b bootstrap 減重：inventory(261筆/38.5KB) 移出開機路徑——開機畫面用不到，
   //   原料/資材庫頁與研發試算頁本就有 lazy-load(!C.inv 即自抓)，進頁才載。舊版前端拿不到
   //   _b.inventory 時走 || {ok:false} 分支，同樣落入 lazy-load，向下相容。
-  out.orders        = safe(function () { return getOrders(p); });   // view 由前端帶，PM 剝除照舊
-  out.runCardIndex  = safe(function () { return getRunCardIndex(); });
-  out.bottles       = safe(function () { return getBottleOverview(); });
-  out.stockAlerts   = safe(function () { return getStockAlerts(); });
+  out.orders        = timed('orders', function () { return getOrders(p); });   // view 由前端帶，PM 剝除照舊
+  out.runCardIndex  = timed('runCardIndex', function () { return getRunCardIndex(); });
+  out.bottles       = timed('bottles', function () { return getBottleOverview(); });
+  out.stockAlerts   = timed('stockAlerts', function () { return getStockAlerts(); });
   return out;
 }
 

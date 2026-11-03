@@ -798,6 +798,27 @@ async function doLogin() {
   await _bootApp(username, res.role);
   loginBtn.disabled = false; loginBtn.textContent = '登入';
 }
+// v3.87 酒譜清單常駐索引：開機一律吃後端索引（秒回），索引年齡超過 30 分鐘才在背景帶 fresh=1 重掃 11 本客戶酒譜表（約 20 秒）。
+//   背景呼叫 silent＝無遮罩、無 toast；回來後只換資料、不重繪畫面（下次進酒譜頁／下拉就是新清單），避免打斷正在操作的人。
+//   舊後端沒有 builtAt → 不觸發（前後端部署時差期間不會每次登入都重掃）。
+const RECIPE_IDX_STALE_MS = 30 * 60 * 1000;
+function _recipeIdxMaybeRefresh(lr) {
+  try {
+    if (!lr || !lr.builtAt) return;
+    if (Date.now() - Number(lr.builtAt) < RECIPE_IDX_STALE_MS) return;
+    if (window._recipeBgBusy) return;
+    window._recipeBgBusy = true;
+    setTimeout(() => {
+      api({ action: 'getRecipeList', fresh: '1' }, true).then(r => {
+        if (r && r.ok && Array.isArray(r.list) && r.list.length) {
+          recipeList = r.list;
+          clientList = [...new Set(recipeList.map(i => i.client))].map(n => ({ name: n }));
+          lsSet('np_recipeList', recipeList);
+        }
+      }).finally(() => { window._recipeBgBusy = false; });
+    }, 3000);   // 讓開機其餘請求先走完，避免瞬間連打觸發 Google 限流
+  } catch (e) { window._recipeBgBusy = false; }
+}
 // v3.12 登入後開機流程（doLogin 與 F5 還原共用；自 doLogin 原地抽出、內容不變）
 async function _bootApp(username, role) {
   curUser = { username, role };
@@ -826,6 +847,7 @@ async function _bootApp(username, role) {
     // 從酒譜清單推導客戶清單（不需要獨立 getClientList API）
     clientList = [...new Set(recipeList.map(i => i.client))].map(n => ({ name: n }));
     lsSet('np_recipeList', recipeList); setOffline(false);
+    _recipeIdxMaybeRefresh(lr);   // v3.87 索引超過 30 分鐘 → 背景重建（不擋開機）
   } else if (lr._offline) {
     const cached = lsGet('np_recipeList');
     if (cached && cached.length) {
