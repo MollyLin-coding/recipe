@@ -2580,6 +2580,7 @@ function saveRdRecord(p) {
   const now = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
   const _newRow = [id, now, p.creator, p.client, p.name, p.volume, p.bottle, p.ingredients, p.results];
   ws.appendRow(_newRow);
+  _forceTextCell_(ws, ws.getLastRow(), 2, now);   // v3.88 建立時間存純文字（appendRow 會把 zh-TW 字串吃成 Date 再依時區偏移，與 v3.65 備份分頁同地雷）
   const _bwN = _rdBackup_('新增', _newRow, p);   // v3.65 新增後留一筆
   const _rn = { ok: true, id: id, updated: false }; if (_bwN) _rn.backupWarn = _bwN;
   return _rn;

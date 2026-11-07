@@ -1720,13 +1720,15 @@ async function rdRenderSavedList(force) {
     if (res && res.ok) _rdRecords = res.records || [];
   }
   if (!_rdRecords.length) { box.innerHTML = ''; return; }
+  window._rdRecords = _rdRecords;   // v3.88 讓 _qcResolve 找得到
+  await ensureQcIndex();            // v3.88 風味品鑑燈號
   const rows = _rdRecords.slice().reverse(); // 新→舊
   box.innerHTML = `<div class="card" style="margin-top:10px;">
     <div class="card-title" style="margin-bottom:4px;">💾 已儲存試算記錄（${rows.length}）</div>
     <div style="font-size:11px;color:var(--ink3);margin-bottom:4px;">點一筆查看詳細試算內容；可從詳情載入編輯或送出申請。</div>
     ${rows.map(r => `<div onclick="rdShowDetail('${rcEsc(r.id)}')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;background:var(--card);">
       <div style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"><span style="font-weight:600;font-size:13px;">${rcEsc(r.name || '未命名')}</span><span style="font-size:11px;color:var(--ink3);margin-left:6px;">${rcEsc(r.client || '—')}</span></div>
-      <div style="font-size:11px;color:var(--ink3);flex:0 0 auto;">${rcEsc(r.creator || '')} · ${rcEsc(String(r.createdAt).substring(0, 10))}</div>
+      ${rdQcBtnHtml(r)}<div style="font-size:11px;color:var(--ink3);flex:0 0 auto;">${rcEsc(r.creator || '')} · ${rcEsc(String(r.createdAt).substring(0, 10))}</div>
     </div>`).join('')}
   </div>`;
 }
@@ -1750,7 +1752,7 @@ function rdShowDetail(id) {
   }).join('') || '<div style="color:var(--ink3);font-size:12px;">（無原料明細）</div>';
   const resRow = (lb, v, unit) => (v == null || v === '' ? '' : `<div class="rm"><div class="lb">${lb}</div><div class="vl">${v}${unit || ''}</div></div>`);
   const isAdmin = curUser && curUser.role === 'admin';
-  const modal = makeModal(`<div class="modal-title">🧪 ${rcEsc(r.name || '未命名')}</div>
+  const modal = makeModal(`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;"><div class="modal-title" style="margin:0;">🧪 ${rcEsc(r.name || '未命名')}</div>${rdQcBtnHtml(r)}</div>
     <div style="font-size:12px;color:var(--ink3);margin-bottom:8px;">${rcEsc(r.client || '—')} · ${rcEsc(r.creator || '')} · ${rcEsc(String(r.createdAt).substring(0, 16))}｜總量 ${rcEsc(r.volume || 0)}ml · ${rcEsc(r.bottle || '')}</div>
     <div class="card-title" style="font-size:13px;">原料明細</div>
     <div style="max-height:230px;overflow-y:auto;margin-bottom:10px;">${ingRows}</div>
@@ -4703,6 +4705,18 @@ function qcBtnHtml(o, it, i, compact) {
   return `<button class="btn btn-sm" style="${common}border:1px solid ${QC_VCOLOR[v]};background:${QC_VBG[v]};color:${QC_VCOLOR[v]};font-weight:600;" onclick="${click}">🔬 ${nm}${QC_VICON[v]} ${v}${st.date ? ' ' + String(st.date).slice(5) : ''}${st.n > 1 ? '（' + st.n + '張）' : ''}</button>`;
 }
 function qcBtnsFor(o) { return (o.items || []).map((it, i) => qcBtnHtml(o, it, i, false)).join(''); }
+// v3.88 研發試算記錄的「🔬 風味品鑑」鈕：鍵＝'RD-'+記錄id || 記錄名稱，三態燈號與訂單列表一致
+function rdQcBtnHtml(r) {
+  if (!qcCanUse() || !r || !r.name) return '';
+  const o = { orderNo: 'RD-' + String(r.id) }, it = { product: rdQcKey(r).product };
+  const st = qcStateOf(o, it);
+  const common = 'padding:3px 8px;font-size:11px;border-radius:6px;cursor:pointer;flex:0 0 auto;';
+  const click = `event.stopPropagation();qcOpen('${rcEsc(o.orderNo)}',0)`;
+  if (st === undefined) return `<button class="btn btn-sm" style="${common}border:1px solid var(--border);background:transparent;color:var(--ink3);" onclick="${click}">🔬 風味品鑑</button>`;
+  if (!st) return `<button class="btn btn-sm" style="${common}border:1px dashed #c0392b;background:transparent;color:#c0392b;" onclick="${click}">🔬 風味品鑑（未做）</button>`;
+  const v = st.verdict || '待試飲';
+  return `<button class="btn btn-sm" style="${common}border:1px solid ${QC_VCOLOR[v]};background:${QC_VBG[v]};color:${QC_VCOLOR[v]};font-weight:600;" onclick="${click}">🔬 ${QC_VICON[v]} ${v}${st.date ? ' ' + String(st.date).slice(5) : ''}${st.n > 1 ? '（' + st.n + '張）' : ''}</button>`;
+}
 // ════════════════════════════════════════════════
 // v3.83 🥃 基酒品評（主公 2026-10-30 指示）
 // Babyface 261027-002（鳳梨／芒果高粱冰茶）要在金門高粱 58° 與皇家高粱之間選基酒 → 阿軒、Vic 各自試喝勾雷達。
@@ -4947,10 +4961,32 @@ function _qcLampDot(l) { return l === 'g' ? '<span title="容許差內" style="c
 function _qcVerdictBadge(v, small) { v = v || '待試飲'; return `<span style="display:inline-block;padding:${small ? '1px 6px' : '3px 10px'};border-radius:999px;font-size:${small ? 10 : 13}px;font-weight:700;color:${QC_VCOLOR[v]};background:${QC_VBG[v]};border:1px solid ${QC_VCOLOR[v]};">${QC_VICON[v]} ${v}</span>`; }
 
 // 入口：某單某款 → 品管單清單＋標準樣
+// v3.88 研發試算記錄也能開品管單（主公 2026-11-07 拍板 A 案）：orderNo 以 'RD-' 開頭＝研發記錄 id，
+//   client／酒款取自記錄、Lot 預填名稱中的版本號；後端 qcSave 只驗 orderNo＋product、不查訂單存在，零改動。
+// 品管鍵：酒款＝記錄名稱去掉版本尾綴（「乳清蛋白調酒_百香果莫希托_v0.2（軍師初估）」→「乳清蛋白調酒_百香果莫希托」）、Lot＝版本號
+//   這樣 v0.1／v0.2 兩筆記錄共用同一個標準樣、第二版自動疊第一版雷達（後端 _qcPrevFor_ 以 client＋product 找前批）。
+function rdQcKey(r) {
+  const nm = String(r.name || ''); const vm = nm.match(/v\d+(?:\.\d+)?/i);
+  let prod = vm ? nm.slice(0, vm.index).replace(/[\s_\-–—・·]+$/, '') : nm;
+  if (!prod) prod = nm;
+  return { product: prod.slice(0, 120), lot: vm ? vm[0] : '' };
+}
+function _qcResolve(orderNo, ii) {
+  if (/^RD-/.test(String(orderNo))) {
+    const r = (window._rdRecords || []).find(x => 'RD-' + String(x.id) === orderNo); if (!r) return null;
+    const k = rdQcKey(r);
+    return { o: { orderNo, client: String(r.client || ''), lot: k.lot, _rd: true, _rdId: String(r.id), _rdName: String(r.name || '') },
+             it: { product: k.product, qty: r.volume, volume: 'ml（研發試算）' } };
+  }
+  const o = (window._mgmtOrders || []).find(x => x.orderNo === orderNo); if (!o) return null;
+  const it = (o.items || [])[ii]; if (!it || !it.product) return null;
+  return { o, it };
+}
+function _qcAfterSave(o) { if (o && o._rd) { rdRenderSavedList(false); } else if (window._mgmtOrders) renderMonthOrders(window._mgmtOrders); }
 async function qcOpen(orderNo, ii) {
-  const o = (window._mgmtOrders || []).find(x => x.orderNo === orderNo);
-  if (!o) { toast('找不到訂單 ' + orderNo + '，請重新整理'); return; }
-  const it = (o.items || [])[ii]; if (!it || !it.product) { toast('此款尚未綁定酒款名稱'); return; }
+  const rs = _qcResolve(orderNo, ii);
+  if (!rs) { toast(/^RD-/.test(String(orderNo)) ? '找不到研發試算記錄，請重新整理' : '找不到訂單 ' + orderNo + '，請重新整理'); return; }
+  const { o, it } = rs;
   const r = await apiBusy({ action: 'qcGet', orderNo: o.orderNo, product: it.product, client: o.client }, '讀取品管紀錄…');
   if (!r || !r.ok) { toast('讀取失敗：' + ((r && r.error) || '')); return; }
   document.querySelectorAll('.modal-bg.qc-modal').forEach(x => x.remove());
@@ -4973,16 +5009,16 @@ async function qcOpen(orderNo, ii) {
   }).join('');
   const m = makeModal(`
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-      <div class="modal-title" style="margin:0;">🔬 出貨品管・${rcEsc(it.product)}</div>
+      <div class="modal-title" style="margin:0;">🔬 ${o._rd ? '研發風味品鑑' : '出貨品管'}・${rcEsc(it.product)}</div>
       <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">關閉</button>
     </div>
-    <div style="font-size:12px;color:var(--ink3);margin:4px 0 8px;">${o.orderNo} · ${clientLabel(o.client)}${o.lot ? ' · Lot ' + rcEsc(o.lot) : ''} · ${it.qty} 瓶 × ${rcEsc(it.volume || '')}</div>
+    <div style="font-size:12px;color:var(--ink3);margin:4px 0 8px;">${o._rd ? ('研發試算 ' + rcEsc(o._rdId) + '「' + rcEsc(o._rdName) + '」 · ' + rcEsc(o.client || '—') + ' · 批量 ' + rcEsc(String(it.qty || '')) + ' ml' + (o.lot ? ' · 版本 ' + rcEsc(o.lot) : '')) : (o.orderNo + ' · ' + clientLabel(o.client) + (o.lot ? ' · Lot ' + rcEsc(o.lot) : '') + ' · ' + it.qty + ' 瓶 × ' + rcEsc(it.volume || ''))}</div>
     ${stdBox}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;">
       <b style="font-size:13px;">本單品管紀錄（${(r.list || []).length}）</b>
       <button class="btn btn-primary btn-sm" onclick="qcEdit('${o.orderNo}',${ii},'')">＋ 新增品管單</button>
     </div>
-    ${rows || '<div style="color:var(--ink3);font-size:12px;padding:10px;text-align:center;">尚無品管單——出貨前請先做一張。</div>'}
+    ${rows || ('<div style="color:var(--ink3);font-size:12px;padding:10px;text-align:center;">' + (o._rd ? '尚無品鑑紀錄——試作後做一張，第二版會自動疊上這一版的雷達。' : '尚無品管單——出貨前請先做一張。') + '</div>')}
     <div style="font-size:11px;color:var(--ink3);margin-top:10px;line-height:1.6;">判定規則：任一異味／任一感官或色澤給 1、5 分／<b>感官雷達面積與前一批（無前批則與標準樣）相差超過 ${QC_AREA_TOL * 100}%</b>／任一儀器超出容許差 2 倍 → <b style="color:#c0392b;">退回</b>；儀器略超、3 項以上感官 2 或 4 分、混濁沉澱、尚無標準樣 → <b style="color:#b7791f;">待試飲</b>；其餘 <b style="color:var(--green);">放行</b>。容許差：Brix ±${QC_TOL.brix}、pH ±${QC_TOL.ph}、相對酒精度 ±${QC_TOL.abv}。</div>`);
   m.classList.add('qc-modal');
   m.querySelector('.modal-box').style.maxWidth = '720px';
@@ -4998,7 +5034,7 @@ async function qcDel(orderNo, ii, id) {
   if (!confirm('刪除這張品管單（含照片）？無法復原。')) return;
   const r = await api({ action: 'qcDelete', id });
   if (!r || !r.ok) { reqWarn('刪除失敗', (r && r.error) || ''); return; }
-  toast('已刪除'); await ensureQcIndex(true); if (window._mgmtOrders) renderMonthOrders(window._mgmtOrders); qcOpen(orderNo, ii);
+  toast('已刪除'); await ensureQcIndex(true); _qcAfterSave(window._qcCtx && window._qcCtx.o); qcOpen(orderNo, ii);
 }
 // 查看（唯讀）：雷達圖＋儀器燈號＋照片
 async function qcView(id) {
@@ -5206,7 +5242,7 @@ async function qcSubmit() {
   const v = r.report.final || r.report.sys;
   toast('🔬 品管單已存：' + v, 3000);
   await ensureQcIndex(true);
-  if (window._mgmtOrders) renderMonthOrders(window._mgmtOrders);
+  _qcAfterSave(f.o);
   qcOpen(f.o.orderNo, f.ii);
 }
 // ════════════════════════════════════════════════
