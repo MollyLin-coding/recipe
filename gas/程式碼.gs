@@ -6189,8 +6189,10 @@ function qcSave(p) {
     var lotNow = _qcStr_(p.lot, 20);
     var prev = _qcPrevFor_(all, client || (cur && cur.client) || '', product, orderNo, lotNow, cur ? cur.id : '');
     var j = _qcJudge_(inst, sens, look, offs, std, prev);
+    var isRd = /^RD-/.test(orderNo);   // v3.90 研發試算品鑑（主公 2026-11-07 拍板）：只記錄、不判定，sys／final 固定「紀錄」，不接受覆寫
+    if (isRd) { j.verdict = '紀錄'; }
     var final = j.verdict, reason = '';
-    if (p._role === 'admin' && QC_VERDICTS.indexOf(String(p.final || '')) >= 0 && String(p.final) !== j.verdict) {
+    if (!isRd && p._role === 'admin' && QC_VERDICTS.indexOf(String(p.final || '')) >= 0 && String(p.final) !== j.verdict) {
       reason = _qcStr_(p.reason, 300);
       if (!reason) return { ok: false, error: '覆寫系統判定須填寫理由' };
       final = String(p.final);

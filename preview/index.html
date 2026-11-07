@@ -4677,9 +4677,9 @@ const QC_INST = [
   ['brix', '糖度 Brix', '°Bx', '0.1', '必填'], ['ph', 'pH', '', '0.01', '必填'],
   ['abv', '相對酒精度（以樣品為基準）', '%', '0.1', '選填；密度型酒精計，樣品＝8%']   // v3.82 主公指示：取消酸度欄（留 pH）、酒精度改相對值   // v3.81 主公指示：總酸改 g/1000ml、酒精度改量透明基酒、刪樣品溫度
 ];
-const QC_VCOLOR = { '放行': 'var(--green)', '待試飲': '#b7791f', '退回': '#c0392b' };
-const QC_VBG = { '放行': '#e8f2ea', '待試飲': '#fbf1dc', '退回': '#fbe9e7' };
-const QC_VICON = { '放行': '✔', '待試飲': '⏳', '退回': '✖' };
+const QC_VCOLOR = { '放行': 'var(--green)', '待試飲': '#b7791f', '退回': '#c0392b', '紀錄': '#4a6fa5' };   // v3.90 '紀錄'＝研發品鑑不判定
+const QC_VBG = { '放行': '#e8f2ea', '待試飲': '#fbf1dc', '退回': '#fbe9e7', '紀錄': '#e9eef7' };
+const QC_VICON = { '放行': '✔', '待試飲': '⏳', '退回': '✖', '紀錄': '📝' };
 function qcCanUse() { return !!(curUser && curUser.role !== 'FB觀看' && curUser.role !== '經銷商'); }
 function qcIsAdmin() { return !!(curUser && curUser.role === 'admin'); }
 function _qcIdxApply(r) {
@@ -5019,7 +5019,7 @@ async function qcOpen(orderNo, ii) {
       <button class="btn btn-primary btn-sm" onclick="qcEdit('${o.orderNo}',${ii},'')">＋ 新增品管單</button>
     </div>
     ${rows || ('<div style="color:var(--ink3);font-size:12px;padding:10px;text-align:center;">' + (o._rd ? '尚無品鑑紀錄——試作後做一張，第二版會自動疊上這一版的雷達。' : '尚無品管單——出貨前請先做一張。') + '</div>')}
-    <div style="font-size:11px;color:var(--ink3);margin-top:10px;line-height:1.6;">判定規則：任一異味／任一感官或色澤給 1、5 分／<b>感官雷達面積與前一批（無前批則與標準樣）相差超過 ${QC_AREA_TOL * 100}%</b>／任一儀器超出容許差 2 倍 → <b style="color:#c0392b;">退回</b>；儀器略超、3 項以上感官 2 或 4 分、混濁沉澱、尚無標準樣 → <b style="color:#b7791f;">待試飲</b>；其餘 <b style="color:var(--green);">放行</b>。容許差：Brix ±${QC_TOL.brix}、pH ±${QC_TOL.ph}、相對酒精度 ±${QC_TOL.abv}。</div>`);
+    <div style="font-size:11px;color:var(--ink3);margin-top:10px;line-height:1.6;">${o._rd ? '研發品鑑：每張只記錄儀器、感官雷達、色澤照片與備註，<b>不判定放行／退回</b>；主公核可的那一版按「⭐ 設為標準」，之後各版自動疊前一版雷達並顯示面積差供參考。' : ''}${o._rd ? '' : '判定規則：'}任一異味／任一感官或色澤給 1、5 分／<b>感官雷達面積與前一批（無前批則與標準樣）相差超過 ${QC_AREA_TOL * 100}%</b>／任一儀器超出容許差 2 倍 → <b style="color:#c0392b;">退回</b>；儀器略超、3 項以上感官 2 或 4 分、混濁沉澱、尚無標準樣 → <b style="color:#b7791f;">待試飲</b>；其餘 <b style="color:var(--green);">放行</b>。容許差：Brix ±${QC_TOL.brix}、pH ±${QC_TOL.ph}、相對酒精度 ±${QC_TOL.abv}。</div>`);
   m.classList.add('qc-modal');
   m.querySelector('.modal-box').style.maxWidth = '720px';
   window._qcCtx = { o, ii, it, std, list: r.list || [], hist: r.hist || [] };
@@ -5131,7 +5131,7 @@ function qcEdit(orderNo, ii, id) {
     <div class="fg" style="margin-top:8px;"><label>備註（處理方式、補正、客戶意見、品飲描述…）</label><textarea class="inp" id="qc_note" maxlength="500" rows="5" wrap="soft" style="margin:0;min-height:120px;height:auto;line-height:1.5;resize:vertical;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-all;">${rcEsc(cur ? cur.note : '')}</textarea></div>
 
     <div id="qc_verdict" style="margin-top:10px;padding:10px;border-radius:10px;"></div>
-    ${qcIsAdmin() ? `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:12px;"><b>主公覆寫判定</b><select class="inp" id="qc_final" style="margin:0;width:auto;"><option value="">（照系統判定）</option>${['放行', '待試飲', '退回'].map(v => `<option ${cur && cur.final !== cur.sys && cur.final === v ? 'selected' : ''}>${v}</option>`).join('')}</select><input class="inp" id="qc_reason" placeholder="覆寫理由（必填）" value="${rcEsc(cur && cur.final !== cur.sys ? cur.reason : '')}" style="margin:0;flex:1;min-width:160px;"></div>` : ''}
+    ${qcIsAdmin() && !o._rd ? `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:12px;"><b>主公覆寫判定</b><select class="inp" id="qc_final" style="margin:0;width:auto;"><option value="">（照系統判定）</option>${['放行', '待試飲', '退回'].map(v => `<option ${cur && cur.final !== cur.sys && cur.final === v ? 'selected' : ''}>${v}</option>`).join('')}</select><input class="inp" id="qc_reason" placeholder="覆寫理由（必填）" value="${rcEsc(cur && cur.final !== cur.sys ? cur.reason : '')}" style="margin:0;flex:1;min-width:160px;"></div>` : ''}
     <div class="fe" style="margin-top:10px;gap:6px;">
       <button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button>
       <button class="btn btn-primary btn-sm" id="qc_save">💾 儲存品管單</button>
@@ -5215,10 +5215,13 @@ function qcFormSync() {
   if (!F.look.color) miss.push('色澤'); if (!F.look.clarity) miss.push('澄清度');
   if (F.inst.brix == null) miss.push('Brix'); if (F.inst.ph == null) miss.push('pH');
   const vd = f.m.querySelector('#qc_verdict');
-  vd.style.background = miss.length ? '#f4f4f4' : QC_VBG[j.verdict]; vd.style.border = '1px solid ' + (miss.length ? '#ddd' : QC_VCOLOR[j.verdict]);
+  const _vk = (f.o && f.o._rd) ? '紀錄' : j.verdict;   // v3.90 研發紀錄不判定
+  vd.style.background = miss.length ? '#f4f4f4' : QC_VBG[_vk]; vd.style.border = '1px solid ' + (miss.length ? '#ddd' : QC_VCOLOR[_vk]);
   vd.innerHTML = miss.length
     ? `<div style="font-size:12px;color:var(--ink3);">尚未填完：${miss.map(rcEsc).join('、')}</div>`
-    : `<div style="font-size:12px;">系統判定預覽：${_qcVerdictBadge(j.verdict)}</div>${j.why.length ? `<ul style="font-size:12px;margin:4px 0 0 18px;padding:0;">${j.why.map(w => '<li>' + rcEsc(w) + '</li>').join('')}</ul>` : '<div style="font-size:12px;color:var(--green);margin-top:3px;">各項皆在標準範圍內，可以出貨。</div>'}`;
+    : (f.o && f.o._rd)
+      ? `<div style="font-size:12px;">研發品鑑：${_qcVerdictBadge('紀錄')} <span style="color:var(--ink3);">只記錄、不判定放行／退回</span></div>${j.why.length ? `<div style="font-size:11px;color:var(--ink3);margin-top:4px;">與${f.prev ? '前一版' : '標準樣'}相比的觀察（僅供參考）：</div><ul style="font-size:12px;margin:2px 0 0 18px;padding:0;color:var(--ink3);">${j.why.filter(w => !/尚無標準樣/.test(w)).map(w => '<li>' + rcEsc(w) + '</li>').join('')}</ul>` : ''}`
+      : `<div style="font-size:12px;">系統判定預覽：${_qcVerdictBadge(j.verdict)}</div>${j.why.length ? `<ul style="font-size:12px;margin:4px 0 0 18px;padding:0;">${j.why.map(w => '<li>' + rcEsc(w) + '</li>').join('')}</ul>` : '<div style="font-size:12px;color:var(--green);margin-top:3px;">各項皆在標準範圍內，可以出貨。</div>'}`;
   return miss;
 }
 async function qcSubmit() {
@@ -5232,7 +5235,7 @@ async function qcSubmit() {
     inst: JSON.stringify(F.inst), sens: JSON.stringify(F.sens), look: JSON.stringify(F.look), offs: JSON.stringify(F.offs),
     photos: JSON.stringify(F.photos.map(p => p.keep ? { keep: p.keep } : { data: p.data, w: p.w, h: p.h, caption: p.caption }))
   };
-  if (qcIsAdmin()) {
+  if (qcIsAdmin() && m.querySelector('#qc_final')) {
     const fin = m.querySelector('#qc_final').value, rs = m.querySelector('#qc_reason').value.trim();
     if (fin) { if (!rs) { reqWarn('覆寫判定需要理由', '請在「覆寫理由」寫明為什麼（例如：客戶當面試飲接受）。', m.querySelector('#qc_reason')); return; } params.final = fin; params.reason = rs; }
   }
