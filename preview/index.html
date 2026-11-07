@@ -526,7 +526,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.88';
+const APP_VERSION='v3.89';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -5061,7 +5061,7 @@ async function qcView(id) {
         <div style="margin-top:8px;">色澤：<b>${QC_COLOR_SCALE[(+x.look.color || 3) - 1]}</b>（${x.look.color}）</div>${x.look.hex ? `<div>${qcSwatchHtml(x.look)}</div>` : ''}
         <div>澄清度：<b>${rcEsc(x.look.clarity || '—')}</b></div>
         <div>異味：<b style="color:${x.offs.length ? '#c0392b' : 'var(--green)'};">${x.offs.length ? rcEsc(x.offs.join('、')) : '無'}</b></div>
-        ${x.note ? `<div style="margin-top:4px;">備註：${rcEsc(x.note)}</div>` : ''}
+        ${x.note ? `<div style="margin-top:4px;white-space:pre-wrap;">備註：${rcEsc(x.note)}</div>` : ''}
       </div>
     </div>
     <div id="qcvPhotos" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">${(x.photos || []).map(() => '<div style="width:160px;height:120px;border-radius:6px;background:#eee;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--ink3);">照片讀取中…</div>').join('')}</div>`);
@@ -5128,7 +5128,7 @@ function qcEdit(orderNo, ii, id) {
 
     <div style="font-weight:700;color:#c0392b;margin:12px 0 4px;">④ 異味（勾任一項＝直接退回）</div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;">${QC_OFFS.map(x => `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="qc-off" value="${x}" ${F.offs.includes(x) ? 'checked' : ''} onchange="qcFormSync()" style="width:16px;height:16px;margin:0;">${x}</label>`).join('')}</div>
-    <div class="fg" style="margin-top:8px;"><label>備註（處理方式、補正、客戶意見…）</label><input class="inp" id="qc_note" value="${rcEsc(cur ? cur.note : '')}" maxlength="500" style="margin:0;"></div>
+    <div class="fg" style="margin-top:8px;"><label>備註（處理方式、補正、客戶意見、品飲描述…）</label><textarea class="inp" id="qc_note" maxlength="500" rows="5" style="margin:0;min-height:120px;height:auto;line-height:1.5;resize:vertical;">${rcEsc(cur ? cur.note : '')}</textarea></div>
 
     <div id="qc_verdict" style="margin-top:10px;padding:10px;border-radius:10px;"></div>
     ${qcIsAdmin() ? `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;font-size:12px;"><b>主公覆寫判定</b><select class="inp" id="qc_final" style="margin:0;width:auto;"><option value="">（照系統判定）</option>${['放行', '待試飲', '退回'].map(v => `<option ${cur && cur.final !== cur.sys && cur.final === v ? 'selected' : ''}>${v}</option>`).join('')}</select><input class="inp" id="qc_reason" placeholder="覆寫理由（必填）" value="${rcEsc(cur && cur.final !== cur.sys ? cur.reason : '')}" style="margin:0;flex:1;min-width:160px;"></div>` : ''}
