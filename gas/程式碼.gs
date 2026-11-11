@@ -6347,7 +6347,7 @@ function tastingDelete(p) {
 // ============================================================
 // v3.93 資材庫存模組（主公 2026-11-11 指示；第一版＝純庫存登記，不與訂單預估／完工扣庫連動）
 //   分頁：資材庫存異動（於 MAIN_SHEET_ID；欄位與玻璃瓶庫存異動相同，C 欄＝資材品名）
-//   品項＝固定 5 項（熱縮膜 3＋江小白瓶蓋 2）∪ 未出貨代工單（全客製／換前標）每客戶每酒款的「前標」「後標」
+//   品項＝固定 5 項（熱縮膜 3＋江小白瓶蓋 2）∪ 出貨日晚於 BOTTLE_RSV_AFTER 的未完成訂單（含自有品牌；不含出貨／樣品／寄售單、Feeling Bar）每客戶每酒款的「前標」「後標」
 //        ∪ 本分頁出現過的品名（含「➕ 新增品項」）。庫存＝Σ入庫−Σ出庫。
 // ============================================================
 const MAT_SHEET_NAME = '資材庫存異動';
@@ -6390,15 +6390,18 @@ function _matLabelItems_() {
       if (!String(data[i][0] || '')) continue;
       const client = String(data[i][1] || '').trim();
       const type = String(data[i][2] || '');
-      if (!(type.indexOf('代工') >= 0 || /^(全客製-|OEM-|換前標-)/.test(client))) continue;
+      // v3.94 主公 11/11：含自有品牌（前後標數量也要控管）；出成品庫存的單（出貨／樣品／寄售）不貼標故不列
+      if (['自有酒款庫存出貨訂單', '自有酒款出貨訂單(有金流)', '自有酒款樣品(無金流)'].indexOf(type) >= 0 || type.indexOf('寄售') >= 0) continue;
       if (String(data[i][8] || '').trim() === '已出貨') continue;
+      const _dd = _fmtDate_(data[i][3]).trim().replace(/\//g, '-').slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(_dd) && _dd <= BOTTLE_RSV_AFTER) continue;   // 與玻璃瓶訂單預估同口徑：出貨日晚於 11/11 才列（未填出貨日照列）
       const cName = client.replace(/^(全客製-|OEM-|換前標-)/, '').trim();
       if (!cName || MAT_HIDDEN_RE.test(cName)) continue;
       let items;
       try { items = JSON.parse(data[i][4] || '[]'); } catch (e) { continue; }
       items.forEach(function (it) {
         const prod = String((it && it.product) || '').trim();
-        if (!prod) return;
+        if (!prod || it.status === '完成') return;
         const base = cName + '－' + prod;
         if (seen[base]) return;
         seen[base] = true;
