@@ -1826,12 +1826,32 @@ function filterInv() {
   const list = (C.inv||[]).filter(i => (!cat||i.category===cat) && (!kw||i.name.toLowerCase().includes(kw)||(i.brand||'').toLowerCase().includes(kw)));
   const el = document.getElementById('invArea'); if (!el) return;
   if (!list.length) { el.innerHTML='<div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;">無符合結果</div>'; return; }
-  el.innerHTML = `<div class="tbl-wrap"><table>
-    <thead><tr><th>品名 / 品牌</th><th class="tr">單價 / 容量 / ABV</th></tr></thead>
-    <tbody>${list.map(i=>`<tr>
+  // v3.96 主公 11/11：原料庫品項過多 → 依「大分類」（與研發試算同一份分類）收合，點分類才展開；
+  //   有選大分類或打關鍵字時＝符合的分類直接展開。
+  const cats = [...new Set(list.map(i => i.category || '未分類'))];
+  window._invCatNames = cats;
+  const forceOpen = !!(cat || kw);
+  const row = i => `<tr>
       <td><div style="font-weight:500;font-size:13px;">${i.name}</div><div class="sub">${i.brand||'—'} · ${i.category}${i.isSolid?' <span class="badge bg-yellow">固</span>':''}</div></td>
       <td class="tr"><div style="font-size:13px;font-weight:500;">${fm0(i.price)}</div><div class="sub">${i.vol?nt(i.vol,0)+'ml':'—'}${invUC(i)>0?' · '+invUC(i).toFixed(2)+'/ml':''} · ABV ${i.abv||0}%</div></td>
-    </tr>`).join('')}</tbody></table></div>`;
+    </tr>`;
+  el.innerHTML = `<div class="tbl-wrap"><table>
+    <thead><tr><th>品名 / 品牌</th><th class="tr">單價 / 容量 / ABV</th></tr></thead>`
+    + cats.map((c, k) => {
+      const rows = list.filter(i => (i.category || '未分類') === c);
+      const open = forceOpen || !!_invCatOpen[c];
+      return `<tbody><tr style="cursor:pointer;" onclick="toggleInvCat(${k})"><td colspan="2" style="background:var(--bg2,#f6f1ea);font-weight:700;font-size:15px;color:var(--ink);border-left:4px solid var(--gold-dk);"><span id="invCatArrow_${k}">${open ? '▾' : '▸'}</span> ${c} <span style="font-weight:400;font-size:12px;color:var(--ink3);">（${rows.length} 項）</span></td></tr></tbody>`
+        + `<tbody id="invCatBody_${k}"${open ? '' : ' style="display:none;"'}>${rows.map(row).join('')}</tbody>`;
+    }).join('') + '</table></div>';
+}
+const _invCatOpen = {};
+function toggleInvCat(k) {
+  const c = (window._invCatNames || [])[k]; if (c == null) return;
+  const b = document.getElementById('invCatBody_' + k); if (!b) return;
+  const open = b.style.display === 'none';
+  _invCatOpen[c] = open;
+  b.style.display = open ? '' : 'none';
+  const a = document.getElementById('invCatArrow_' + k); if (a) a.textContent = open ? '▾' : '▸';
 }
 function renderMaterialCost() {
   const bt = document.getElementById('matBottle')?.value || '江小白';
