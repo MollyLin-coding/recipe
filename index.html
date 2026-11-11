@@ -526,7 +526,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.93';
+const APP_VERSION='v3.94';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -1485,11 +1485,6 @@ async function renderInventoryPage(mc) {
       </div>
       <div class="fe mt8"><button class="btn btn-danger btn-sm" id="boBtn">出庫</button></div>
     </div>
-    <div style="border-top:0.5px solid var(--border);margin-top:12px;padding-top:12px;">
-      <div class="sec-hd"><div class="card-title" style="margin:0;font-size:13px;">📜 異動歷史</div>
-        <select class="inp" id="blFilter" style="margin:0;width:auto;max-width:150px;padding:6px 26px 6px 10px;font-size:13px;" onchange="bottleFilter=this.value;loadBottleLedger();"></select></div>
-      <div id="bottleLedgerArea"><div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>
-    </div>
   </div>
 
   <div class="card" style="margin-top:10px;">
@@ -1514,11 +1509,6 @@ async function renderInventoryPage(mc) {
       </div>
       <div class="fe mt8"><button class="btn btn-danger btn-sm" id="moBtn">出庫</button></div>
     </div>
-    <div style="border-top:0.5px solid var(--border);margin-top:12px;padding-top:12px;">
-      <div class="sec-hd"><div class="card-title" style="margin:0;font-size:13px;">📜 異動歷史</div>
-        <select class="inp" id="mlFilter" style="margin:0;width:auto;max-width:150px;padding:6px 26px 6px 10px;font-size:13px;" onchange="matFilter=this.value;loadMatLedger();"></select></div>
-      <div id="matLedgerArea"><div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>
-    </div>
   </div>
 
   <div id="invProfitCard" style="margin-top:10px;">${invProfitCardHtml()}</div>
@@ -1540,6 +1530,20 @@ async function renderInventoryPage(mc) {
       </div>
     </div>
     <div id="matArea"></div>
+  </div>
+
+  <div class="card" style="margin-top:10px;">
+    <div class="card-title">📜 異動歷史</div>
+    <div style="">
+      <div class="sec-hd"><div class="card-title" style="margin:0;font-size:13px;">🍾 玻璃瓶</div>
+        <select class="inp" id="blFilter" style="margin:0;width:auto;max-width:150px;padding:6px 26px 6px 10px;font-size:13px;" onchange="bottleFilter=this.value;loadBottleLedger();"></select></div>
+      <div id="bottleLedgerArea"><div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>
+    </div>
+    <div style="border-top:0.5px solid var(--border);margin-top:12px;padding-top:12px;">
+      <div class="sec-hd"><div class="card-title" style="margin:0;font-size:13px;">🏷️ 資材</div>
+        <select class="inp" id="mlFilter" style="margin:0;width:auto;max-width:150px;padding:6px 26px 6px 10px;font-size:13px;" onchange="matFilter=this.value;loadMatLedger();"></select></div>
+      <div id="matLedgerArea"><div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>
+    </div>
   </div>`;
   await loadInv();
   renderMaterialCost();
@@ -1578,25 +1582,78 @@ function showAddMatItem() {
     else toast(res.error || '新增失敗');
   });
 }
+const _matCliOpen = {};
+function _matClientOf(item) { const n = String(item || ''); const k = n.indexOf('－'); return k > 0 ? n.slice(0, k) : (n.replace(/(前標|後標)$/, '').trim() || n); }
+// 入庫／出庫下拉的選項；kw 有值時酒標只留符合的客戶（熱縮膜／瓶蓋／其他照列）
+function _matOpts(kw) {
+  const list = window._matList || []; const q = String(kw || '').trim().toLowerCase();
+  return MAT_GROUPS.map(g => {
+    const rows = list.filter(x => (x.group || '其他') === g && (!q || !(g === '前標' || g === '後標') || _matClientOf(x.item).toLowerCase().indexOf(q) >= 0));
+    return rows.length ? `<optgroup label="${g}">` + rows.map(x => `<option value="${_escf(x.item)}">${_escf(x.item)}</option>`).join('') + '</optgroup>' : '';
+  }).join('');
+}
+function _matFillItemSelects() {
+  const opts = _matOpts(window._matCliKw || '');
+  ['miItem', 'moItem'].forEach(id => { const el = document.getElementById(id); if (!el) return; const v = el.value; el.innerHTML = opts; if (v) el.value = v; if (!el.value && el.options && el.options.length) el.selectedIndex = 0; });
+}
+function filterMatClients(kw) {
+  window._matCliKw = kw || '';
+  const q = String(kw || '').trim().toLowerCase(); let hit = 0;
+  (window._matCliNames || []).forEach((c, k) => {
+    const m = !q || c.toLowerCase().indexOf(q) >= 0; if (m) hit++;
+    const h = document.getElementById('matCliHead_' + k); if (h) h.style.display = m ? '' : 'none';
+    const show = m && (q ? true : !!_matCliOpen[c]);   // 搜尋中＝符合的客戶直接展開
+    const b = document.getElementById('matCliBody_' + k); if (b) b.style.display = show ? '' : 'none';
+    const a = document.getElementById('matCliArrow_' + k); if (a) a.textContent = show ? '▾' : '▸';
+  });
+  const n = document.getElementById('matCliNone'); if (n) n.style.display = hit ? 'none' : '';
+  _matFillItemSelects();
+}
+function toggleMatClient(k) {
+  const c = (window._matCliNames || [])[k]; if (c == null) return;
+  _matCliOpen[c] = !_matCliOpen[c];
+  const b = document.getElementById('matCliBody_' + k); if (b) b.style.display = _matCliOpen[c] ? '' : 'none';
+  const a = document.getElementById('matCliArrow_' + k); if (a) a.textContent = _matCliOpen[c] ? '▾' : '▸';
+}
 async function loadMatOverview() {
   const res = await api({ action: 'getMatOverview' });
   const area = document.getElementById('matWaterArea');
   if (!area) return;
   if (!res.ok) { area.innerHTML = `<div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${_escf(res.error || '')}</div>`; return; }
   const list = res.list || [];
-  let html = '<div class="tbl-wrap"><table><thead><tr><th>資材品名</th><th class="tr">現有庫存(個)</th><th class="tr">安全水位</th></tr></thead><tbody>';
-  MAT_GROUPS.forEach(g => {
-    const rows = list.filter(x => (x.group || '其他') === g);
-    if (!rows.length) return;
-    html += `<tr><td colspan="3" style="background:var(--bg2,#f6f1ea);font-size:12px;font-weight:700;color:var(--ink2,#5c4f42);">${g}（${rows.length}）</td></tr>` + rows.map(x => safetyRow(x, '資材', '')).join('');
+  const _gh = (t) => `<tr><td colspan="3" style="background:var(--bg2,#f6f1ea);font-size:16px;font-weight:700;color:var(--ink);padding-top:10px;padding-bottom:10px;border-left:4px solid var(--gold-dk);">${t}</td></tr>`;
+  let html = '<div class="tbl-wrap"><table><thead><tr><th>資材品名</th><th class="tr">現有庫存(個)</th><th class="tr">安全水位</th></tr></thead>';
+  ['熱縮膜', '瓶蓋'].forEach(g => {
+    const rows = list.filter(x => x.group === g);
+    if (rows.length) html += '<tbody>' + _gh(`${g}（${rows.length}）`) + rows.map(x => safetyRow(x, '資材', '')).join('') + '</tbody>';
   });
-  html += '</tbody></table></div><div style="font-size:11px;color:var(--ink3);margin-top:6px;">前標／後標依「未出貨的全客製／換前標訂單」每客戶每酒款自動列出；有庫存紀錄的品項會一直保留。</div>';
+  // v3.94 主公 11/11：酒標（前標／後標）按客戶收合，要看該客戶細項再展開
+  const labels = list.filter(x => x.group === '前標' || x.group === '後標');
+  if (labels.length) {
+    const byCli = {}; const order = [];
+    labels.forEach(x => { const c = _matClientOf(x.item); if (!byCli[c]) { byCli[c] = []; order.push(c); } byCli[c].push(x); });
+    window._matCliNames = order;
+    // v3.94 主公 11/11：酒標標題列右側放「依客戶名稱搜尋」，倉管可快速找到單一客戶登記前後標數量
+    html += '<tbody>' + _gh(`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="flex:1 1 auto;">酒標：前標／後標（${order.length} 個客戶、${labels.length} 項）</span><input class="inp" id="matCliKw" placeholder="🔍 依客戶名稱搜尋…" value="${_escf(window._matCliKw || '')}" oninput="filterMatClients(this.value)" style="margin:0;flex:0 1 200px;padding:6px 10px;font-size:13px;font-weight:400;"></div>`) + '</tbody>'
+      + '<tbody id="matCliNone" style="display:none;"><tr><td colspan="3" style="color:var(--ink3);font-size:13px;text-align:center;">找不到符合的客戶</td></tr></tbody>';
+    order.forEach((c, k) => {
+      const rows = byCli[c].slice().sort((a, b) => a.item.localeCompare(b.item, 'zh-Hant'));
+      const warn = rows.some(x => x.safety > 0 && x.stock < x.safety);
+      const open = !!_matCliOpen[c];
+      html += `<tbody id="matCliHead_${k}"><tr style="cursor:pointer;" onclick="toggleMatClient(${k})"><td colspan="3" style="font-weight:700;font-size:14px;"><span id="matCliArrow_${k}">${open ? '▾' : '▸'}</span> ${_escf(c)} <span style="font-weight:400;font-size:12px;color:var(--ink3);">（${rows.length} 項）</span>${warn ? ' <span style="color:var(--red);font-size:12px;">⚠低於水位</span>' : ''}</td></tr></tbody>`
+        + `<tbody id="matCliBody_${k}"${open ? '' : ' style="display:none;"'}>` + rows.map(x => safetyRow(x, '資材', '')).join('') + '</tbody>';
+    });
+  }
+  const others = list.filter(x => (x.group || '其他') === '其他');
+  if (others.length) html += '<tbody>' + _gh(`其他（${others.length}）`) + others.map(x => safetyRow(x, '資材', '')).join('') + '</tbody>';
+  html += '</table></div><div style="font-size:11px;color:var(--ink3);margin-top:6px;">前標／後標依「出貨日晚於 ' + BOTTLE_RSV_AFTER + ' 的未完成訂單」（含自有品牌）每客戶每酒款自動列出；有庫存紀錄的品項會一直保留。點客戶名稱可展開／收合。</div>';
   area.innerHTML = html;
-  const opts = MAT_GROUPS.map(g => { const rows = list.filter(x => (x.group || '其他') === g); return rows.length ? `<optgroup label="${g}">` + rows.map(x => `<option value="${_escf(x.item)}">${_escf(x.item)}</option>`).join('') + '</optgroup>' : ''; }).join('');
-  const mi = document.getElementById('miItem'); if (mi) { const v = mi.value; mi.innerHTML = opts; if (v) mi.value = v; }
-  const mo = document.getElementById('moItem'); if (mo) { const v = mo.value; mo.innerHTML = opts; if (v) mo.value = v; }
+  window._matList = list;
+  const opts = _matOpts('');
+  _matFillItemSelects();
   const fl = document.getElementById('mlFilter');
   if (fl) { fl.innerHTML = '<option value="">全部資材</option>' + opts; fl.value = matFilter; }
+  if (window._matCliKw) filterMatClients(window._matCliKw);
 }
 async function loadMatLedger() {
   const area = document.getElementById('matLedgerArea');
@@ -1607,9 +1664,8 @@ async function loadMatLedger() {
   if (!res.ok) { area.innerHTML = `<div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${_escf(res.error || '')}</div>`; return; }
   const rows = res.list || [];
   if (!rows.length) { area.innerHTML = '<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">尚無異動</div>'; return; }
-  area.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>日期</th><th>類型</th><th>品項</th><th class="tr">數量</th><th>操作人</th></tr></thead><tbody>'
-    + rows.map(r => `<tr><td style="font-size:12px;">${_escf(r.date)}</td><td>${r.type === '入庫' ? '<span style="color:var(--gold-dk);">入庫</span>' : '<span style="color:var(--red);">出庫</span>'}</td><td style="font-size:12px;">${_escf(r.item)}</td><td class="tr">${r.qty}</td><td style="font-size:12px;">${_escf(r.operator)}</td></tr>`).join('')
-    + '</tbody></table></div>';
+  area.innerHTML = ledgerFoldHtml('mat', '<thead><tr><th>日期</th><th>類型</th><th>品項</th><th class="tr">數量</th><th>操作人</th></tr></thead>',
+    rows.map(r => `<tr><td style="font-size:12px;">${_escf(r.date)}</td><td>${r.type === '入庫' ? '<span style="color:var(--gold-dk);">入庫</span>' : '<span style="color:var(--red);">出庫</span>'}</td><td style="font-size:12px;">${_escf(r.item)}</td><td class="tr">${r.qty}</td><td style="font-size:12px;">${_escf(r.operator)}</td></tr>`));
 }
 async function doMatMove(dir) {
   const isIn = dir === 'in';
@@ -1676,6 +1732,19 @@ async function loadBottleOverview() {
   const fl = document.getElementById('blFilter');
   if (fl) { fl.innerHTML = '<option value="">全部瓶型</option>' + opts; fl.value = bottleFilter; }
 }
+// v3.94 主公 11/11：異動歷史只顯示最新一筆，較舊的收合（按鈕展開）；trs＝新到舊的 <tr> 字串陣列
+const _ledgerOpen = {};
+function ledgerFoldHtml(key, thead, trs) {
+  const open = !!_ledgerOpen[key];
+  return '<div class="tbl-wrap"><table>' + thead + '<tbody>' + trs[0]
+    + '</tbody><tbody id="ldgOld_' + key + '"' + (open ? '' : ' style="display:none;"') + '>' + trs.slice(1).join('') + '</tbody></table></div>'
+    + (trs.length > 1 ? '<div style="margin-top:8px;"><button class="btn btn-ghost btn-sm" onclick="toggleLedgerOld(\'' + key + '\',this)" data-n="' + (trs.length - 1) + '">' + (open ? '▾ 收合' : '▸ 展開') + '較舊的 ' + (trs.length - 1) + ' 筆</button></div>' : '');
+}
+function toggleLedgerOld(key, btn) {
+  _ledgerOpen[key] = !_ledgerOpen[key];
+  const b = document.getElementById('ldgOld_' + key); if (b) b.style.display = _ledgerOpen[key] ? '' : 'none';
+  if (btn) btn.textContent = (_ledgerOpen[key] ? '▾ 收合' : '▸ 展開') + '較舊的 ' + btn.dataset.n + ' 筆';
+}
 async function loadBottleLedger() {
   const area = document.getElementById('bottleLedgerArea');
   if (!area) return;
@@ -1685,14 +1754,13 @@ async function loadBottleLedger() {
   if (!res.ok) { area.innerHTML = `<div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${res.error || ''}</div>`; return; }
   const rows = res.list || [];
   if (!rows.length) { area.innerHTML = '<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">尚無異動</div>'; return; }
-  area.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>日期</th><th>類型</th><th>瓶型</th><th class="tr">數量</th><th>操作人</th></tr></thead><tbody>'
-    + rows.map(r => {
+  area.innerHTML = ledgerFoldHtml('bottle', '<thead><tr><th>日期</th><th>類型</th><th>瓶型</th><th class="tr">數量</th><th>操作人</th></tr></thead>',
+    rows.map(r => {
         const tag = r.type === '入庫'
           ? '<span style="color:var(--gold-dk);">入庫</span>'
           : (r.type === 'NG' ? '<span style="color:var(--red);font-weight:700;">NG</span>' : '<span style="color:var(--red);">出庫</span>'); // v3.6 NG 標籤
         return `<tr><td style="font-size:12px;">${r.date}</td><td>${tag}</td><td style="font-size:12px;">${r.item || ''}</td><td class="tr">${r.qty}</td><td style="font-size:12px;">${r.operator}</td></tr>`;
-      }).join('')
-    + '</tbody></table></div>';
+      }));
 }
 async function doBottleIn() {
   const item = document.getElementById('biItem').value;
