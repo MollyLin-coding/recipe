@@ -526,7 +526,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.92';
+const APP_VERSION='v3.93';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -1492,6 +1492,35 @@ async function renderInventoryPage(mc) {
     </div>
   </div>
 
+  <div class="card" style="margin-top:10px;">
+    <div class="sec-hd"><div class="card-title" style="margin:0">🏷️ 資材庫存</div>
+      <div style="display:flex;gap:6px;">${_canSetSafety() ? '<button class="btn btn-primary btn-sm" onclick="showAddMatItem()">➕ 新增品項</button>' : ''}<button class="btn btn-ghost btn-sm" onclick="loadMatOverview();loadMatLedger();">↻</button></div></div>
+    <div id="matWaterArea"><div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>
+    <div style="border-top:0.5px solid var(--border);margin-top:12px;padding-top:12px;">
+      <div class="card-title" style="font-size:13px;">➕ 入庫</div>
+      <div class="form-row">
+        <div class="fg" style="flex:2 1 150px"><label>資材品名</label><select class="inp" id="miItem" style="margin:0;"></select></div>
+        <div class="fg" style="flex:1 1 80px"><label>數量</label><input class="inp" id="miQty" type="number" min="1" step="1" style="margin:0;"></div>
+        <div class="fg" style="flex:1 1 120px"><label>日期</label><input class="inp" id="miDate" type="date" style="margin:0;"></div>
+      </div>
+      <div class="fe mt8"><button class="btn btn-primary btn-sm" id="miBtn">入庫</button></div>
+    </div>
+    <div style="border-top:0.5px solid var(--border);margin-top:12px;padding-top:12px;">
+      <div class="card-title" style="font-size:13px;">➖ 出庫</div>
+      <div class="form-row">
+        <div class="fg" style="flex:2 1 150px"><label>資材品名</label><select class="inp" id="moItem" style="margin:0;"></select></div>
+        <div class="fg" style="flex:1 1 80px"><label>數量</label><input class="inp" id="moQty" type="number" min="1" step="1" style="margin:0;"></div>
+        <div class="fg" style="flex:1 1 120px"><label>日期</label><input class="inp" id="moDate" type="date" style="margin:0;"></div>
+      </div>
+      <div class="fe mt8"><button class="btn btn-danger btn-sm" id="moBtn">出庫</button></div>
+    </div>
+    <div style="border-top:0.5px solid var(--border);margin-top:12px;padding-top:12px;">
+      <div class="sec-hd"><div class="card-title" style="margin:0;font-size:13px;">📜 異動歷史</div>
+        <select class="inp" id="mlFilter" style="margin:0;width:auto;max-width:150px;padding:6px 26px 6px 10px;font-size:13px;" onchange="matFilter=this.value;loadMatLedger();"></select></div>
+      <div id="matLedgerArea"><div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>
+    </div>
+  </div>
+
   <div id="invProfitCard" style="margin-top:10px;">${invProfitCardHtml()}</div>
 
   <div class="card" style="margin-top:10px;">
@@ -1523,6 +1552,75 @@ async function renderInventoryPage(mc) {
   document.getElementById('boBtn').onclick = () => lockRun(document.getElementById('boBtn'), doBottleOut);
   loadBottleOverview();
   loadBottleLedger();
+  // v3.93 資材庫存
+  document.getElementById('miDate').value = _bd;
+  document.getElementById('moDate').value = _bd;
+  document.getElementById('miBtn').onclick = () => lockRun(document.getElementById('miBtn'), () => doMatMove('in'));
+  document.getElementById('moBtn').onclick = () => lockRun(document.getElementById('moBtn'), () => doMatMove('out'));
+  loadMatOverview();
+  loadMatLedger();
+}
+// ── v3.93 資材庫存（前標／後標／熱縮膜／瓶蓋；第一版＝純庫存登記，邏輯同玻璃瓶，不與訂單連動）──
+let matFilter = '';
+const MAT_GROUPS = ['熱縮膜', '瓶蓋', '前標', '後標', '其他'];
+function showAddMatItem() {
+  const modal = makeModal(`
+    <div class="modal-title">➕ 新增資材品項</div>
+    <div class="fg" style="margin-bottom:12px;"><label>品項名稱</label><input class="inp" id="ami_name" placeholder="如：Babyface－午後蜜蘋－前標" style="margin:0;"></div>
+    <div style="font-size:11px;color:var(--ink3);margin-bottom:10px;">名稱結尾是「前標」「後標」會自動歸到該分組；含「熱縮膜」「瓶蓋」同理。</div>
+    <div class="fe"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">取消</button><button class="btn btn-primary btn-sm" id="ami_sub">新增</button></div>`);
+  const b = modal.querySelector('#ami_sub');
+  b.onclick = () => lockRun(b, async () => {
+    const name = (document.getElementById('ami_name').value || '').trim();
+    if (!name) { toast('請輸入品項名稱'); return; }
+    const res = await api({ action: 'addMatItem', item: name, operator: (curUser && curUser.username) || '' });
+    if (res.ok) { toast('已新增品項「' + name + '」'); modal.remove(); loadMatOverview(); }
+    else toast(res.error || '新增失敗');
+  });
+}
+async function loadMatOverview() {
+  const res = await api({ action: 'getMatOverview' });
+  const area = document.getElementById('matWaterArea');
+  if (!area) return;
+  if (!res.ok) { area.innerHTML = `<div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${_escf(res.error || '')}</div>`; return; }
+  const list = res.list || [];
+  let html = '<div class="tbl-wrap"><table><thead><tr><th>資材品名</th><th class="tr">現有庫存(個)</th><th class="tr">安全水位</th></tr></thead><tbody>';
+  MAT_GROUPS.forEach(g => {
+    const rows = list.filter(x => (x.group || '其他') === g);
+    if (!rows.length) return;
+    html += `<tr><td colspan="3" style="background:var(--bg2,#f6f1ea);font-size:12px;font-weight:700;color:var(--ink2,#5c4f42);">${g}（${rows.length}）</td></tr>` + rows.map(x => safetyRow(x, '資材', '')).join('');
+  });
+  html += '</tbody></table></div><div style="font-size:11px;color:var(--ink3);margin-top:6px;">前標／後標依「未出貨的全客製／換前標訂單」每客戶每酒款自動列出；有庫存紀錄的品項會一直保留。</div>';
+  area.innerHTML = html;
+  const opts = MAT_GROUPS.map(g => { const rows = list.filter(x => (x.group || '其他') === g); return rows.length ? `<optgroup label="${g}">` + rows.map(x => `<option value="${_escf(x.item)}">${_escf(x.item)}</option>`).join('') + '</optgroup>' : ''; }).join('');
+  const mi = document.getElementById('miItem'); if (mi) { const v = mi.value; mi.innerHTML = opts; if (v) mi.value = v; }
+  const mo = document.getElementById('moItem'); if (mo) { const v = mo.value; mo.innerHTML = opts; if (v) mo.value = v; }
+  const fl = document.getElementById('mlFilter');
+  if (fl) { fl.innerHTML = '<option value="">全部資材</option>' + opts; fl.value = matFilter; }
+}
+async function loadMatLedger() {
+  const area = document.getElementById('matLedgerArea');
+  if (!area) return;
+  const params = { action: 'getMatLedger' };
+  if (matFilter) params.item = matFilter;
+  const res = await api(params);
+  if (!res.ok) { area.innerHTML = `<div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${_escf(res.error || '')}</div>`; return; }
+  const rows = res.list || [];
+  if (!rows.length) { area.innerHTML = '<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">尚無異動</div>'; return; }
+  area.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>日期</th><th>類型</th><th>品項</th><th class="tr">數量</th><th>操作人</th></tr></thead><tbody>'
+    + rows.map(r => `<tr><td style="font-size:12px;">${_escf(r.date)}</td><td>${r.type === '入庫' ? '<span style="color:var(--gold-dk);">入庫</span>' : '<span style="color:var(--red);">出庫</span>'}</td><td style="font-size:12px;">${_escf(r.item)}</td><td class="tr">${r.qty}</td><td style="font-size:12px;">${_escf(r.operator)}</td></tr>`).join('')
+    + '</tbody></table></div>';
+}
+async function doMatMove(dir) {
+  const isIn = dir === 'in';
+  const item = document.getElementById(isIn ? 'miItem' : 'moItem').value;
+  const qtyEl = document.getElementById(isIn ? 'miQty' : 'moQty');
+  const qty = parseInt(qtyEl.value, 10);
+  if (!item) { toast('請選資材品名'); return; }
+  if (!(qty > 0)) { toast('數量需為正整數'); return; }
+  const res = await api({ action: isIn ? 'matIn' : 'matOut', item, qty, date: document.getElementById(isIn ? 'miDate' : 'moDate').value || '', operator: (curUser && curUser.username) || '' });
+  if (res.ok) { toast(`已${isIn ? '入庫' : '出庫'}，${item} 現有 ${res.stock} 個`); qtyEl.value = ''; loadMatOverview(); loadMatLedger(); }
+  else toast((isIn ? '入庫' : '出庫') + '失敗：' + (res.error || ''));
 }
 // ── 玻璃瓶庫存（數量統計邏輯同成品庫存）──
 let bottleFilter = '';
@@ -4166,7 +4264,7 @@ async function saveSafety(category, client, item, value, el) {
   if (el) el.disabled = false;
   if (res.ok) {
     toast(`已設定「${item}」安全水位 ${level}`);
-    if (category === '成品') loadStockOverview(); else loadBottleOverview();
+    if (category === '成品') loadStockOverview(); else if (category === '資材') loadMatOverview(); else loadBottleOverview();
   } else toast('設定失敗：' + (res.error || ''));
 }
 // 登入後：低於安全水位則頂端橫幅警告（水位回升後下次登入自動消失）
