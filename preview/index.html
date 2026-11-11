@@ -1582,19 +1582,44 @@ function showAddMatItem() {
     else toast(res.error || '新增失敗');
   });
 }
+const _matCliOpen = {};
+function _matClientOf(item) { const n = String(item || ''); const k = n.indexOf('－'); return k > 0 ? n.slice(0, k) : (n.replace(/(前標|後標)$/, '').trim() || n); }
+function toggleMatClient(k) {
+  const c = (window._matCliNames || [])[k]; if (c == null) return;
+  _matCliOpen[c] = !_matCliOpen[c];
+  const b = document.getElementById('matCliBody_' + k); if (b) b.style.display = _matCliOpen[c] ? '' : 'none';
+  const a = document.getElementById('matCliArrow_' + k); if (a) a.textContent = _matCliOpen[c] ? '▾' : '▸';
+}
 async function loadMatOverview() {
   const res = await api({ action: 'getMatOverview' });
   const area = document.getElementById('matWaterArea');
   if (!area) return;
   if (!res.ok) { area.innerHTML = `<div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${_escf(res.error || '')}</div>`; return; }
   const list = res.list || [];
-  let html = '<div class="tbl-wrap"><table><thead><tr><th>資材品名</th><th class="tr">現有庫存(個)</th><th class="tr">安全水位</th></tr></thead><tbody>';
-  MAT_GROUPS.forEach(g => {
-    const rows = list.filter(x => (x.group || '其他') === g);
-    if (!rows.length) return;
-    html += `<tr><td colspan="3" style="background:var(--bg2,#f6f1ea);font-size:16px;font-weight:700;color:var(--ink);padding-top:10px;padding-bottom:10px;border-left:4px solid var(--gold-dk);">${g}（${rows.length}）</td></tr>` + rows.map(x => safetyRow(x, '資材', '')).join('');
+  const _gh = (t) => `<tr><td colspan="3" style="background:var(--bg2,#f6f1ea);font-size:16px;font-weight:700;color:var(--ink);padding-top:10px;padding-bottom:10px;border-left:4px solid var(--gold-dk);">${t}</td></tr>`;
+  let html = '<div class="tbl-wrap"><table><thead><tr><th>資材品名</th><th class="tr">現有庫存(個)</th><th class="tr">安全水位</th></tr></thead>';
+  ['熱縮膜', '瓶蓋'].forEach(g => {
+    const rows = list.filter(x => x.group === g);
+    if (rows.length) html += '<tbody>' + _gh(`${g}（${rows.length}）`) + rows.map(x => safetyRow(x, '資材', '')).join('') + '</tbody>';
   });
-  html += '</tbody></table></div><div style="font-size:11px;color:var(--ink3);margin-top:6px;">前標／後標依「未出貨的全客製／換前標訂單」每客戶每酒款自動列出；有庫存紀錄的品項會一直保留。</div>';
+  // v3.94 主公 11/11：酒標（前標／後標）按客戶收合，要看該客戶細項再展開
+  const labels = list.filter(x => x.group === '前標' || x.group === '後標');
+  if (labels.length) {
+    const byCli = {}; const order = [];
+    labels.forEach(x => { const c = _matClientOf(x.item); if (!byCli[c]) { byCli[c] = []; order.push(c); } byCli[c].push(x); });
+    window._matCliNames = order;
+    html += '<tbody>' + _gh(`酒標：前標／後標（${order.length} 個客戶、${labels.length} 項）`) + '</tbody>';
+    order.forEach((c, k) => {
+      const rows = byCli[c].slice().sort((a, b) => a.item.localeCompare(b.item, 'zh-Hant'));
+      const warn = rows.some(x => x.safety > 0 && x.stock < x.safety);
+      const open = !!_matCliOpen[c];
+      html += `<tbody><tr style="cursor:pointer;" onclick="toggleMatClient(${k})"><td colspan="3" style="font-weight:700;font-size:14px;"><span id="matCliArrow_${k}">${open ? '▾' : '▸'}</span> ${_escf(c)} <span style="font-weight:400;font-size:12px;color:var(--ink3);">（${rows.length} 項）</span>${warn ? ' <span style="color:var(--red);font-size:12px;">⚠低於水位</span>' : ''}</td></tr></tbody>`
+        + `<tbody id="matCliBody_${k}"${open ? '' : ' style="display:none;"'}>` + rows.map(x => safetyRow(x, '資材', '')).join('') + '</tbody>';
+    });
+  }
+  const others = list.filter(x => (x.group || '其他') === '其他');
+  if (others.length) html += '<tbody>' + _gh(`其他（${others.length}）`) + others.map(x => safetyRow(x, '資材', '')).join('') + '</tbody>';
+  html += '</table></div><div style="font-size:11px;color:var(--ink3);margin-top:6px;">前標／後標依「未出貨的全客製／換前標訂單」每客戶每酒款自動列出；有庫存紀錄的品項會一直保留。點客戶名稱可展開／收合。</div>';
   area.innerHTML = html;
   const opts = MAT_GROUPS.map(g => { const rows = list.filter(x => (x.group || '其他') === g); return rows.length ? `<optgroup label="${g}">` + rows.map(x => `<option value="${_escf(x.item)}">${_escf(x.item)}</option>`).join('') + '</optgroup>' : ''; }).join('');
   const mi = document.getElementById('miItem'); if (mi) { const v = mi.value; mi.innerHTML = opts; if (v) mi.value = v; }
