@@ -1592,7 +1592,7 @@ async function loadMatOverview() {
   MAT_GROUPS.forEach(g => {
     const rows = list.filter(x => (x.group || '其他') === g);
     if (!rows.length) return;
-    html += `<tr><td colspan="3" style="background:var(--bg2,#f6f1ea);font-size:12px;font-weight:700;color:var(--ink2,#5c4f42);">${g}（${rows.length}）</td></tr>` + rows.map(x => safetyRow(x, '資材', '')).join('');
+    html += `<tr><td colspan="3" style="background:var(--bg2,#f6f1ea);font-size:16px;font-weight:700;color:var(--ink);padding-top:10px;padding-bottom:10px;border-left:4px solid var(--gold-dk);">${g}（${rows.length}）</td></tr>` + rows.map(x => safetyRow(x, '資材', '')).join('');
   });
   html += '</tbody></table></div><div style="font-size:11px;color:var(--ink3);margin-top:6px;">前標／後標依「未出貨的全客製／換前標訂單」每客戶每酒款自動列出；有庫存紀錄的品項會一直保留。</div>';
   area.innerHTML = html;
