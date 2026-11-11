@@ -1567,7 +1567,7 @@ async function loadBottleOverview() {
   area.innerHTML = '<div class="tbl-wrap"><table>' + _th + '<tbody>'
     + common.map(x => safetyRow(x, '玻璃瓶', '')).join('')
     + '</tbody></table></div>'
-    + '<div style="font-size:11px;color:var(--ink3);margin-top:6px;">訂單預佔只統計表訂出貨日晚於 ' + BOTTLE_RSV_AFTER + ' 的未完成訂單。</div>'
+    + '<div style="font-size:11px;color:var(--ink3);margin-top:6px;">訂單預估只統計表訂出貨日晚於 ' + BOTTLE_RSV_AFTER + ' 的未完成訂單。</div>'
     + (rare.length ? '<div style="margin-top:8px;"><button class="btn btn-ghost btn-sm" id="bottleRareBtn" data-label="' + _rareLabel + '" onclick="toggleBottleRare()">' + (_bottleRareOpen ? '▾ ' : '▸ ') + _rareLabel + '</button></div>'
       + '<div id="bottleRareBody" style="margin-top:8px;' + (_bottleRareOpen ? '' : 'display:none;') + '"><div class="tbl-wrap"><table>' + _th + '<tbody>'
       + rare.map(x => safetyRow(x, '玻璃瓶', '')).join('')
@@ -2867,7 +2867,7 @@ function checkBottleWarn() {
     const total = need[r.inv] || 0;
     if (total > avail) {
       w.style.display = 'block';
-      w.innerHTML = '⚠ <b>' + r.inv + '</b> 可用僅 ' + avail + ' 個（庫存 ' + (rec.stock || 0) + '−其他訂單預佔 ' + rsv + '），本單需 ' + total + ' 個，缺 <b>' + (total - avail) + '</b> 個——仍可建單，請留意補瓶',
+      w.innerHTML = '⚠ <b>' + r.inv + '</b> 可用僅 ' + avail + ' 個（庫存 ' + (rec.stock || 0) + '−其他訂單預估 ' + rsv + '），本單需 ' + total + ' 個，缺 <b>' + (total - avail) + '</b> 個——仍可建單，請留意補瓶',
       w.style.color = 'var(--red)';
     } else { w.style.display = 'none'; }
   });
@@ -4154,7 +4154,7 @@ function safetyRow(x, category, client) {
     ? `<input type="number" min="0" step="1" value="${x.safety || 0}" data-item="${x.item}" style="width:56px;padding:4px;font-size:13px;text-align:right;border:1px solid var(--border);border-radius:4px;" onchange="saveSafety('${category}','${client}',this.dataset.item,this.value,this)">`
     : (x.safety || 0);
   return `<tr${low ? ' style="background:#fbeaea;"' : ''}>`
-    + `<td>${x.item}${low ? ' <span style="color:var(--red);font-size:11px;">⚠低於水位</span>' : ''}<div style="font-size:11px;color:var(--ink3);">累計入 ${x.inQty} / 出 ${x.outQty}${x.ng ? ` / <span style="color:var(--red);">NG ${x.ng}</span>` : ''}</div>${x.reserved != null ? `<div style="font-size:11px;${(x.stock - x.reserved) < 0 ? 'color:var(--red);font-weight:700;' : 'color:var(--gold-dk);'}" title="${x.reservedDetail || ''}">訂單預佔 ${x.reserved}｜可用 ${x.stock - x.reserved}</div>` : ''}</td>`
+    + `<td>${x.item}${low ? ' <span style="color:var(--red);font-size:11px;">⚠低於水位</span>' : ''}<div style="font-size:11px;color:var(--ink3);">累計入 ${x.inQty} / 出 ${x.outQty}${x.ng ? ` / <span style="color:var(--red);">NG ${x.ng}</span>` : ''}</div>${x.reserved != null ? `<div style="font-size:11px;${(x.stock - x.reserved) < 0 ? 'color:var(--red);font-weight:700;' : 'color:var(--gold-dk);'}" title="${x.reservedDetail || ''}">訂單預估 ${x.reserved}｜可用 ${x.stock - x.reserved}</div>` : ''}</td>`
     + `<td class="tr" style="font-weight:600;font-size:16px;${x.stock <= 0 ? 'color:var(--ink3);' : (low ? 'color:var(--red);' : '')}">${x.stock}</td>`
     + `<td class="tr">${safeCell}</td></tr>`;
 }
