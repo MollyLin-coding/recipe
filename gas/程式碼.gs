@@ -6352,6 +6352,8 @@ function tastingDelete(p) {
 // ============================================================
 const MAT_SHEET_NAME = '資材庫存異動';
 const MAT_FIXED = ['100ml香水瓶透明熱縮膜', '500ml大香水瓶黑色熱縮膜', '500ml伏特加透明熱縮膜', '白色江小白瓶蓋', '黑色江小白瓶蓋'];
+// v3.94 主公 11/11：Feeling Bar 已結束營業，其相關資材（前標／後標等）一律不列出
+const MAT_HIDDEN_RE = /^feeling\s*bar/i;
 function _matSheet_() {
   const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
   let ws = ss.getSheetByName(MAT_SHEET_NAME);
@@ -6391,7 +6393,7 @@ function _matLabelItems_() {
       if (!(type.indexOf('代工') >= 0 || /^(全客製-|OEM-|換前標-)/.test(client))) continue;
       if (String(data[i][8] || '').trim() === '已出貨') continue;
       const cName = client.replace(/^(全客製-|OEM-|換前標-)/, '').trim();
-      if (!cName) continue;
+      if (!cName || MAT_HIDDEN_RE.test(cName)) continue;
       let items;
       try { items = JSON.parse(data[i][4] || '[]'); } catch (e) { continue; }
       items.forEach(function (it) {
@@ -6410,7 +6412,7 @@ function getMatOverview() {
   const rows = _matRows_();
   const smap = _safetyMap_();
   const ordered = MAT_FIXED.slice();
-  const add = function (n) { n = String(n || ''); if (n && ordered.indexOf(n) < 0) ordered.push(n); };
+  const add = function (n) { n = String(n || ''); if (n && !MAT_HIDDEN_RE.test(n) && ordered.indexOf(n) < 0) ordered.push(n); };
   _matLabelItems_().forEach(add);
   rows.forEach(function (r) { add(r[BK.item]); });
   const list = ordered.map(function (item) {
