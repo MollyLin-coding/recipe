@@ -526,7 +526,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.91';
+const APP_VERSION='v3.92';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -1587,12 +1587,12 @@ async function loadBottleLedger() {
   if (!res.ok) { area.innerHTML = `<div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${res.error || ''}</div>`; return; }
   const rows = res.list || [];
   if (!rows.length) { area.innerHTML = '<div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;">尚無異動</div>'; return; }
-  area.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>日期</th><th>類型</th><th class="tr">數量</th><th>操作人</th></tr></thead><tbody>'
+  area.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>日期</th><th>類型</th><th>瓶型</th><th class="tr">數量</th><th>操作人</th></tr></thead><tbody>'
     + rows.map(r => {
         const tag = r.type === '入庫'
           ? '<span style="color:var(--gold-dk);">入庫</span>'
           : (r.type === 'NG' ? '<span style="color:var(--red);font-weight:700;">NG</span>' : '<span style="color:var(--red);">出庫</span>'); // v3.6 NG 標籤
-        return `<tr><td style="font-size:12px;">${r.date}</td><td>${tag}</td><td class="tr">${r.qty}</td><td style="font-size:12px;">${r.operator}</td></tr>`;
+        return `<tr><td style="font-size:12px;">${r.date}</td><td>${tag}</td><td style="font-size:12px;">${r.item || ''}</td><td class="tr">${r.qty}</td><td style="font-size:12px;">${r.operator}</td></tr>`;
       }).join('')
     + '</tbody></table></div>';
 }
