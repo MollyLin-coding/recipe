@@ -526,7 +526,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.90';
+const APP_VERSION='v3.91';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -1459,7 +1459,7 @@ function renderProfitData(res) {
 // ③ 原料庫 + 資材費用
 // ════════════════════════════════════════════════
 async function renderInventoryPage(mc) {
-  mc.innerHTML = `<div id="invProfitCard">${invProfitCardHtml()}</div><div class="card">
+  mc.innerHTML = `<div class="card">
     <div class="sec-hd"><div class="card-title" style="margin:0">🍾 玻璃瓶庫存</div>
       <div style="display:flex;gap:6px;">${_canSetSafety() ? '<button class="btn btn-primary btn-sm" onclick="showAddBottleItem()">➕ 新增品項</button>' : ''}<button class="btn btn-ghost btn-sm" onclick="loadBottleOverview();loadBottleLedger();">↻</button></div></div>
     <div id="bottleWaterArea"><div style="text-align:center;color:var(--ink3);padding:14px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>
@@ -1491,6 +1491,8 @@ async function renderInventoryPage(mc) {
       <div id="bottleLedgerArea"><div style="text-align:center;color:var(--ink3);padding:12px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>
     </div>
   </div>
+
+  <div id="invProfitCard" style="margin-top:10px;">${invProfitCardHtml()}</div>
 
   <div class="card" style="margin-top:10px;">
     <div class="sec-hd"><div class="card-title" style="margin:0">原料庫</div><button class="btn btn-ghost btn-sm" onclick="loadInv(true)">↻ 刷新</button></div>
@@ -1539,6 +1541,16 @@ function showAddBottleItem() {
     else toast(res.error || '新增失敗');
   });
 }
+// v3.91 主公 11/11 指示：最常用五款置頂，其餘收進「不常用瓶型」按鈕（按了才展開）；比對時忽略空白
+const BOTTLE_COMMON = ['100ml江小白', '100ml山形香水瓶', '500ml伏特加瓶', '500ml大香水瓶', '1000ml 黑色PP瓶'];
+const BOTTLE_RSV_AFTER = '2026-11-11';   // 訂單預佔只統計表訂出貨日晚於此日的訂單（與後端 BOTTLE_RSV_AFTER 同值）
+let _bottleRareOpen = false;
+function _bottleNorm(n) { return String(n || '').replace(/\s+/g, ''); }
+function toggleBottleRare() {
+  _bottleRareOpen = !_bottleRareOpen;
+  const b = document.getElementById('bottleRareBody'); if (b) b.style.display = _bottleRareOpen ? '' : 'none';
+  const t = document.getElementById('bottleRareBtn'); if (t) t.textContent = (_bottleRareOpen ? '▾ ' : '▸ ') + t.dataset.label;
+}
 async function loadBottleOverview() {
   const res = await api({ action: 'getBottleOverview' });
   const area = document.getElementById('bottleWaterArea');
@@ -1546,9 +1558,20 @@ async function loadBottleOverview() {
   if (!res.ok) { area.innerHTML = `<div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${res.error || ''}</div>`; return; }
   const list = res.list || [];
   window._bottleOv = list; window._bottleOvAt = Date.now(); // 同步建單警告快取
-  area.innerHTML = '<div class="tbl-wrap"><table><thead><tr><th>瓶品名</th><th class="tr">現有庫存(個)</th><th class="tr">安全水位</th></tr></thead><tbody>'
-    + list.map(x => safetyRow(x, '玻璃瓶', '')).join('')
-    + '</tbody></table></div>';
+  const _cm = BOTTLE_COMMON.map(_bottleNorm);
+  const common = _cm.map(n => list.find(x => _bottleNorm(x.item) === n)).filter(Boolean);
+  const rare = list.filter(x => _cm.indexOf(_bottleNorm(x.item)) < 0);
+  const _th = '<thead><tr><th>瓶品名</th><th class="tr">現有庫存(個)</th><th class="tr">安全水位</th></tr></thead>';
+  const _rareWarn = rare.some(x => (x.safety > 0 && x.stock < x.safety) || (x.reserved != null && x.stock - x.reserved < 0));
+  const _rareLabel = '不常用瓶型（' + rare.length + ' 款）' + (_rareWarn ? ' ⚠' : '');
+  area.innerHTML = '<div class="tbl-wrap"><table>' + _th + '<tbody>'
+    + common.map(x => safetyRow(x, '玻璃瓶', '')).join('')
+    + '</tbody></table></div>'
+    + '<div style="font-size:11px;color:var(--ink3);margin-top:6px;">訂單預估只統計表訂出貨日晚於 ' + BOTTLE_RSV_AFTER + ' 的未完成訂單。</div>'
+    + (rare.length ? '<div style="margin-top:8px;"><button class="btn btn-ghost btn-sm" id="bottleRareBtn" data-label="' + _rareLabel + '" onclick="toggleBottleRare()">' + (_bottleRareOpen ? '▾ ' : '▸ ') + _rareLabel + '</button></div>'
+      + '<div id="bottleRareBody" style="margin-top:8px;' + (_bottleRareOpen ? '' : 'display:none;') + '"><div class="tbl-wrap"><table>' + _th + '<tbody>'
+      + rare.map(x => safetyRow(x, '玻璃瓶', '')).join('')
+      + '</tbody></table></div></div>' : '');
   const opts = list.map(x => `<option value="${x.item}">${x.item}</option>`).join('');
   const bi = document.getElementById('biItem'); if (bi) bi.innerHTML = opts;
   const bo = document.getElementById('boItem'); if (bo) bo.innerHTML = opts;
@@ -2844,7 +2867,7 @@ function checkBottleWarn() {
     const total = need[r.inv] || 0;
     if (total > avail) {
       w.style.display = 'block';
-      w.innerHTML = '⚠ <b>' + r.inv + '</b> 可用僅 ' + avail + ' 個（庫存 ' + (rec.stock || 0) + '−其他訂單預佔 ' + rsv + '），本單需 ' + total + ' 個，缺 <b>' + (total - avail) + '</b> 個——仍可建單，請留意補瓶',
+      w.innerHTML = '⚠ <b>' + r.inv + '</b> 可用僅 ' + avail + ' 個（庫存 ' + (rec.stock || 0) + '−其他訂單預估 ' + rsv + '），本單需 ' + total + ' 個，缺 <b>' + (total - avail) + '</b> 個——仍可建單，請留意補瓶',
       w.style.color = 'var(--red)';
     } else { w.style.display = 'none'; }
   });
@@ -4131,7 +4154,7 @@ function safetyRow(x, category, client) {
     ? `<input type="number" min="0" step="1" value="${x.safety || 0}" data-item="${x.item}" style="width:56px;padding:4px;font-size:13px;text-align:right;border:1px solid var(--border);border-radius:4px;" onchange="saveSafety('${category}','${client}',this.dataset.item,this.value,this)">`
     : (x.safety || 0);
   return `<tr${low ? ' style="background:#fbeaea;"' : ''}>`
-    + `<td>${x.item}${low ? ' <span style="color:var(--red);font-size:11px;">⚠低於水位</span>' : ''}<div style="font-size:11px;color:var(--ink3);">累計入 ${x.inQty} / 出 ${x.outQty}${x.ng ? ` / <span style="color:var(--red);">NG ${x.ng}</span>` : ''}</div>${x.reserved != null ? `<div style="font-size:11px;${(x.stock - x.reserved) < 0 ? 'color:var(--red);font-weight:700;' : 'color:var(--gold-dk);'}" title="${x.reservedDetail || ''}">訂單預佔 ${x.reserved}｜可用 ${x.stock - x.reserved}</div>` : ''}</td>`
+    + `<td>${x.item}${low ? ' <span style="color:var(--red);font-size:11px;">⚠低於水位</span>' : ''}<div style="font-size:11px;color:var(--ink3);">累計入 ${x.inQty} / 出 ${x.outQty}${x.ng ? ` / <span style="color:var(--red);">NG ${x.ng}</span>` : ''}</div>${x.reserved != null ? `<div style="font-size:11px;${(x.stock - x.reserved) < 0 ? 'color:var(--red);font-weight:700;' : 'color:var(--gold-dk);'}" title="${x.reservedDetail || ''}">訂單預估 ${x.reserved}｜可用 ${x.stock - x.reserved}</div>` : ''}</td>`
     + `<td class="tr" style="font-weight:600;font-size:16px;${x.stock <= 0 ? 'color:var(--ink3);' : (low ? 'color:var(--red);' : '')}">${x.stock}</td>`
     + `<td class="tr">${safeCell}</td></tr>`;
 }
