@@ -1646,7 +1646,7 @@ async function loadMatOverview() {
   }
   const others = list.filter(x => (x.group || '其他') === '其他');
   if (others.length) html += '<tbody>' + _gh(`其他（${others.length}）`) + others.map(x => safetyRow(x, '資材', '')).join('') + '</tbody>';
-  html += '</table></div><div style="font-size:11px;color:var(--ink3);margin-top:6px;">前標／後標依「出貨日晚於 ' + BOTTLE_RSV_AFTER + ' 的未完成訂單」（含自有品牌）每客戶每酒款自動列出；有庫存紀錄的品項會一直保留。點客戶名稱可展開／收合。</div>';
+  html += '</table></div><div style="font-size:11px;color:var(--ink3);margin-top:6px;">前標／後標依「下過單的客戶與酒款」（含自有品牌；不含出貨／樣品／寄售單）自動列出；有庫存紀錄的品項會一直保留。點客戶名稱可展開／收合。</div>';
   area.innerHTML = html;
   window._matList = list;
   const opts = _matOpts('');
