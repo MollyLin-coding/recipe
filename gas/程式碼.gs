@@ -3769,7 +3769,7 @@ function getBottleLedger(p) {
     if (item && String(r[BK.item]) !== String(item)) continue;
     if (String(r[BK.type]) === '品項建立') continue; // 建立列不列入異動歷史
     out.push({
-      id: String(r[BK.id]), date: String(r[BK.date]), item: String(r[BK.item]),
+      id: String(r[BK.id]), date: _fmtDate_(r[BK.date]), item: String(r[BK.item]),   // v3.92 日期被 Sheets 轉成 Date 時改回 yyyy-MM-dd
       type: String(r[BK.type]), qty: Number(r[BK.qty]) || 0,
       operator: String(r[BK.operator] || ''), createdAt: String(r[BK.createdAt] || ''),
       note: String(r[BK.note] || '')
