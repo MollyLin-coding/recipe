@@ -528,7 +528,7 @@ var SESSION_TTL_SEC = 21600;
 var DATA_CACHE_ON = true;
 var V3144_CACHE_KEYS = ['orders_v1_full_std', 'orders_v1_full_PM',
   'orders_v1_bartender_std', 'orders_v1_bartender_PM',
-  'bottleOv_v1', 'rcIdx_v1', 'stockAlerts_v1'];
+  'bottleOv_v2', 'rcIdx_v1', 'stockAlerts_v1'];
 // v3.14.6 session 儲存：CacheService 優先，失效時自動 fallback 到 PropertiesService。
 //   ⚠️ 2026-08-21 事故：CacheService 整個服務失效（put 後立刻 get 回 null 且不拋例外），
 //   session 只存在那裡 → 全站 SESSION_EXPIRED、所有人無法使用。實測 Properties/Lock 正常。
@@ -3619,6 +3619,9 @@ function _bottleKeyOf_(name, namesMap) {
   if (BOTTLE_ALIAS[n] && namesMap[BOTTLE_ALIAS[n]]) return BOTTLE_ALIAS[n];
   return null;
 }
+// v3.91 主公 11/11 指示：訂單預佔只統計「表訂出貨日晚於此日」的訂單（11/11 以前的舊單不再佔瓶）；
+//   未填出貨日的訂單仍照舊計入。前端 index.html 的 BOTTLE_RSV_AFTER 說明文字同值，改這裡要一起改。
+const BOTTLE_RSV_AFTER = '2026-11-11';
 // 未完成訂單的玻璃瓶預佔量（item 狀態≠完成者依瓶型彙總；失敗不影響庫存總覽）
 function _bottleReserved_(namesMap) {
   const map = {};
@@ -3632,6 +3635,8 @@ function _bottleReserved_(namesMap) {
       // v3.5 P1-1：出貨單出成品不裝瓶，不佔玻璃瓶；v3.13：改抬頭「自有酒款出貨訂單(有金流)」＋新型「自有酒款樣品(無金流)」同理（皆出自有成品庫存）
       if (['自有酒款庫存出貨訂單', '自有酒款出貨訂單(有金流)', '自有酒款樣品(無金流)'].indexOf(String(data[i][2] || '')) >= 0) continue;
       if (String(data[i][8] || '').trim() === '已出貨') continue;        // v3.5 P1-2：已出貨單不再預佔
+      const _dd = _fmtDate_(data[i][3]).trim().replace(/\//g, '-').slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(_dd) && _dd <= BOTTLE_RSV_AFTER) continue;   // v3.91 出貨日 ≤ 11/11 不計
       let items;
       try { items = JSON.parse(data[i][4] || '[]'); } catch (e) { continue; }
       items.forEach(function (it) {
@@ -3684,7 +3689,7 @@ function _bottleStockOf_(rows, item) {
 function getBottleOverview() {
   // v3.14.4 快取 60 秒（無參數＝無 role/view 變體，單一 key 天然安全）；
   //   bottleIn/bottleOut/addBottleItem 成功後由 _bustOrderCache_ 立即清除。
-  if (DATA_CACHE_ON) { try { const h = CacheService.getScriptCache().get('bottleOv_v1'); if (h) return JSON.parse(h); } catch (e) {} }
+  if (DATA_CACHE_ON) { try { const h = CacheService.getScriptCache().get('bottleOv_v2'); if (h) return JSON.parse(h); } catch (e) {} }
   const rows = _bottleRows_();
   const smap = _safetyMap_();
   const names = {};
@@ -3708,7 +3713,7 @@ function getBottleOverview() {
       reserved: rsv.qty, reservedDetail: rsv.detail.join('、') };
   });
   const _o = { ok: true, list: list };
-  if (DATA_CACHE_ON) { try { CacheService.getScriptCache().put('bottleOv_v1', JSON.stringify(_o), 1800); } catch (e) {} }
+  if (DATA_CACHE_ON) { try { CacheService.getScriptCache().put('bottleOv_v2', JSON.stringify(_o), 1800); } catch (e) {} }
   return _o;
 }
 
@@ -4155,13 +4160,13 @@ var ORDER_MUTATING_ACTIONS = {
 // 其餘讀取快取的失效對應（action → 要清掉的 key）。
 // 新增寫入函式時只要在這裡登記一行，就不會出現「改了資料卻還看到舊值」。
 var CACHE_BUST_MAP = {
-  bottleIn:['bottleOv_v1'], bottleOut:['bottleOv_v1'], addBottleItem:['bottleOv_v1'],
+  bottleIn:['bottleOv_v2'], bottleOut:['bottleOv_v2'], addBottleItem:['bottleOv_v2'],
   // v3.65（複檢 P1-4）saveRunCard 完工會自動入庫成品 → 水位警示要跟著失效
   saveRunCard:['rcIdx_v1','stockAlerts_v1'], deleteRunCard:['rcIdx_v1'],
   stockIn:['stockAlerts_v1'], stockOut:['stockAlerts_v1'], setSafetyLevel:['stockAlerts_v1'],
   // 出貨/完工會動成品庫存與卡片狀態 → 水位警示與 run card 索引一併重算
   // v3.65（複檢 P1-4）completeOrderItem 會扣玻璃瓶 → 補 bottleOv_v1（TTL 1800 秒，原本最長 30 分鐘顯示舊數字）
-  shipOrder:['stockAlerts_v1'], completeOrderItem:['stockAlerts_v1','rcIdx_v1','bottleOv_v1'],
+  shipOrder:['stockAlerts_v1'], completeOrderItem:['stockAlerts_v1','rcIdx_v1','bottleOv_v2'],
   // v3.27 出貨紀錄合併扣庫存 → 水位警示同步失效
   addShipment:['stockAlerts_v1'], deleteShipment:['stockAlerts_v1']
 };
@@ -4169,9 +4174,9 @@ var CACHE_BUST_MAP = {
 var FRESH_BUST_MAP = {
   getOrders: ORDERS_CACHE_KEYS,
   extGetOrders: ORDERS_CACHE_KEYS,   // v3.45 報價系統同步一律讀最新（帶 fresh=1）
-  getBottleOverview: ['bottleOv_v1'], getRunCardIndex: ['rcIdx_v1'], getStockAlerts: ['stockAlerts_v1'],
+  getBottleOverview: ['bottleOv_v2'], getRunCardIndex: ['rcIdx_v1'], getStockAlerts: ['stockAlerts_v1'],
   getRecipeList: ['recipeList_v1'], getInventory: ['inventory_v2'],
-  bootstrap: ORDERS_CACHE_KEYS.concat(['bottleOv_v1', 'rcIdx_v1', 'stockAlerts_v1'])
+  bootstrap: ORDERS_CACHE_KEYS.concat(['bottleOv_v2', 'rcIdx_v1', 'stockAlerts_v1'])
 };
 function _bustOrderCache_(action, result) {
   if (!result || result.ok !== true) return;   // 失敗的寫入不必清
