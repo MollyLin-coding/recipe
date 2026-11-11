@@ -183,6 +183,7 @@ var ROLE_MATRIX = {
   completeOrderItem: ['admin', '倉管'], confirmShipDate: ['admin', '倉管'], shipOrder: ['admin', '倉管'],
   stockIn: ['admin', '倉管'], stockOut: ['admin', '倉管'],
   bottleIn: ['admin', '倉管'], bottleOut: ['admin', '倉管'], addBottleItem: ['admin', '倉管'],
+  matIn: ['admin', '倉管'], matOut: ['admin', '倉管'], addMatItem: ['admin', '倉管'],   // v3.93 資材庫存
   setSafetyLevel: ['admin', '倉管'],
   // v3.26 實際出貨紀錄：登打出貨＝出貨作業(admin+倉管)；刪除紀錄是破壞性動作＝僅 admin
   // v3.76（2026-10-20 主公指示）：PM（Vic／阿軒）也可登記出貨；刪除仍僅 admin
@@ -424,6 +425,11 @@ function doGet(e) {
       case 'bottleOut':              result = bottleOut(p); break;               // 玻璃瓶庫存
       case 'getBottleLedger':        result = getBottleLedger(p); break;         // 玻璃瓶庫存
       case 'addBottleItem':          result = addBottleItem(p); break;           // 新增玻璃瓶品項(ledger 派生)
+      case 'getMatOverview':         result = getMatOverview(); break;           // v3.93 資材庫存（前標/後標/熱縮膜/瓶蓋）
+      case 'matIn':                  result = matIn(p); break;
+      case 'matOut':                 result = matOut(p); break;
+      case 'getMatLedger':           result = getMatLedger(p); break;
+      case 'addMatItem':             result = addMatItem(p); break;
       case 'saveRunCard':            result = saveRunCard(p); break;             // Run Card(v2.6)
       case 'getRunCards':            result = getRunCards(p); break;             // Run Card(v2.6)
       case 'getRunCardIndex':        result = getRunCardIndex(); break;          // Run Card 輕量索引(v2.9.3, 訂單列表鈕條件顯示)
@@ -473,7 +479,7 @@ function doGet(e) {
 var AUDIT_ACTIONS = {
   createOrder:1, updateOrder:1, updateOrderFinance:1, updateOrderDelivery:1, deleteOrder:1, removeOrderItem:1, bindOrderItemSheet:1,   // v3.57
   completeOrderItem:1, confirmShipDate:1, shipOrder:1,
-  stockIn:1, stockOut:1, bottleIn:1, bottleOut:1, addBottleItem:1, setSafetyLevel:1,
+  stockIn:1, stockOut:1, bottleIn:1, bottleOut:1, addBottleItem:1, setSafetyLevel:1, matIn:1, matOut:1, addMatItem:1,
   addShipment:1, deleteShipment:1,
   consignSale:1, consignAdjust:1, consignSaveDealer:1, consignStatementCreate:1, consignStatementSettle:1, consignSeed:1, consignStatementDelete:1,
   consignRestockCreate:1, consignRestockApprove:1, consignRestockReject:1, consignMailTest:1, consignResetDealer:1,
@@ -3852,7 +3858,7 @@ function setSafetyLevel(p) {
   const category = p && p.category, item = p && p.item;
   const client = (p && p.client) || '';
   const level = Math.floor(Number(p && p.level));
-  if (category !== '成品' && category !== '玻璃瓶') return { ok: false, error: '類別需為 成品 或 玻璃瓶' };
+  if (category !== '成品' && category !== '玻璃瓶' && category !== '資材') return { ok: false, error: '類別需為 成品、玻璃瓶 或 資材' };
   if (!item) return { ok: false, error: '缺少品名' };
   if (!(level >= 0)) return { ok: false, error: '安全水位需為 0 或正整數' };
   const lock = LockService.getScriptLock();
@@ -3883,6 +3889,7 @@ function getStockAlerts() {
   if (!rows.length) return { ok: true, count: 0, alerts: [] };
   const stockRows = _stockRows_();
   const bottleRows = _bottleRows_();
+  let matRows = null;   // v3.93 有設資材水位才讀資材分頁
   const alerts = [];
   rows.forEach(function (r) {
     const cat = String(r[SF.cat]);
@@ -3893,6 +3900,7 @@ function getStockAlerts() {
     let stock = 0;
     if (cat === '成品') stock = _stockOf_(stockRows, client, item);
     else if (cat === '玻璃瓶') stock = _bottleStockOf_(bottleRows, item);
+    else if (cat === '資材') { if (!matRows) matRows = _matRows_(); stock = _bottleStockOf_(matRows, item); }
     else return;
     if (stock < level) alerts.push({ category: cat, client: client, item: item, stock: stock, level: level });
   });
@@ -4161,6 +4169,7 @@ var ORDER_MUTATING_ACTIONS = {
 // 新增寫入函式時只要在這裡登記一行，就不會出現「改了資料卻還看到舊值」。
 var CACHE_BUST_MAP = {
   bottleIn:['bottleOv_v2'], bottleOut:['bottleOv_v2'], addBottleItem:['bottleOv_v2'],
+  matIn:['stockAlerts_v1'], matOut:['stockAlerts_v1'],   // v3.93
   // v3.65（複檢 P1-4）saveRunCard 完工會自動入庫成品 → 水位警示要跟著失效
   saveRunCard:['rcIdx_v1','stockAlerts_v1'], deleteRunCard:['rcIdx_v1'],
   stockIn:['stockAlerts_v1'], stockOut:['stockAlerts_v1'], setSafetyLevel:['stockAlerts_v1'],
@@ -6332,5 +6341,140 @@ function tastingDelete(p) {
     if (!tgt) return { ok: false, error: '找不到品評：' + id };
     _tsSheet_().deleteRow(tgt.rowIdx);
     return { ok: true, id: id, deleted: true };
+  } finally { lock.releaseLock(); }
+}
+
+// ============================================================
+// v3.93 資材庫存模組（主公 2026-11-11 指示；第一版＝純庫存登記，不與訂單預估／完工扣庫連動）
+//   分頁：資材庫存異動（於 MAIN_SHEET_ID；欄位與玻璃瓶庫存異動相同，C 欄＝資材品名）
+//   品項＝固定 5 項（熱縮膜 3＋江小白瓶蓋 2）∪ 未出貨代工單（全客製／換前標）每客戶每酒款的「前標」「後標」
+//        ∪ 本分頁出現過的品名（含「➕ 新增品項」）。庫存＝Σ入庫−Σ出庫。
+// ============================================================
+const MAT_SHEET_NAME = '資材庫存異動';
+const MAT_FIXED = ['100ml香水瓶透明熱縮膜', '500ml大香水瓶黑色熱縮膜', '500ml伏特加透明熱縮膜', '白色江小白瓶蓋', '黑色江小白瓶蓋'];
+function _matSheet_() {
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  let ws = ss.getSheetByName(MAT_SHEET_NAME);
+  if (!ws) ws = ss.insertSheet(MAT_SHEET_NAME);
+  if (ws.getLastRow() === 0) {
+    ws.getRange(1, 1, 1, BOTTLE_HEADERS.length).setValues([['異動ID', '日期', '資材品名', '異動類型', '數量', '操作人', '建立時間', '備註']]);
+    ws.setFrozenRows(1);
+  }
+  return ws;
+}
+function _matRows_() {
+  const ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  const ws = ss.getSheetByName(MAT_SHEET_NAME);   // 讀取不建表（寫入時才建）
+  if (!ws || ws.getLastRow() < 2) return [];
+  return ws.getRange(2, 1, ws.getLastRow() - 1, BOTTLE_HEADERS.length).getValues();
+}
+function _matGroupOf_(name) {
+  const n = String(name || '');
+  if (/前標$/.test(n)) return '前標';
+  if (/後標$/.test(n)) return '後標';
+  if (n.indexOf('熱縮膜') >= 0) return '熱縮膜';
+  if (n.indexOf('瓶蓋') >= 0) return '瓶蓋';
+  return '其他';
+}
+// 未出貨代工單 → 每客戶每酒款的前標／後標品名（失敗不影響總覽）
+function _matLabelItems_() {
+  const out = [];
+  try {
+    const ws = SpreadsheetApp.openById(MAIN_SHEET_ID).getSheetByName('訂單主表');
+    if (!ws || ws.getLastRow() < 2) return out;
+    const data = ws.getDataRange().getValues();
+    const seen = {};
+    for (let i = 1; i < data.length; i++) {
+      if (!String(data[i][0] || '')) continue;
+      const client = String(data[i][1] || '').trim();
+      const type = String(data[i][2] || '');
+      if (!(type.indexOf('代工') >= 0 || /^(全客製-|OEM-|換前標-)/.test(client))) continue;
+      if (String(data[i][8] || '').trim() === '已出貨') continue;
+      const cName = client.replace(/^(全客製-|OEM-|換前標-)/, '').trim();
+      if (!cName) continue;
+      let items;
+      try { items = JSON.parse(data[i][4] || '[]'); } catch (e) { continue; }
+      items.forEach(function (it) {
+        const prod = String((it && it.product) || '').trim();
+        if (!prod) return;
+        const base = cName + '－' + prod;
+        if (seen[base]) return;
+        seen[base] = true;
+        out.push(base + '－前標'); out.push(base + '－後標');
+      });
+    }
+  } catch (e) { }
+  return out;
+}
+function getMatOverview() {
+  const rows = _matRows_();
+  const smap = _safetyMap_();
+  const ordered = MAT_FIXED.slice();
+  const add = function (n) { n = String(n || ''); if (n && ordered.indexOf(n) < 0) ordered.push(n); };
+  _matLabelItems_().forEach(add);
+  rows.forEach(function (r) { add(r[BK.item]); });
+  const list = ordered.map(function (item) {
+    let inQty = 0, outQty = 0;
+    rows.forEach(function (r) {
+      if (String(r[BK.item]) !== item) return;
+      const q = Number(r[BK.qty]) || 0;
+      if (String(r[BK.type]) === '入庫') inQty += q;
+      else if (String(r[BK.type]) === '出庫') outQty += q;
+    });
+    return { item: item, group: _matGroupOf_(item), inQty: inQty, outQty: outQty, stock: inQty - outQty,
+      safety: smap['資材||' + item] || 0 };
+  });
+  return { ok: true, list: list };
+}
+function matIn(p) {
+  const item = String((p && p.item) || '').trim();
+  const qty = Math.floor(Number(p && p.qty));
+  if (!item) return { ok: false, error: '缺少資材品名' };
+  if (!(qty > 0)) return { ok: false, error: '數量需為正整數' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    _matSheet_().appendRow([_stockGenId_(), p.date || _stockToday_(), item, '入庫', qty, p.operator || '', _stockNow_(), p.note || '']);
+    return { ok: true, item: item, stock: _bottleStockOf_(_matRows_(), item) };
+  } finally { lock.releaseLock(); }
+}
+function matOut(p) {
+  const item = String((p && p.item) || '').trim();
+  const qty = Math.floor(Number(p && p.qty));
+  if (!item) return { ok: false, error: '缺少資材品名' };
+  if (!(qty > 0)) return { ok: false, error: '數量需為正整數' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    const cur = _bottleStockOf_(_matRows_(), item);
+    if (qty > cur) return { ok: false, error: '庫存不足：「' + item + '」目前 ' + cur + ' 個，無法出庫 ' + qty + ' 個', stock: cur };
+    _matSheet_().appendRow([_stockGenId_(), p.date || _stockToday_(), item, '出庫', qty, p.operator || '', _stockNow_(), p.note || '']);
+    return { ok: true, item: item, stock: cur - qty };
+  } finally { lock.releaseLock(); }
+}
+function getMatLedger(p) {
+  const item = p && p.item;
+  const rows = _matRows_();
+  const out = [];
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const r = rows[i];
+    if (item && String(r[BK.item]) !== String(item)) continue;
+    if (String(r[BK.type]) === '品項建立') continue;
+    out.push({ id: String(r[BK.id]), date: _fmtDate_(r[BK.date]), item: String(r[BK.item]), type: String(r[BK.type]),
+      qty: Number(r[BK.qty]) || 0, operator: String(r[BK.operator] || ''), note: String(r[BK.note] || '') });
+  }
+  return { ok: true, list: out };
+}
+function addMatItem(p) {
+  const item = String((p && p.item) || '').trim();
+  if (!item) return { ok: false, error: '缺少品項名稱' };
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    if (MAT_FIXED.indexOf(item) >= 0 || _matRows_().some(function (r) { return String(r[BK.item]) === item; })) {
+      return { ok: false, error: '品項已存在：' + item };
+    }
+    _matSheet_().appendRow([_stockGenId_(), _stockToday_(), item, '品項建立', 0, p.operator || '', _stockNow_(), '新增品項']);
+    return { ok: true, item: item };
   } finally { lock.releaseLock(); }
 }
