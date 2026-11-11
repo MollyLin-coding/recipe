@@ -209,7 +209,9 @@ var ROLE_MATRIX = {
   // v3.80 出貨品管：填單／看單＝任何廠內登入者（調酒師可能是 user／倉管／PM）；設標準樣與刪單僅 admin
   qcSetStd: ['admin'], qcDelete: ['admin'],
   // v3.83 基酒品評：填／看＝任何廠內登入者（經銷商、FB觀看 已被前面的閘門擋掉）；刪除僅 admin
-  tastingDelete: ['admin']
+  tastingDelete: ['admin'],
+  // v3.97 後台搬 Supabase：主表分頁原樣匯出（搬遷用，唯讀）→ 僅 admin
+  adminExportSheet: ['admin']
 };
 // v3.38 POST 入口：大 payload（經銷商設定含授權酒款 JSON／長文字、建單明細…）走 POST，免 GET 網址過長被 Google 回 400 HTML 頁。
 //   前端以 text/plain 送 JSON body（免 CORS preflight）；解析後與 doGet 走完全相同的流程（token 閘門／角色／派發）。
@@ -459,6 +461,7 @@ function doGet(e) {
       case 'getRdApplies':   result = getRdApplies(); break;
       case 'reviewRdApply':  result = reviewRdApply(p); break;
       case 'getRdHistory':   result = getRdHistory(); break;
+      case 'adminExportSheet': result = adminExportSheet(p); break;       // v3.97 後台搬 Supabase：主表分頁原樣匯出（admin、唯讀）
       default: result = { ok: false, error: '未知 action: ' + action };
     }
     _logAction_(action, p, result); // v3.8 操作紀錄（內部 try/catch，失敗不阻斷）
@@ -6481,4 +6484,56 @@ function addMatItem(p) {
     _matSheet_().appendRow([_stockGenId_(), _stockToday_(), item, '品項建立', 0, p.operator || '', _stockNow_(), '新增品項']);
     return { ok: true, item: item };
   } finally { lock.releaseLock(); }
+}
+
+// ############################################################
+// ##  adminExportSheet（v3.97，2026-11-11 主公拍板）
+// ##  後台搬 Supabase 用：把主表某一張分頁「原樣」匯出給匯入腳本（規劃書 v0.3／回報_廠務APP_Supabase_Phase0）。
+// ##  ・僅 admin（ROLE_MATRIX）；唯讀——不寫入、不建分頁、不碰任何快取。
+// ##  ・只匯出白名單內的分頁。「使用者資料／帳號」含明碼密碼，永不經由本 action 流出（帳號搬遷另案處理）。
+// ##  ・不帶 sheet＝回主表全部分頁清單（列數、欄數、是否可匯出），供搬遷前盤點。
+// ##  ・日期儲存格 getValues() 會回 Date 物件：一律用「試算表時區」格式化成 yyyy-MM-dd HH:mm:ss 字串，
+// ##    並在 dateCells 記下 [列, 欄]（0 起算，相對於本次回傳的 values），匯入端才知道哪些格子原本是日期。
+// ##  ・offset／limit 以資料列計（不含表頭；limit 預設 2000、上限 5000）——品管照片等大分頁分批拉。
+// ############################################################
+var EXPORT_SHEET_WHITELIST = ['訂單主表', '訂單異動紀錄', '出貨紀錄', 'RunCard', '製作記錄',
+  '成品庫存異動', '玻璃瓶庫存異動', '資材庫存異動', '安全水位設定',
+  '經銷商設定', '牌價表', '經銷商庫存異動', '經銷商對帳單', '經銷商叫貨單',
+  '業績模型參數', '業績模型月表', '廠務支出', '固定成本表', '會議主檔', '會議議題',
+  '品管報告', '品管照片', '基酒品評', '研發試算記錄', '研發試算備份', '研發申請記錄',
+  '申請記錄', '酒譜更改申請', '彙整價格表', '登入紀錄', '操作紀錄'];
+function adminExportSheet(p) {
+  if (!p || p._role !== 'admin') return { ok: false, error: '權限不足' };   // 縱深防禦（第一道在 ROLE_MATRIX）
+  var ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  var name = String(p.sheet || '').trim();
+  if (!name) {
+    var sheets = ss.getSheets().map(function (w) {
+      var n = w.getName();
+      return { name: n, rows: w.getLastRow(), cols: w.getLastColumn(), exportable: EXPORT_SHEET_WHITELIST.indexOf(n) >= 0 };
+    });
+    return { ok: true, sheets: sheets };
+  }
+  if (EXPORT_SHEET_WHITELIST.indexOf(name) < 0) return { ok: false, error: '此分頁不開放匯出：' + name };
+  var ws = ss.getSheetByName(name);
+  if (!ws) return { ok: false, error: '找不到分頁：' + name };
+  var lastRow = ws.getLastRow(), lastCol = ws.getLastColumn();
+  var out = { ok: true, sheet: name, totalRows: Math.max(0, lastRow - 1), cols: lastCol, tz: _sheetTz_(),
+    offset: 0, header: [], values: [], dateCells: [] };
+  if (lastRow < 1 || lastCol < 1) return out;
+  var tz = out.tz;
+  function cell(v) { return (v instanceof Date) ? Utilities.formatDate(v, tz, 'yyyy-MM-dd HH:mm:ss') : v; }
+  out.header = ws.getRange(1, 1, 1, lastCol).getValues()[0].map(cell);
+  var offset = Math.max(0, Math.floor(Number(p.offset)) || 0);
+  var limit = Math.min(5000, Math.max(1, Math.floor(Number(p.limit)) || 2000));
+  out.offset = offset;
+  var n = Math.min(limit, out.totalRows - offset);
+  if (n <= 0) return out;
+  var vals = ws.getRange(2 + offset, 1, n, lastCol).getValues();
+  for (var i = 0; i < vals.length; i++) {
+    for (var j = 0; j < vals[i].length; j++) {
+      if (vals[i][j] instanceof Date) { out.dateCells.push([i, j]); vals[i][j] = cell(vals[i][j]); }
+    }
+  }
+  out.values = vals;
+  return out;
 }
