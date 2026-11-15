@@ -211,7 +211,9 @@ var ROLE_MATRIX = {
   // v3.83 基酒品評：填／看＝任何廠內登入者（經銷商、FB觀看 已被前面的閘門擋掉）；刪除僅 admin
   tastingDelete: ['admin'],
   // v3.97 後台搬 Supabase：主表分頁原樣匯出（搬遷用，唯讀）→ 僅 admin
-  adminExportSheet: ['admin']
+  adminExportSheet: ['admin'],
+  // v3.98 一次性：同仁帳號搬 Supabase（搬完下一版刪除）→ 僅 admin
+  adminExportUsersOnce: ['admin']
 };
 // v3.38 POST 入口：大 payload（經銷商設定含授權酒款 JSON／長文字、建單明細…）走 POST，免 GET 網址過長被 Google 回 400 HTML 頁。
 //   前端以 text/plain 送 JSON body（免 CORS preflight）；解析後與 doGet 走完全相同的流程（token 閘門／角色／派發）。
@@ -462,6 +464,7 @@ function doGet(e) {
       case 'reviewRdApply':  result = reviewRdApply(p); break;
       case 'getRdHistory':   result = getRdHistory(); break;
       case 'adminExportSheet': result = adminExportSheet(p); break;       // v3.97 後台搬 Supabase：主表分頁原樣匯出（admin、唯讀）
+      case 'adminExportUsersOnce': result = adminExportUsersOnce(p); break;   // v3.98 一次性：同仁帳號搬 Supabase（admin、唯讀、有到期日）
       default: result = { ok: false, error: '未知 action: ' + action };
     }
     _logAction_(action, p, result); // v3.8 操作紀錄（內部 try/catch，失敗不阻斷）
@@ -480,6 +483,7 @@ function doGet(e) {
 // 記「寫入動作」＋「敏感讀取(開酒譜)」到主表「操作紀錄」分頁：時間/帳號/角色/動作/摘要/結果。
 // 摘要只收白名單參數(絕不記 password/token/data 大 JSON)；appendRow 失敗不阻斷業務。
 var AUDIT_ACTIONS = {
+  adminExportUsersOnce:1,   // v3.98 一次性帳號匯出：留紀錄
   createOrder:1, updateOrder:1, updateOrderFinance:1, updateOrderDelivery:1, deleteOrder:1, removeOrderItem:1, bindOrderItemSheet:1,   // v3.57
   completeOrderItem:1, confirmShipDate:1, shipOrder:1,
   stockIn:1, stockOut:1, bottleIn:1, bottleOut:1, addBottleItem:1, setSafetyLevel:1, matIn:1, matOut:1, addMatItem:1,
@@ -6536,4 +6540,33 @@ function adminExportSheet(p) {
   }
   out.values = vals;
   return out;
+}
+
+// ############################################################
+// ##  adminExportUsersOnce（v3.98，2026-11-15 主公拍板 A′）——一次性，搬完下一版整段刪除
+// ##  用途：同仁帳號搬到 Supabase 新後端。回傳「使用者資料」的帳號／密碼／角色／綁定經銷商四欄，
+// ##    只給已登入 admin 的分頁；分頁內當場以 PBKDF2 雜湊後直接送新後端 adminImportUsers，明碼不落地。
+// ##  防護：① ROLE_MATRIX＋函式內雙重 admin 檢查 ② 過了 USERS_EXPORT_UNTIL（台北日期）自動失效
+// ##    ③ 唯讀、不寫任何儲存格 ④ 操作紀錄只記「誰、何時、成功/失敗」，不記回傳內容。
+// ##  密碼取值與 login() 相同：String(儲存格).trim()（純數字密碼被吃掉的開頭 0，新後端 login 另有容錯）。
+// ############################################################
+var USERS_EXPORT_UNTIL = '2026-11-16';
+function adminExportUsersOnce(p) {
+  if (!p || p._role !== 'admin') return { ok: false, error: '權限不足' };   // 縱深防禦（第一道在 ROLE_MATRIX）
+  var today = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy-MM-dd');
+  if (today > USERS_EXPORT_UNTIL) return { ok: false, error: '此匯出入口已過期' };
+  var ss = SpreadsheetApp.openById(MAIN_SHEET_ID);
+  var ws = ss.getSheetByName('使用者資料') || ss.getSheetByName('帳號');
+  if (!ws) return { ok: false, error: '找不到帳號分頁' };
+  var rows = ws.getDataRange().getValues();
+  var dc = _userDealerCol_(rows[0]);
+  var users = [];
+  for (var i = 1; i < rows.length; i++) {
+    var acc = String(rows[i][0] == null ? '' : rows[i][0]).trim();
+    var pwd = String(rows[i][1] == null ? '' : rows[i][1]).trim();
+    if (!acc || !pwd) continue;
+    users.push({ username: acc, password: pwd, role: _normRole_(rows[i][2]),
+      dealer: String(rows[i][dc] == null ? '' : rows[i][dc]).trim() });
+  }
+  return { ok: true, users: users };
 }
