@@ -226,6 +226,11 @@ function doGet(e) {
   const action = p.action || '';
   let result;
   try {
+    // v4.00 後台搬 Supabase：轉接頭（SB_RELAY_ON≠'1' 時 _sbRelay_ 回 null，以下流程與 v3.99 相同）
+    var _sbOut = _sbRelay_(action, p);
+    if (_sbOut) return _sbOut;
+    if (action === 'relayMail') return _sbJson_(relayMail(p));
+    if (action === 'sbRelaySetup') return _sbJson_(sbRelaySetup(p));
     // v2.1 輕量 session token：除 login/getEnvInfo 外，所有 action 一律要求有效 token
     // v3.40 匯入腳本免 token：expImport 帶 key＝Script Property CRM_CASH_KEY 時視為 admin（操作人「匯入腳本」；一次性搬 Google 支出表用）
     var _expKeyOk = (action === 'expImport' && !!_crmCashKey_() && String(p.key || '') === _crmCashKey_());
@@ -6536,4 +6541,76 @@ function adminExportSheet(p) {
   }
   out.values = vals;
   return out;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ## v4.00 後台搬 Supabase：/exec 轉接頭＋寄信轉接入口（2026-11-15，主公拍板「切換後 /exec 留作轉接頭」）
+// ##  新後端＝Supabase Edge Function「factory-api」。轉接開關與網址、金鑰都放「指令碼屬性」，程式裡沒有任何金鑰：
+// ##    SB_RELAY_ON＝'1' 才轉接（預設沒有這個屬性＝本檔行為與 v3.99 完全相同）／SB_RELAY_URL／SB_RELAY_KEY／MAIL_RELAY_KEY
+// ##  開了之後：
+// ##   - 報價系統 ext*、任務卡 CRM crmCashRead：金鑰照舊在這裡驗（QS_LINK_KEY／CRM_CASH_KEY 不外流），驗過才帶 SB_RELAY_KEY 轉給新後端。
+// ##   - 其餘 action（含 login）：原封不動轉給新後端。還開著舊版前台的同仁會被要求重新登入一次，之後照常用，資料都寫在新後端。
+// ##   - 不轉接、留在這裡：getEnvInfo（部署探針）、relayMail、sbRelaySetup、兩個金鑰一次性設定、adminExportSheet（匯出舊主表）。
+// ##   - expImport（9 月一次性匯入用）：轉接開啟後停用，避免寫進已停更的舊主表。
+// ##  ⚠ UrlFetchApp 需要「連線到外部服務」授權：部署前須由 Action 的 clasp 帳號在編輯器執行一次授權（8/21 事故同型，見 v3.14.5 註解）。
+// ═══════════════════════════════════════════════════════════════════
+var SB_RELAY_LOCAL_ACTIONS = ['getEnvInfo', 'relayMail', 'sbRelaySetup', 'crmCashKeySetup', 'qsLinkKeySetup', 'adminExportSheet'];
+function _sbProp_(k) { try { return PropertiesService.getScriptProperties().getProperty(k) || ''; } catch (e) { return ''; } }
+function _sbJson_(o) { return ContentService.createTextOutput(typeof o === 'string' ? o : JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
+// 回 null＝不轉接（照舊流程）；否則回要直接送出的 TextOutput。
+function _sbRelay_(action, p) {
+  if (_sbProp_('SB_RELAY_ON') !== '1') return null;
+  if (SB_RELAY_LOCAL_ACTIONS.indexOf(action) >= 0) return null;
+  var url = _sbProp_('SB_RELAY_URL'), rk = _sbProp_('SB_RELAY_KEY');
+  if (!url || rk.length < 20) return null;
+  if (action === 'expImport') return _sbJson_({ ok: false, error: '廠務後台已搬到新後端，expImport 已停用' });
+  var body = {};
+  for (var k in p) if (Object.prototype.hasOwnProperty.call(p, k)) body[k] = p[k];
+  delete body.relayKey;
+  if (QS_LINK_ACTIONS.indexOf(action) >= 0) {
+    if (!_qsLinkOk_(p)) return _sbJson_({ ok: false, error: 'QS_LINK 金鑰錯誤或未設定' });
+    delete body.key; body.relayKey = rk;
+  } else if (action === 'crmCashRead') {
+    var ck = _crmCashKey_();
+    if (!ck || String(p.key || '') !== ck) return _sbJson_({ ok: false, error: 'CRM 金鑰錯誤或未設定' });
+    delete body.key; body.relayKey = rk;
+  }
+  try {
+    var res = UrlFetchApp.fetch(url, { method: 'post', contentType: 'text/plain;charset=utf-8', payload: JSON.stringify(body), muteHttpExceptions: true });
+    var txt = res.getContentText();
+    if (txt && txt.charAt(0) === '{') return _sbJson_(txt);
+    return _sbJson_({ ok: false, error: '新後端回應異常（HTTP ' + res.getResponseCode() + '）' });
+  } catch (err) {
+    return _sbJson_({ ok: false, error: '轉接新後端失敗：' + err.message });
+  }
+}
+// 轉接設定（寫指令碼屬性）。授權：SB_RELAY_KEY 還沒設過 → 需 admin 登入；設過之後 → 帶目前的 SB_RELAY_KEY（curKey）也可以（轉接開啟後舊登入會失效，退回時靠它關）。
+//   參數：on＝'1'／'0'（必填）；url、relayKey、mailKey（有帶才寫；relayKey／mailKey 至少 20 碼）。回傳只有狀態，不回任何金鑰。
+function sbRelaySetup(p) {
+  var props = PropertiesService.getScriptProperties();
+  var cur = props.getProperty('SB_RELAY_KEY') || '';
+  var byKey = !!cur && String((p && p.curKey) || '') === cur;
+  if (!byKey) {
+    var sess = _getSession_(p && p.token);
+    if (!sess || sess.role !== 'admin') return { ok: false, error: '權限不足' };
+  }
+  var on = String((p && p.on) || '');
+  if (on !== '1' && on !== '0') return { ok: false, error: 'on 須為 1 或 0' };
+  if (p.url) { if (!/^https:\/\/[a-z0-9]+\.supabase\.co\/functions\/v1\/[a-z0-9-]+$/.test(String(p.url))) return { ok: false, error: 'url 格式不符' }; props.setProperty('SB_RELAY_URL', String(p.url)); }
+  if (p.relayKey) { if (String(p.relayKey).length < 20) return { ok: false, error: 'relayKey 長度不足' }; props.setProperty('SB_RELAY_KEY', String(p.relayKey)); }
+  if (p.mailKey) { if (String(p.mailKey).length < 20) return { ok: false, error: 'mailKey 長度不足' }; props.setProperty('MAIL_RELAY_KEY', String(p.mailKey)); }
+  if (on === '1' && (!props.getProperty('SB_RELAY_URL') || !props.getProperty('SB_RELAY_KEY'))) return { ok: false, error: '尚未設定 url／relayKey，不能開啟' };
+  props.setProperty('SB_RELAY_ON', on);
+  return { ok: true, on: on === '1', hasUrl: !!props.getProperty('SB_RELAY_URL'), hasRelayKey: !!props.getProperty('SB_RELAY_KEY'), hasMailKey: !!props.getProperty('MAIL_RELAY_KEY') };
+}
+// 寄信轉接：新後端的叫貨通知信由這裡代寄（寄件身分＝本 Web App 執行身分，與 v3.29 起相同）。收件人固定 CONSIGN_NOTIFY_EMAILS，不收外部指定。
+function relayMail(p) {
+  var k = _sbProp_('MAIL_RELAY_KEY');
+  if (k.length < 20 || String((p && p.key) || '') !== k) return { ok: false, error: '寄信轉接金鑰錯誤或未設定' };
+  var subject = String((p && p.subject) || '').slice(0, 200), body = String((p && p.body) || '').slice(0, 20000);
+  if (!subject || !body) return { ok: false, error: '缺少 subject 或 body' };
+  try {
+    MailApp.sendEmail({ to: CONSIGN_NOTIFY_EMAILS.join(','), subject: subject, body: body, name: '南坡萬廠務系統' });
+    return { ok: true };
+  } catch (err) { return { ok: false, error: String(err.message || err).slice(0, 200) }; }
 }
