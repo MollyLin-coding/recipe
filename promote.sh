@@ -10,8 +10,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-# 正式後端 /exec（公開網址，非機密；已在正式站 index.html 內）
-PROD_API='https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5N4uT9RBaqAHiqWBPseCrSvKV3QnC9NK9S2MGnHQvJg/exec'
+# 正式後端（v4.01 起＝Supabase Edge Function factory-api；舊 /exec 留作外部系統轉接頭，2026-11-16 切換）
+PROD_API='https://lzbkbzrhwbnajoxkbcle.supabase.co/functions/v1/factory-api'
 
 TAG="${1:-}"
 MSG="${2:-promote preview to production}"

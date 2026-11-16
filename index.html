@@ -515,8 +515,8 @@ tbody tr:hover td{background:#faf3e8;}
 // ── API ──────────────────────────────────────────────────────
 // 預覽環境：後端指向「測試部署 /exec」（沙盒資料），與正式站完全隔離。
 // promote.sh 升正式時會把此行 sed 換回正式 /exec，下方橫幅條件即自動失效（不出現在正式站）。
-const API='https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5N4uT9RBaqAHiqWBPseCrSvKV3QnC9NK9S2MGnHQvJg/exec';
-if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5N4uT9RBaqAHiqWBPseCrSvKV3QnC9NK9S2MGnHQvJg/exec') {
+const API='https://lzbkbzrhwbnajoxkbcle.supabase.co/functions/v1/factory-api';
+if (API !== 'https://lzbkbzrhwbnajoxkbcle.supabase.co/functions/v1/factory-api') {
   window.addEventListener('DOMContentLoaded', function () {
     var b = document.createElement('div');
     b.textContent = '🧪 預覽／測試環境（沙盒資料，非正式站）';
@@ -526,7 +526,7 @@ if (API !== 'https://script.google.com/macros/s/AKfycbzAfsGzzbg3FV6d8-x2sWFPO1o5
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v3.96';
+const APP_VERSION='v4.01';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
