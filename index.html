@@ -460,6 +460,8 @@ tbody tr:hover td{background:#faf3e8;}
         <button type="button" class="login-user-btn" onclick="selectLoginUser(this)" style="display:none;">小捲</button><!-- 2026-07-21 主公指示隱藏（帳號資料未刪，要復原拿掉 display:none 即可） -->
         <button type="button" class="login-user-btn" onclick="selectLoginUser(this)" style="display:none;">上海Jason</button><!-- v3.3 主公指示隱藏（帳號資料未刪，要復原拿掉 display:none 即可） -->
       </div>
+      <div style="text-align:center;margin:2px 0 8px;"><a href="javascript:void(0)" onclick="loginOtherUser()" style="font-size:12px;color:var(--ink3);">用其他帳號登入</a></div><!-- v4.03 -->
+      <div id="loginOtherBox" style="display:none;"><input class="inp" id="loginOtherInp" type="text" placeholder="輸入帳號名稱" autocomplete="username" oninput="document.getElementById('loginUser').value=this.value.trim()"></div>
       <input type="hidden" id="loginUser" value="">
       <input class="inp" id="loginPass" type="password" placeholder="密碼" inputmode="numeric">
       <button class="btn btn-primary btn-full" id="loginBtn" onclick="doLogin()">登入</button>
@@ -493,6 +495,7 @@ tbody tr:hover td{background:#faf3e8;}
     <div class="nav-tab admin-only" data-tab="perf" onclick="switchTab('perf')"><span class="ni">📈</span><span>業績模型</span></div><!-- v3.39 admin-only -->
     <div class="nav-tab admin-only" data-tab="expense" onclick="switchTab('expense')"><span class="ni">💸</span><span>廠務支出</span></div><!-- v3.40 admin-only -->
     <div class="nav-tab admin-only" data-tab="apply" onclick="switchTab('apply')">   <span class="ni">✏️</span><span>審核</span></div>
+    <div class="nav-tab admin-only" data-tab="users" onclick="switchTab('users')">   <span class="ni">👥</span><span>帳號管理</span></div><!-- v4.03 admin-only -->
   </div>
 </div>
 <div id="loadOverlay"><div class="spinner"></div></div>
@@ -526,7 +529,7 @@ if (API !== 'https://lzbkbzrhwbnajoxkbcle.supabase.co/functions/v1/factory-api')
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v4.02';
+const APP_VERSION='v4.03';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -1023,6 +1026,7 @@ function wmAttach(box){
 }
 function switchTab(tab) {
   // v3.65 研發試算僅 admin（Kevin／Molly）：非 admin 從任何入口（按鈕／F5 還原／殘留狀態）都擋下，留在原分頁
+  if (tab === 'users' && !(curUser && curUser.role === 'admin')) { toast('🔒 帳號管理僅 admin 可用'); return; }   // v4.03
   if (tab === 'rd' && !(curUser && curUser.role === 'admin')) { toast('🔒 研發試算僅 admin 可用'); return; }
   // v3.39 業績模型有未儲存變更 → 離開前確認（留在原分頁）
   if (tab !== curTab && curTab === 'perf' && _perfDirty && !confirm('📈 業績模型有未儲存的變更，離開將捨棄，確定離開？')) return;
@@ -1031,7 +1035,7 @@ function switchTab(tab) {
 
   document.querySelectorAll('.nav-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
   const mc = document.getElementById('mainContent'); mc.scrollTop = 0;
-  ({ recipe:renderRecipePage, meeting:renderMeetingPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderRuncardPage, order:renderOrderPage, stock:renderStockPage, apply:renderApplyPage, consign:renderConsignPage, perf:renderPerfPage, expense:renderExpensePage })[tab]?.(mc);
+  ({ recipe:renderRecipePage, meeting:renderMeetingPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderRuncardPage, order:renderOrderPage, stock:renderStockPage, apply:renderApplyPage, consign:renderConsignPage, perf:renderPerfPage, expense:renderExpensePage, users:renderUsersPage })[tab]?.(mc);
   wmUpdate(); // v3.8 酒譜頁浮水印開/關
 }
 
@@ -4636,7 +4640,100 @@ document.addEventListener('click', e => {
 });
 document.getElementById('loginPass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
 // v1.9 帳號改按鈕格：點按鈕選帳號→highlight＋自動聚焦密碼欄（#loginUser 改 hidden input 承接值，doLogin 不用改）
+// ════════════════════════════════════════════════
+// v4.03 帳號管理（僅 admin）：新增帳號、改角色／經銷商、重設密碼、刪除帳號。
+//   後端 userList／userSave／userDelete（新後端 v21）。密碼只送出、不讀回；改角色或密碼後該帳號要重新登入。
+// ════════════════════════════════════════════════
+const USER_ROLES = ['admin', 'PM', 'user', '倉管', '財務', 'FB觀看', '經銷商'];
+let _usersCache = [];
+function _uEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+function _uRoleOpts(cur) { return USER_ROLES.map(function (r) { return '<option value="' + r + '"' + (r === cur ? ' selected' : '') + '>' + r + '</option>'; }).join(''); }
+function _uDealerOpts(cur) {
+  const ds = (window._consignDealers || []).map(function (d) { return [d.key, d.label || d.key]; });
+  if (cur && !ds.some(function (d) { return d[0] === cur; })) ds.unshift([cur, cur]);
+  return '<option value="">（非經銷商免選）</option>' + ds.map(function (d) { return '<option value="' + _uEsc(d[0]) + '"' + (d[0] === cur ? ' selected' : '') + '>' + _uEsc(d[1]) + '</option>'; }).join('');
+}
+function renderUsersPage(mc) {
+  if (!curUser || curUser.role !== 'admin') { mc.innerHTML = '<div class="card"><div style="color:var(--ink3);padding:14px;font-size:13px;">此分頁僅 admin 可見</div></div>'; return; }
+  mc.innerHTML = '<div class="card" style="margin-bottom:10px;">'
+    + '<div class="sec-hd"><div class="card-title" style="margin:0;">👥 帳號管理</div><div><button class="btn btn-ghost btn-sm" onclick="usersLoad()" title="重新讀取">↻</button></div></div>'
+    + '<div style="font-size:12px;color:var(--ink3);line-height:1.6;">改角色、經銷商或密碼後，那個帳號要重新登入一次。密碼至少 4 碼，系統只存加密後的結果，這裡看不到原密碼，忘記就直接重設。新帳號不會自動出現在登入頁的按鈕上，請同仁在登入頁點「用其他帳號登入」輸入帳號名稱。</div>'
+    + '</div>'
+    + '<div class="card" style="margin-bottom:10px;"><div class="card-title">＋ 新增帳號</div>'
+    + '<div class="form-row">'
+    + '<div class="fg"><label>帳號名稱</label><input class="inp" id="uNewName" maxlength="40" autocomplete="off"></div>'
+    + '<div class="fg" style="flex:0 0 120px"><label>角色</label><select id="uNewRole">' + _uRoleOpts('user') + '</select></div>'
+    + '<div class="fg"><label>經銷商（角色＝經銷商才要選）</label><select id="uNewDealer">' + _uDealerOpts('') + '</select></div>'
+    + '<div class="fg"><label>密碼</label><input class="inp" id="uNewPw" type="text" autocomplete="off"></div>'
+    + '<div class="fg" style="flex:0 0 auto;"><label>&nbsp;</label><button class="btn btn-primary btn-sm" onclick="usersCreate()">新增</button></div>'
+    + '</div></div>'
+    + '<div id="usersArea"><div class="card"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div></div>';
+  usersLoad();
+}
+async function usersLoad() {
+  const area = document.getElementById('usersArea'); if (!area) return;
+  const r = await api({ action: 'userList' });
+  if (!r || !r.ok) { area.innerHTML = '<div class="card"><div style="color:#c0392b;padding:14px;font-size:13px;">讀取失敗：' + _uEsc((r && r.error) || '') + '</div></div>'; return; }
+  _usersCache = r.users || [];
+  const rows = _usersCache.map(function (u, i) {
+    const me = curUser && u.username === curUser.username;
+    return '<tr><td><b>' + _uEsc(u.username) + '</b>' + (me ? ' <span style="font-size:11px;color:var(--ink3);">（自己）</span>' : '') + '</td>'
+      + '<td><select id="uRole' + i + '" style="min-width:86px;">' + _uRoleOpts(u.role) + '</select></td>'
+      + '<td><select id="uDealer' + i + '" style="max-width:170px;">' + _uDealerOpts(u.dealer) + '</select></td>'
+      + '<td><input class="inp" id="uPw' + i + '" type="text" placeholder="不改就留空" autocomplete="off" style="margin:0;min-width:110px;"></td>'
+      + '<td style="white-space:nowrap;"><button class="btn btn-primary btn-sm" onclick="usersSave(' + i + ')">儲存</button> '
+      + (me ? '' : '<button class="btn btn-ghost btn-sm" style="color:#c0392b;" onclick="usersDelete(' + i + ')">刪除</button>') + '</td></tr>';
+  }).join('');
+  area.innerHTML = '<div class="card"><div class="card-title">現有帳號（' + _usersCache.length + '）</div><div class="tbl-wrap"><table><thead><tr><th>帳號</th><th>角色</th><th>經銷商</th><th>重設密碼</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+}
+async function usersCreate() {
+  const username = (document.getElementById('uNewName').value || '').trim(), role = document.getElementById('uNewRole').value, dealer = document.getElementById('uNewDealer').value, password = document.getElementById('uNewPw').value || '';
+  if (!username) { toast('請輸入帳號名稱'); return; }
+  if (password.length < 4) { toast('密碼至少 4 碼'); return; }
+  if (role === '經銷商' && !dealer) { toast('經銷商帳號要選經銷商'); return; }
+  const r = await api({ action: 'userSave', mode: 'create', username: username, role: role, dealer: dealer, password: password });
+  if (!r || !r.ok) { toast('新增失敗：' + ((r && r.error) || ''), 4000); return; }
+  toast('已新增帳號 ' + username);
+  ['uNewName', 'uNewPw'].forEach(function (id) { const el = document.getElementById(id); if (el) el.value = ''; });
+  usersLoad();
+}
+async function usersSave(i) {
+  const u = _usersCache[i]; if (!u) return;
+  const role = document.getElementById('uRole' + i).value, dealer = document.getElementById('uDealer' + i).value, password = document.getElementById('uPw' + i).value || '';
+  if (password && password.length < 4) { toast('密碼至少 4 碼'); return; }
+  if (role === '經銷商' && !dealer) { toast('經銷商帳號要選經銷商'); return; }
+  const chg = [];
+  if (role !== u.role) chg.push('角色 ' + u.role + '→' + role);
+  if ((role === '經銷商' ? dealer : '') !== (u.dealer || '')) chg.push('經銷商');
+  if (password) chg.push('重設密碼');
+  if (!chg.length) { toast('沒有變更'); return; }
+  if (!confirm('確定修改「' + u.username + '」？\n' + chg.join('、') + '\n\n修改後這個帳號要重新登入。')) return;
+  const p = { action: 'userSave', mode: 'update', username: u.username, role: role, dealer: dealer };
+  if (password) p.password = password;
+  const r = await api(p);
+  if (!r || !r.ok) { toast('儲存失敗：' + ((r && r.error) || ''), 4000); return; }
+  toast('已更新 ' + u.username);
+  usersLoad();
+}
+async function usersDelete(i) {
+  const u = _usersCache[i]; if (!u) return;
+  if (!confirm('確定刪除帳號「' + u.username + '」？\n刪除後無法復原，這個帳號會立刻被登出。')) return;
+  const r = await api({ action: 'userDelete', username: u.username });
+  if (!r || !r.ok) { toast('刪除失敗：' + ((r && r.error) || ''), 4000); return; }
+  toast('已刪除 ' + u.username);
+  usersLoad();
+}
+// v4.03 登入頁「用其他帳號登入」：帳號管理新增的帳號不在按鈕格裡，用這個輸入帳號名稱
+function loginOtherUser() {
+  const box = document.getElementById('loginOtherBox'); if (!box) return;
+  box.style.display = '';
+  document.querySelectorAll('#loginUserGrid .login-user-btn').forEach(function (b) { b.classList.remove('sel'); });
+  const inp = document.getElementById('loginOtherInp'); document.getElementById('loginUser').value = (inp.value || '').trim();
+  setTimeout(function () { inp.focus(); }, 50);
+}
+
 function selectLoginUser(btn) {
+  { const ob = document.getElementById('loginOtherBox'); if (ob) ob.style.display = 'none'; }   // v4.03 選按鈕就收起「其他帳號」
   document.querySelectorAll('#loginUserGrid .login-user-btn').forEach(b => b.classList.remove('sel'));
   btn.classList.add('sel');
   document.getElementById('loginUser').value = btn.textContent.trim();
