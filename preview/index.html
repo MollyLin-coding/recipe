@@ -550,7 +550,7 @@ if (API !== 'https://lzbkbzrhwbnajoxkbcle.supabase.co/functions/v1/factory-api')
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v4.06';
+const APP_VERSION='v4.07';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -7341,7 +7341,7 @@ function poSentHtml(slip) {
   const nS = vv.filter(v => st[v] === 'share').length, nD = vv.filter(v => st[v] === 'dl').length, nDone = vv.filter(v => st[v]).length;
   const title = !vv.length || !nDone ? '叫料單已進系統'
     : nDone < vv.length ? `叫料單已進系統（已傳 ${nDone}／${vv.length} 家）`
-    : nS === vv.length ? '叫料單已經以 LINE 分享給供應商'
+    : nS === vv.length ? '叫料單已用外部APP分享給供應商'
     : nD === vv.length ? '叫料單已下載到手機' : '叫料單已分享／下載給供應商';
   const tag = v => st[v] === 'share' ? '<span class="perf-chip ok" style="margin-left:6px;">已分享</span>' : st[v] === 'dl' ? '<span class="perf-chip ok" style="margin-left:6px;">已下載</span>' : '<span class="perf-chip warn" style="margin-left:6px;">未傳</span>';
   return `<div class="card" style="margin-bottom:10px;"><div class="sec-hd"><div class="card-title" style="margin:0;">✅ ${title}</div></div>
