@@ -7277,8 +7277,9 @@ function poNewHtml() {
     });
   });
   h += `</div><div class="po-err">${_escf(S.err)}</div>
-    <button class="btn btn-primary" style="width:100%;padding:14px;font-size:15px;" onclick="poSubmitClick(this)">送出叫料單</button>
-    <div style="font-size:12px;color:var(--ink3);margin:6px 0 14px;">送出後依供應商各產生一張圖，可傳到 LINE。圖上有公司抬頭與統編，不會有價格、叫料目的與會計分類。</div>`;
+    <button class="btn btn-primary" style="width:100%;padding:14px;font-size:15px;margin-bottom:8px;" onclick="poSubmitClick(this, 'share')">📤 以 LINE 分享方式送出叫料單</button>
+    <button class="btn btn-ghost" style="width:100%;padding:14px;font-size:15px;border:1px solid var(--border);" onclick="poSubmitClick(this, 'dl')">⬇️ 送出並下載叫料圖</button>
+    <div style="font-size:12px;color:var(--ink3);margin:6px 0 14px;line-height:1.6;">兩顆都會送出叫料單，並依供應商各產生一張圖（有公司抬頭與統編，不會有價格、叫料目的與會計分類）。<br>供應商不在 LINE 好友裡，就選「下載」，再用 email 等方式傳。</div>`;
   return h;
 }
 function poPur(k) { const S = _po; S.open = k === 'order' ? (S.pur === 'order' ? !S.open : true) : false; S.pur = k; S.err = ''; poR(); }
@@ -7315,7 +7316,7 @@ function poAdd() {
   S.pick = ''; S.err = ''; poR();
   toast('已加入清單');
 }
-async function poSubmitClick(btn) {
+async function poSubmitClick(btn, mode) {   // v4.05 mode：share＝送出後跳分享選單／dl＝送出後下載叫料圖
   const S = _po;
   const bad = !S.pur ? '先選叫料目的' : (S.pur === 'order' && !S.ord) ? '先選一張訂單' : (S.pur === 'other' && !S.other.trim()) ? '先輸入叫料目的' : !S.lines.length ? '清單是空的，先加品項' : '';
   const noV = S.lines.find(l => !l.vendor);
@@ -7325,16 +7326,23 @@ async function poSubmitClick(btn) {
     lines: S.lines.map(l => ({ bigCat: l.bigCat, name: l.name, qty: l.qty, unit: l.unit, vendor: l.vendor, category: l.category, refPrice: l.refPrice, custom: l.custom, spec: l.spec })) };
   const res = await api({ action: 'poSubmit', slip: JSON.stringify(slip) });
   if (!res.ok) { S.err = '送出失敗：' + (res.error || ''); poR(); return; }
-  S.sent = res.slip; S.err = ''; poR();
+  S.sent = res.slip; S.sentMode = mode === 'dl' ? 'dl' : 'share'; S.err = ''; poR();
   toast('✅ 叫料單 ' + res.slip.id + ' 已送出');
   const mc = document.getElementById('mainContent'); if (mc) mc.scrollTop = 0;
+  const vs = Object.keys(poByVendor(res.slip.lines)).filter(v => v !== PO_SELF);   // v4.05
+  if (!vs.length) return;
+  if (S.sentMode === 'dl') { for (let i = 0; i < vs.length; i++) { await poDownload(res.slip.id, vs[i]); if (i < vs.length - 1) await new Promise(r => setTimeout(r, 700)); } }
+  else await poShare(res.slip.id, vs[0], true);   // 存檔要約一秒，部分手機會因此擋掉自動分享 → 改提示按下方按鈕
 }
 function poSentHtml(slip) {
   const byV = poByVendor(slip.lines), vs = Object.keys(byV);
   return `<div class="card" style="margin-bottom:10px;"><div class="sec-hd"><div class="card-title" style="margin:0;">✅ 叫料單 ${_escf(slip.id)} 已送出</div></div>
     <div style="font-size:13px;color:var(--ink2);line-height:1.6;">${_escf(slip.attr)}・${slip.lines.length} 項・${vs.length} 家${slip.wishDate ? '・希望 ' + poMd(slip.wishDate) + ' 到貨' : ''}</div>
-    <div class="po-lab">傳給供應商（手機會跳出分享選單，可直接選 LINE）</div>
-    ${vs.filter(v => v !== PO_SELF).map(v => `<button class="btn btn-ghost" style="width:100%;margin-bottom:8px;border:1px solid var(--border);" onclick="poShare('${_escf(slip.id)}', ${JSON.stringify(v).replace(/"/g, '&quot;')})">📤 「${_escf(v)}」叫料圖（${byV[v].length} 項）</button>`).join('')}
+    <div class="po-lab">傳給供應商（一家一張圖；分享一次只能傳給一個聊天室）</div>
+    ${vs.filter(v => v !== PO_SELF).map(v => { const a = `'${_escf(slip.id)}', ${JSON.stringify(v).replace(/"/g, '&quot;')}`; return `<div style="font-size:13.5px;font-weight:600;margin:6px 0 4px;">「${_escf(v)}」${byV[v].length} 項</div>
+      <div class="po-row" style="margin-bottom:8px;"><button class="btn ${slip === _po.sent && _po.sentMode === 'dl' ? 'btn-ghost' : 'btn-primary'}" style="flex:1;border:1px solid var(--border);" onclick="poShare(${a})">📤 分享（LINE 等）</button>
+      <button class="btn ${slip === _po.sent && _po.sentMode === 'dl' ? 'btn-primary' : 'btn-ghost'}" style="flex:1;border:1px solid var(--border);" onclick="poDownload(${a})">⬇️ 下載圖</button></div>`; }).join('')}
+    ${vs.some(v => v !== PO_SELF) ? `<div style="font-size:12px;color:var(--ink3);line-height:1.6;margin-bottom:6px;">${PO_DL_HINT}</div>` : ''}
     ${byV[PO_SELF] ? `<div style="font-size:12px;color:var(--ink3);">「自行採買」${byV[PO_SELF].length} 項不出圖，買回來後到「待到貨」填實際金額。</div>` : ''}
   </div>
   <button class="btn btn-primary" style="width:100%;margin-bottom:8px;" onclick="poGo('recv')">📥 看待到貨</button>
@@ -7380,10 +7388,30 @@ function poDraw(slip, vendor) {
   x.fillStyle = '#7d6e5d'; x.font = '28px ' + F; x.fillText('共 ' + ls.length + ' 項｜本單由南坡萬廠務系統產生', 50, y);
   return c;
 }
-async function poShare(slipId, vendor) {
+const PO_DL_HINT = '⬇️ 下載的圖：Android 在相簿或「下載」資料夾；iPhone 在「檔案」App。iPhone 要存進相簿，請按「📤 分享」→「儲存影像」。在 LINE 裡開廠務APP 時下載和分享可能沒反應，請改用 Safari 或 Chrome 開。';
+function poImgName(slip, vendor) { return '叫料單_' + slip.id + '_' + vendor.replace(/[\\/:*?"<>|\s]/g, '') + '.png'; }
+async function poDownload(slipId, vendor) {   // v4.05 直接下載叫料圖（供應商不在 LINE 好友時改用 email 等）
+  const slip = poFindSlip(slipId); if (!slip) { toast('找不到叫料單，請按 ↻'); return; }
+  const vk = Object.keys(poByVendor(slip.lines)).filter(v => v !== PO_SELF).indexOf(vendor) + 1;
+  const c = poDraw(slip, vendor), fname = 'PO_' + slip.id + '_' + (vk > 0 ? vk : 1) + '.png';   // 下載檔名用英數：中文檔名在部分 Chrome 會變成無副檔名的「download」
+  try {
+    const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+    if (!blob) throw new Error('no blob');
+    const url = URL.createObjectURL(blob), a = document.createElement('a');
+    a.href = url; a.download = fname; a.style.display = 'none'; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 60000);
+    toast('⬇️ 已下載「' + vendor + '」叫料圖');
+  } catch (e) {
+    const url = c.toDataURL('image/png');
+    makeModal(`<div class="sec-hd"><div class="card-title" style="margin:0;">⬇️ ${_escf(vendor)} 叫料圖</div><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">✕ 關閉</button></div>
+      <img src="${url}" alt="叫料圖" style="width:100%;border:1px solid var(--border);border-radius:8px;display:block;">
+      <div style="font-size:12px;color:var(--ink3);margin-top:8px;line-height:1.6;">下載沒有成功：請長按圖片存到手機，或在電腦上右鍵另存。</div>`);
+  }
+}
+async function poShare(slipId, vendor, auto) {
   const slip = poFindSlip(slipId); if (!slip) { toast('找不到叫料單，請按 ↻'); return; }
   const c = poDraw(slip, vendor);
-  const fname = '叫料單_' + slip.id + '_' + vendor.replace(/[\\/:*?"<>|\s]/g, '') + '.png';
+  const fname = poImgName(slip, vendor);
   try {
     const blob = await new Promise(r => c.toBlob(r, 'image/png'));
     const file = blob && new File([blob], fname, { type: 'image/png' });
@@ -7391,7 +7419,11 @@ async function poShare(slipId, vendor) {
       await navigator.share({ files: [file], title: '叫料單 ' + slip.id + '（' + vendor + '）' });
       return;
     }
-  } catch (e) { if (e && e.name === 'AbortError') return; }
+  } catch (e) {
+    if (e && e.name === 'AbortError') return;
+    if (auto) { toast('請按下方「📤 分享」把圖傳給「' + vendor + '」'); return; }   // v4.05 送出後自動分享被手機擋掉（離按鍵太久）
+  }
+  if (auto && !(navigator.canShare)) { toast('這台裝置不支援分享，請按下方「⬇️ 下載圖」'); return; }
   const url = c.toDataURL('image/png');   // 不支援分享（電腦／舊手機）：顯示圖＋下載
   makeModal(`<div class="sec-hd"><div class="card-title" style="margin:0;">📤 ${_escf(vendor)} 叫料圖</div><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">✕ 關閉</button></div>
     <img src="${url}" alt="叫料圖" style="width:100%;border:1px solid var(--border);border-radius:8px;display:block;">
@@ -7427,7 +7459,7 @@ function poRecvHtml() {
       <div class="po-err" id="poErr_${gi}"></div>
       <button class="btn btn-primary" style="width:100%;" onclick="poReceiveClick(${gi}, this)">${self ? '✅ 已買回，記帳' : '✅ 確認到貨'}</button>
       <div class="po-row" style="margin-top:8px;">
-        ${self ? '' : `<button class="btn btn-ghost btn-sm" style="flex:1;border:1px solid var(--border);" onclick="poShare('${_escf(s.id)}', ${JSON.stringify(g.vendor).replace(/"/g, '&quot;')})">📤 叫料圖</button>`}
+        ${self ? '' : `<button class="btn btn-ghost btn-sm" style="flex:1;border:1px solid var(--border);" onclick="poShare('${_escf(s.id)}', ${JSON.stringify(g.vendor).replace(/"/g, '&quot;')})">📤 分享圖</button><button class="btn btn-ghost btn-sm" style="flex:1;border:1px solid var(--border);" onclick="poDownload('${_escf(s.id)}', ${JSON.stringify(g.vendor).replace(/"/g, '&quot;')})">⬇️ 下載圖</button>`}
         ${(admin || s.requester === me) ? `<button class="btn btn-ghost btn-sm" style="flex:1;border:1px solid var(--border);color:var(--red);" onclick="poCancelClick(${gi})">取消這組</button>` : ''}
       </div></div>`;
   });
