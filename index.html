@@ -550,7 +550,7 @@ if (API !== 'https://lzbkbzrhwbnajoxkbcle.supabase.co/functions/v1/factory-api')
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v4.05';
+const APP_VERSION='v4.06';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -7331,6 +7331,7 @@ async function poSubmitClick(btn, mode) {   // v4.05 mode：share＝送出後跳
   const mc = document.getElementById('mainContent'); if (mc) mc.scrollTop = 0;
   const vs = Object.keys(poByVendor(res.slip.lines)).filter(v => v !== PO_SELF);   // v4.05
   if (!vs.length) return;
+  if (S.sentMode === 'dl' && PO_IOS) { poShowImgs(res.slip, vs); return; }   // v4.06 iPhone：一次顯示全部供應商的圖，長按存到照片
   if (S.sentMode === 'dl') { for (let i = 0; i < vs.length; i++) { await poDownload(res.slip.id, vs[i]); if (i < vs.length - 1) await new Promise(r => setTimeout(r, 700)); } }
   else await poShare(res.slip.id, vs[0], true);   // 存檔要約一秒，部分手機會因此擋掉自動分享 → 改提示按下方按鈕
 }
@@ -7388,10 +7389,17 @@ function poDraw(slip, vendor) {
   x.fillStyle = '#7d6e5d'; x.font = '28px ' + F; x.fillText('共 ' + ls.length + ' 項｜本單由南坡萬廠務系統產生', 50, y);
   return c;
 }
-const PO_DL_HINT = '⬇️ 下載的圖：Android 在相簿或「下載」資料夾；iPhone 在「檔案」App。iPhone 要存進相簿，請按「📤 分享」→「儲存影像」。在 LINE 裡開廠務APP 時下載和分享可能沒反應，請改用 Safari 或 Chrome 開。';
+const PO_DL_HINT = '⬇️ 下載圖：iPhone 會跳出圖片，<b>長按圖片 →「儲存到照片」</b>就會存進相簿；Android 會直接下載到相簿或「下載」資料夾。存好後可用 email 等方式傳給不在 LINE 好友裡的供應商。';
+const PO_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);   // v4.06 iPhone 的瀏覽器多半不支援網頁直接下載（會跳「開啟外部應用程式」後沒動作）→ 改顯示圖片讓同仁長按存到照片
+function poShowImgs(slip, vendors) {
+  const imgs = vendors.map(v => `<div style="font-size:13.5px;font-weight:600;margin:10px 0 4px;">「${_escf(v)}」</div><img src="${poDraw(slip, v).toDataURL('image/png')}" alt="${_escf(v)} 叫料圖" style="width:100%;border:1px solid var(--border);border-radius:8px;display:block;">`).join('');
+  makeModal(`<div class="sec-hd"><div class="card-title" style="margin:0;">⬇️ 叫料圖</div><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">✕ 關閉</button></div>
+    <div style="font-size:14px;color:var(--ink1);background:var(--card2,#f5ead8);border-radius:8px;padding:8px 10px;line-height:1.6;"><b>長按圖片 →「儲存到照片」</b>，就會存進相簿。${vendors.length > 1 ? '每家供應商一張，請逐張存。' : ''}</div>${imgs}`);
+}
 function poImgName(slip, vendor) { return '叫料單_' + slip.id + '_' + vendor.replace(/[\\/:*?"<>|\s]/g, '') + '.png'; }
 async function poDownload(slipId, vendor) {   // v4.05 直接下載叫料圖（供應商不在 LINE 好友時改用 email 等）
   const slip = poFindSlip(slipId); if (!slip) { toast('找不到叫料單，請按 ↻'); return; }
+  if (PO_IOS) { poShowImgs(slip, [vendor]); return; }   // v4.06
   const vk = Object.keys(poByVendor(slip.lines)).filter(v => v !== PO_SELF).indexOf(vendor) + 1;
   const c = poDraw(slip, vendor), fname = 'PO_' + slip.id + '_' + (vk > 0 ? vk : 1) + '.png';   // 下載檔名用英數：中文檔名在部分 Chrome 會變成無副檔名的「download」
   try {
