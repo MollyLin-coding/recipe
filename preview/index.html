@@ -435,6 +435,26 @@ tbody tr:hover td{background:#faf3e8;}
 .mtg-item-l3{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;font-size:11.5px;color:var(--ink2);margin-top:4px;}
 .mtg-item-r{flex:0 0 auto;display:flex;gap:2px;}.mtg-item-r .btn{padding:4px 6px;}
 .mtg-over{color:var(--red);font-weight:700;}
+/* v4.04 叫料／記帳 */
+.po-seg,.po-g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;}
+.po-g6{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;}
+@media(max-width:520px){.po-g6{grid-template-columns:repeat(3,minmax(0,1fr));}}
+.po-seg .btn,.po-g3 .btn,.po-g6 .btn{min-height:40px;padding:6px 2px;overflow:hidden;text-overflow:ellipsis;border:1px solid var(--border);}
+.po-on{background:var(--gold-lt)!important;border:1px solid var(--gold)!important;color:var(--gold-dk)!important;font-weight:700!important;}
+.po-lab{font-size:12px;color:var(--ink3);margin:10px 0 4px;}
+.po-ord{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;text-align:left;margin-bottom:6px;padding:9px 10px;border:1px solid var(--border);border-radius:10px;background:#fff;font:inherit;font-size:13px;color:var(--ink);cursor:pointer;}
+.po-ord span:first-child{min-width:0;word-break:break-word;}
+.po-meta{font-size:12px;color:var(--ink3);white-space:nowrap;}
+.po-row{display:flex;gap:8px;align-items:center;}
+.po-chips{display:flex;flex-wrap:wrap;gap:6px;}.po-chips .btn{border:1px solid var(--border);}
+.po-vend{display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:var(--gold-dk);background:var(--gold-lt);border-radius:8px;padding:4px 8px;margin:10px 0 2px;}
+.po-line{border-bottom:1px solid var(--border);padding:8px 0;}
+.po-step{display:flex;align-items:center;gap:3px;flex:0 0 auto;}
+.po-step .btn{width:34px;height:34px;padding:0;font-size:18px;border:1px solid var(--border);}
+.po-step .inp{width:50px;text-align:center;margin:0;padding:6px 2px;font-size:14px;}
+.po-sub{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;font-size:12px;color:var(--ink3);margin-top:6px;}
+.po-sub .inp{width:auto;margin:0;padding:4px 6px;font-size:12.5px;min-height:30px;}
+.po-err{color:var(--red);font-size:13px;min-height:18px;margin:6px 0;}
 </style>
 </head>
 <body>
@@ -486,6 +506,7 @@ tbody tr:hover td{background:#faf3e8;}
   <div id="mainContent"></div>
   <div id="navbar">
     <div class="nav-tab"        data-tab="batch"     onclick="switchTab('batch')">    <span class="ni">📦</span><span>訂單</span></div>
+    <div class="nav-tab"        data-tab="po"        onclick="switchTab('po')">       <span class="ni">🛒</span><span>叫料／記帳</span></div><!-- v4.04 admin／PM／倉管／財務 -->
     <div class="nav-tab active" data-tab="recipe"    onclick="switchTab('recipe')">   <span class="ni">📋</span><span>酒譜/run card</span></div>
     <div class="nav-tab"        data-tab="meeting"   onclick="switchTab('meeting')">  <span class="ni">📝</span><span>工務/業務會議</span></div><!-- v3.58 原「📊 毛利分析」降為原料/資材庫頁內一張卡（admin／PM） -->
     <div class="nav-tab"        data-tab="inventory" onclick="switchTab('inventory')"><span class="ni">🧪</span><span>原料/資材庫</span></div>
@@ -518,7 +539,7 @@ tbody tr:hover td{background:#faf3e8;}
 // ── API ──────────────────────────────────────────────────────
 // 預覽環境：後端指向「測試部署 /exec」（沙盒資料），與正式站完全隔離。
 // promote.sh 升正式時會把此行 sed 換回正式 /exec，下方橫幅條件即自動失效（不出現在正式站）。
-const API='https://script.google.com/macros/s/AKfycbxfztod7KrsKBHW_5XZLrAhFEdw3qoNmaId6-TbsW8TM9w3mz3MlaZhq7t6I7ytkfOctw/exec';
+const API='https://lzbkbzrhwbnajoxkbcle.supabase.co/functions/v1/factory-api-sbx';
 if (API !== 'https://lzbkbzrhwbnajoxkbcle.supabase.co/functions/v1/factory-api') {
   window.addEventListener('DOMContentLoaded', function () {
     var b = document.createElement('div');
@@ -593,7 +614,7 @@ document.addEventListener('wheel', function (e) {
 let _sessExpiredShown = false;
 // v3.33 寫入處理中遮罩（計數器＋延遲顯示，多個寫入重疊也只有一層）
 let _busyN = 0, _busyTimer = null;
-const BUSY_READ_RE = /^(get|bootstrap|login|checkUser|consignMe|consignDealers|consignPrices|consignOverview|consignAlerts|consignLedger|consignStatements|consignDaily|consignRestockList|perfGet|mtgList|mtgGet|expList|fixedGet)/;   // v3.39 +perfGet；v3.40 +expList/fixedGet
+const BUSY_READ_RE = /^(get|bootstrap|login|checkUser|consignMe|consignDealers|consignPrices|consignOverview|consignAlerts|consignLedger|consignStatements|consignDaily|consignRestockList|perfGet|mtgList|mtgGet|expList|fixedGet|poInit|poList)/;   // v4.04 +poInit/poList   // v3.39 +perfGet；v3.40 +expList/fixedGet
 function _busyEl() {
   let el = document.getElementById('busyOverlay');
   if (!el) { el = document.createElement('div'); el.id = 'busyOverlay'; el.innerHTML = '<div class="busy-box"><div class="busy-spin"></div><div id="busyMsg">系統處理中，請稍候…</div></div>'; document.body.appendChild(el); }
@@ -628,7 +649,7 @@ async function api(params, silent) {
   const url = API + '?' + Object.entries(send).map(([k,v]) => k + '=' + encodeURIComponent(v)).join('&');
   // v3.38 大 payload 走 POST（後端 doPost 同流程）：GET 網址超過 ~10KB Google 直接回 400 HTML → 前端誤判「系統忙碌」而資料沒存。
   //   經銷商設定（授權酒款 JSON＋多段長文字）固定走 POST；其餘 action 網址超過 6000 字元自動改 POST。text/plain 免 preflight。
-  const _post = /^(consignSaveDealer|perfSave|expImport|mtgItemSave|mtgUpdate|qcSave|tastingSave)$/.test(_act) || url.length > 6000;   // v3.80 品管單含照片固定 POST   // v3.58 會議長文字固定 POST   // v3.40 +expImport   // v3.39 perfSave 整包 params/months 物件固定 POST
+  const _post = /^(consignSaveDealer|perfSave|expImport|mtgItemSave|mtgUpdate|qcSave|tastingSave|poSubmit)$/.test(_act) || url.length > 6000;   // v3.80 品管單含照片固定 POST   // v3.58 會議長文字固定 POST   // v3.40 +expImport   // v3.39 perfSave 整包 params/months 物件固定 POST
   let _lastErr = '';
   try {
     for (let _try = 0; ; _try++) {
@@ -846,7 +867,7 @@ async function _bootApp(username, role) {
   // admin 才顯示審核
   document.querySelectorAll('.admin-only').forEach(el => el.style.display = role === 'admin' ? '' : 'none');
   // 角色分頁分流：倉管=run card+庫存；財務(Lulu)=只看訂單/run card(含金流總覽)；FB觀看(上海Jason)=只看酒譜；其餘角色維持原本可見範圍
-  const ROLE_TABS = { '倉管': ['batch', 'recipe', 'stock', 'inventory', 'meeting'], '財務': ['batch'], 'FB觀看': ['recipe'] };   // v3.58 倉管 +meeting（只看工務型，後端強制） // v3.3 主公指示：小李(倉管)加開 酒譜/run card
+  const ROLE_TABS = { '倉管': ['batch', 'po', 'recipe', 'stock', 'inventory', 'meeting'], '財務': ['batch', 'po'], 'FB觀看': ['recipe'] };   // v4.04 倉管／財務 +po   // v3.58 倉管 +meeting（只看工務型，後端強制） // v3.3 主公指示：小李(倉管)加開 酒譜/run card
   const allowed = ROLE_TABS[role];
   // v3.19 F5 還原到原分頁：_restoreTab 只在 _sessRestore 路徑有值；新登入維持預設分頁
   let _rt = window._restoreTab || null; window._restoreTab = null;
@@ -861,7 +882,8 @@ async function _bootApp(username, role) {
       if (!el.classList.contains('admin-only')) el.style.display = '';
     });
     const _mtgTab = document.querySelector('#navbar .nav-tab[data-tab="meeting"]'); if (_mtgTab) _mtgTab.style.display = (role === 'admin' || role === 'PM') ? '' : 'none';   // v3.58 會議分頁：admin／PM（倉管走 ROLE_TABS）
-    const _tabsOK = ['recipe','meeting','inventory','rd','batch','stock','apply','consign','perf','expense'];   // v3.39 +perf；v3.40 +expense；v3.58 profit→meeting
+    const _poTab = document.querySelector('#navbar .nav-tab[data-tab="po"]'); if (_poTab) _poTab.style.display = PO_ROLES.includes(role) ? '' : 'none';   // v4.04 叫料／記帳
+    const _tabsOK = ['recipe','meeting','inventory','rd','batch','po','stock','apply','consign','perf','expense'];   // v4.04 +po   // v3.39 +perf；v3.40 +expense；v3.58 profit→meeting
     switchTab((_rt && _tabsOK.includes(_rt) && (!['apply', 'consign', 'perf', 'expense', 'rd'].includes(_rt) || role === 'admin')) ? _rt : 'batch');   /* v3.65 +rd */ // v3.9.2 登入預設=訂單分頁(主公指示)
   }
   showStockAlerts(window._bootStockAlerts);
@@ -1035,7 +1057,7 @@ function switchTab(tab) {
 
   document.querySelectorAll('.nav-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
   const mc = document.getElementById('mainContent'); mc.scrollTop = 0;
-  ({ recipe:renderRecipePage, meeting:renderMeetingPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderRuncardPage, order:renderOrderPage, stock:renderStockPage, apply:renderApplyPage, consign:renderConsignPage, perf:renderPerfPage, expense:renderExpensePage, users:renderUsersPage })[tab]?.(mc);
+  ({ recipe:renderRecipePage, meeting:renderMeetingPage, inventory:renderInventoryPage, rd:renderRdPage, batch:renderRuncardPage, order:renderOrderPage, stock:renderStockPage, po:renderPoPage, apply:renderApplyPage, consign:renderConsignPage, perf:renderPerfPage, expense:renderExpensePage, users:renderUsersPage })[tab]?.(mc);
   wmUpdate(); // v3.8 酒譜頁浮水印開/關
 }
 
@@ -6909,7 +6931,7 @@ window.addEventListener('beforeunload', function (e) { if (_perfDirty) { e.preve
 // ════════════════════════════════════════════════
 let expMonth = '';            // YYYY-MM
 let _expData = null;          // expList 回傳
-let _expFilterCat = '', _expFilterQ = '';
+let _expFilterCat = '', _expFilterQ = '', _expFilterRev = false;   // v4.04 只看未複檢
 // v3.40.1 三區收納狀態（說明卡 intro／四格 tiles／支出結構 structure），存 localStorage 下次開啟沿用
 let _expFold = (() => { try { return Object.assign({ intro: false, tiles: false, structure: false }, JSON.parse(localStorage.getItem('npw-exp-fold') || '{}')); } catch (e) { return { intro: false, tiles: false, structure: false }; } })();
 const expFoldBtn = (k, lb) => `<button class="btn btn-ghost btn-sm exp-fold-btn" id="expFoldBtn_${k}" onclick="expToggleFold('${k}')" title="${_expFold[k] ? '展開' : '收納'}">${_expFold[k] ? '▸' : '▾'} ${lb || ''}</button>`;
@@ -6951,7 +6973,7 @@ async function expLoad() {
   const area = document.getElementById('expArea'); if (!area) return;
   const res = await api({ action: 'expList', month: expMonth });
   if (!res.ok) { area.innerHTML = `<div class="card"><div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${_escf(res.error || '')}</div></div>`; return; }
-  _expData = res; _expFilterCat = ''; _expFilterQ = '';
+  _expData = res; _expFilterCat = ''; _expFilterQ = ''; _expFilterRev = false;
   expRender();
 }
 function expRender() {
@@ -6977,7 +6999,7 @@ function expRender() {
       <div class="exp-bar-v">NT$${expW(v)} <span>${pct.toFixed(0)}%</span></div>
     </div>`; }).join('') : '<div style="font-size:12px;color:var(--ink3);">本月尚無支出</div>';
   const srcChips = Object.keys(s.bySrc).sort((a, b) => s.bySrc[b] - s.bySrc[a]).map(k => `<span class="perf-chip na">${_escf(k)} NT$${expW(s.bySrc[k])}</span>`).join(' ');
-  const gov = `<span class="perf-chip ${s.invoiceMissing ? 'warn' : 'ok'}">發票未歸位 ${s.invoiceMissing} 筆</span> <span class="perf-chip ${s.advanceOpen ? 'warn' : 'ok'}">代墊未結清 ${s.advanceOpen} 筆</span> <span class="perf-chip na">零用金 補 NT$${expW(s.pettyIn)}・支 NT$${expW(s.pettyOut)}・淨 ${s.pettyIn - s.pettyOut < 0 ? '−' : '+'}NT$${expW(Math.abs(s.pettyIn - s.pettyOut))}</span> <span class="perf-chip ${(D.petty && D.petty.end < 0) ? 'bad' : 'ok'}" title="依流水帳逐筆推算：零用金補款＋、Molly零用金付款−，其他付款出處不動">💵 零用金結餘 月初 NT$${expW(D.petty ? D.petty.start : 0)} → 月底 <b>${(D.petty && D.petty.end < 0) ? '−' : ''}NT$${expW(Math.abs(D.petty ? D.petty.end : 0))}</b></span>`;
+  const gov = `<span class="perf-chip ${_expFilterRev ? 'ok' : (s.unreviewed ? 'warn' : 'na')}" style="cursor:pointer;" onclick="_expFilterRev=!_expFilterRev;expRender();" title="點一下只看未複檢">☑ Molly 未複檢 ${s.unreviewed || 0} 筆${_expFilterRev ? '（篩選中）' : ''}</span> <span class="perf-chip ${s.invoiceMissing ? 'warn' : 'ok'}">發票未歸位 ${s.invoiceMissing} 筆</span> <span class="perf-chip ${s.advanceOpen ? 'warn' : 'ok'}">代墊未結清 ${s.advanceOpen} 筆</span> <span class="perf-chip na">零用金 補 NT$${expW(s.pettyIn)}・支 NT$${expW(s.pettyOut)}・淨 ${s.pettyIn - s.pettyOut < 0 ? '−' : '+'}NT$${expW(Math.abs(s.pettyIn - s.pettyOut))}</span> <span class="perf-chip ${(D.petty && D.petty.end < 0) ? 'bad' : 'ok'}" title="依流水帳逐筆推算：零用金補款＋、Molly零用金付款−，其他付款出處不動">💵 零用金結餘 月初 NT$${expW(D.petty ? D.petty.start : 0)} → 月底 <b>${(D.petty && D.petty.end < 0) ? '−' : ''}NT$${expW(Math.abs(D.petty ? D.petty.end : 0))}</b></span>`;
   const structSum = cats.slice(0, 3).map(c => `${c} ${(s.total ? s.byCat[c] / s.total * 100 : 0).toFixed(0)}%`).join('・') || '本月尚無支出';
   const structure = `<div class="card" style="margin-bottom:10px;${_expFold.structure ? 'padding-bottom:10px;' : ''}">
     <div class="sec-hd" style="${_expFold.structure ? 'margin-bottom:0;' : ''}"><div class="card-title" style="margin:0;">支出結構${_expFold.structure ? ' <span class="exp-fold-sum">' + structSum + '</span>' : ''}</div><div style="display:flex;gap:6px;align-items:center;"><span style="font-size:11px;color:var(--ink3);">${_expFold.structure ? '' : '點類別可篩選明細'}</span>${expFoldBtn('structure')}</div></div>
@@ -7012,19 +7034,19 @@ function expSetCat(c) { _expFilterCat = (_expFilterCat === c) ? '' : c; expRende
 function expRenderRows() {
   const el = document.getElementById('expRows'); if (!el || !_expData) return;
   const q = _expFilterQ.trim().toLowerCase();
-  const rows = _expData.rows.filter(r => (!_expFilterCat || r.category === _expFilterCat) && (!q || [r.item, r.vendor, r.note, r.purpose, r.buyer, r.source].join(' ').toLowerCase().includes(q)));
+  const rows = _expData.rows.filter(r => (!_expFilterCat || r.category === _expFilterCat) && (!_expFilterRev || (!r.reviewed && r.category !== '零用金補款')) && (!q || [r.item, r.vendor, r.note, r.purpose, r.buyer, r.source].join(' ').toLowerCase().includes(q)));
   if (!rows.length) { el.innerHTML = '<div style="font-size:12px;color:var(--ink3);padding:10px 0;">沒有符合的支出</div>'; return; }
   const sum = rows.filter(r => r.category !== '零用金補款').reduce((a, r) => a + r.amount, 0);
   el.innerHTML = rows.map(r => {
     const topup = r.category === '零用金補款';
-    const flags = [topup ? '' : (r.invoice ? '<span class="exp-flag ok">發票✓</span>' : '<span class="exp-flag warn">發票未歸位</span>'), r.advance ? `<span class="exp-flag ${r.advanceSettled ? 'ok' : 'warn'}">代墊${r.advanceSettled ? '已結清 ' + r.advanceSettled : '未結清'}</span>` : ''].filter(Boolean).join(' ');
+    const flags = [topup ? '' : (r.invoice ? '<span class="exp-flag ok">發票✓</span>' : '<span class="exp-flag warn">發票未歸位</span>'), r.advance ? `<span class="exp-flag ${r.advanceSettled ? 'ok' : 'warn'}">代墊${r.advanceSettled ? '已結清 ' + r.advanceSettled : '未結清'}</span>` : '', r.slipId ? `<span class="exp-flag">🛒 ${_escf(r.slipId)}</span>` : '', topup ? '' : (r.reviewed ? `<span class="exp-flag ok" title="${_escf(r.reviewer + ' ' + r.reviewedAt)}">☑ 已複檢</span>` : '<span class="exp-flag warn">未複檢</span>')].filter(Boolean).join(' ');   // v4.04 叫料來源＋複檢
     return `<div class="exp-row${topup ? ' topup' : ''}">
       <div class="exp-row-main">
         <div class="exp-row-l1"><span class="exp-date">${_escf(r.date.slice(5))}</span> <span class="perf-chip na">${EXP_CAT_ICON[r.category] || ''} ${_escf(r.category)}</span> ${r.vendor ? '<b>' + _escf(r.vendor) + '</b>' : ''} <span class="exp-item">${_escf(r.item)}</span></div>
         <div class="exp-row-l2">${r.pettyAfter != null ? `<span class="exp-petty${r.pettyAfter < 0 ? ' neg' : ''}" title="這筆之後的零用金結餘">💵 結餘 ${r.pettyAfter < 0 ? '−' : ''}NT$${expW(Math.abs(r.pettyAfter))}</span>・` : ''}${_escf(r.source)}${r.buyer ? '・' + _escf(r.buyer) : ''}${r.purpose ? '・' + _escf(r.purpose) : ''}${r.note ? '・<span style="color:var(--ink3);">' + _escf(r.note) + '</span>' : ''} ${flags}</div>
       </div>
       <div class="exp-row-r"><div class="exp-amt${topup ? ' in' : ''}">${topup ? '+' : ''}NT$${expW(r.amount)}</div>
-        <div class="exp-acts"><button class="btn btn-ghost btn-sm" onclick="expShowModal('${r.id}')" title="編輯">✏️</button><button class="btn btn-ghost btn-sm" style="color:var(--red);" onclick="expDeleteAsk('${r.id}')" title="刪除">🗑</button></div></div>
+        <div class="exp-acts">${topup ? '' : `<button class="btn btn-ghost btn-sm" onclick="expReviewToggle('${r.id}', ${!r.reviewed})" title="${r.reviewed ? '取消複檢' : '標記為已複檢'}">${r.reviewed ? '☑' : '☐'}</button>`}<button class="btn btn-ghost btn-sm" onclick="expShowModal('${r.id}')" title="編輯">✏️</button><button class="btn btn-ghost btn-sm" style="color:var(--red);" onclick="expDeleteAsk('${r.id}')" title="刪除">🗑</button></div></div>
     </div>`;
   }).join('') + `<div style="text-align:right;font-size:12px;color:var(--ink2);padding:8px 2px 0;">篩選合計（不含零用金補款）NT$${expW(sum)}・${rows.length} 筆</div>`;
 }
@@ -7033,6 +7055,7 @@ function expShowModal(id) {
   const D = _expData || { categories: ['食材', '酒材', '資材', '設備', '廠務', '雜支', '零用金補款'], sources: ['Molly零用金', '月結', 'Kevin轉帳', 'Kevin現金', 'Kevin信用卡', '其他'], vendors: [], purposes: [] };
   const r = id ? (D.rows || []).find(x => x.id === id) : null;
   if (id && !r) { toast('找不到該筆支出，請重新整理'); return; }
+  const _cats = (curUser && curUser.role === 'admin') ? D.categories : D.categories.filter(c => c !== '零用金補款');   // v4.04 非 admin 從叫料頁記支出
   const v = r || { date: _localDate(), category: '食材', vendor: '', purpose: '', buyer: (curUser && curUser.username) || '', item: '', amount: '', source: 'Molly零用金', invoice: false, advance: false, advanceSettled: '', note: '' };
   const opt = (arr, cur) => arr.map(x => `<option value="${_escf(x)}"${x === cur ? ' selected' : ''}>${_escf(x)}</option>`).join('');
   const dl = (arr) => arr.map(x => `<option value="${_escf(x)}">`).join('');
@@ -7040,7 +7063,7 @@ function expShowModal(id) {
     <div class="sec-hd"><div class="card-title" style="margin:0;">${r ? '✏️ 編輯支出' : '＋ 新增支出'}</div><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">✕ 關閉</button></div>
     <div class="form-row">
       <div class="fg" style="flex:1 1 130px"><label>日期 *</label><input class="inp" id="exp_date" type="date" value="${_escf(v.date)}"></div>
-      <div class="fg" style="flex:1 1 130px"><label>類別 *</label><select id="exp_category">${opt(D.categories, v.category)}</select></div>
+      <div class="fg" style="flex:1 1 130px"><label>類別 *</label><select id="exp_category">${opt(_cats, v.category)}</select></div>
       <div class="fg" style="flex:1 1 130px"><label>付款出處 *</label><select id="exp_source">${opt(D.sources, v.source)}</select></div>
     </div>
     ${D.petty ? `<div style="font-size:11.5px;color:var(--ink3);margin:-4px 0 8px;">💵 Molly 零用金目前結餘 <b style="color:${D.petty.current < 0 ? 'var(--red)' : 'var(--gold-dk)'};">${D.petty.current < 0 ? '−' : ''}NT$${expW(Math.abs(D.petty.current))}</b>（付款出處選「Molly零用金」會扣、類別選「零用金補款」會加；Kevin 直接轉帳的不動）</div>` : ''}
@@ -7122,6 +7145,333 @@ async function expFixedSave(btn) {
   toast('✅ 固定成本已存為 ' + expMonth);
   btn.closest('.modal-bg').remove();
   expLoad();
+}
+
+// ════════════════════════════════════════════════
+// 🛒 叫料／記帳（v4.04・2026-11-19 Claude Code 軍師／spec「交接_廠務APP_叫料記帳頁_spec與開工_20261118」，主公 D1〜D17）
+// ・叫料：目的（訂單用→訂單列表／研發用／其他）→ 會計分類 → 大分類按鈕＋細項下拉（含直接輸入）→ 依供應商分組 → 送出 → 每家一張叫料圖（分享／存圖）。
+// ・待到貨：每組「叫料單×供應商」填實際金額（必填）＋付款出處 → 後端寫進廠務支出（每個會計分類一筆）＋「Molly 未複檢」。
+// ・記一筆支出：沿用廠務支出頁的「新增支出」表單（非 admin 不能選零用金補款）。
+// ・可見：admin／PM／倉管／財務；PM／倉管在後端只拿得到物料類支出（見後端 v22）。
+// ════════════════════════════════════════════════
+const PO_ROLES = ['admin', '財務', 'PM', '倉管'];
+const PO_CATS = ['食材', '酒材', '資材', '設備', '廠務', '雜支'];
+const PO_UNITS = ['瓶', '包', '罐', '桶', '箱', '盒', '袋', '個', '支', 'kg', 'g', 'L', 'ml', 'pcs'];
+const PO_SPEC_UNITS = ['ml', 'L', 'g', 'kg', 'pcs'];
+const PO_CO = { name: '凱文南坡萬實業社', taxId: '92719710', addr: '新北市新莊區化成路554巷37號1樓' };   // D7；地址＝登記地址（主公 11/19 同意）
+const PO_SELF = '自行採買';
+const PO_SRC_OPTS = [['Molly零用金', 'Molly 零用金'], ['月結', '月結'], ['adv', '我先墊（員工代墊）'], ['Kevin轉帳', 'Kevin 轉帳'], ['Kevin現金', 'Kevin 現金'], ['Kevin信用卡', 'Kevin 信用卡'], ['unsure', '不確定（請 Molly 複檢時補）']];
+let _poView = 'new';          // new＝叫料／recv＝待到貨
+let _po = poBlank();
+let _poInit = null, _poInv = null, _poList = null, _poKey = 0;
+function poBlank() { return { pur: '', open: false, ord: '', other: '', cat: '食材', want: '', memo: '', grp: '', pick: '', lines: [], err: '', sent: null }; }
+const poCatOfGroup = g => /資材|包裝/.test(g) ? '資材' : (/酒|龍舌蘭|白蘭地|威士忌|伏特加|高粱/.test(g) ? '酒材' : '食材');   // D15
+const poUnitOfCat = c => c === '酒材' ? '瓶' : (c === '資材' ? '個' : '包');
+const poMd = s => s ? Number(s.slice(5, 7)) + '/' + Number(s.slice(8, 10)) : '';
+const poItemName = it => [it.brand, it.name].filter(Boolean).join(' ') + (Number(it.vol) > 1 ? ' ' + it.vol + (it.isSolid ? 'g' : 'ml') : '');
+const poItems = () => (_poInv || []).filter(it => it.category && !/自製/.test(it.category));   // 拿掉「南坡萬自製」
+function poGroups() { const g = []; poItems().forEach(it => { if (!g.includes(it.category)) g.push(it.category); }); return g; }
+function poByVendor(lines) { const m = {}; lines.forEach(l => { const v = l.vendor || '（未填供應商）'; (m[v] = m[v] || []).push(l); }); return m; }
+
+function renderPoPage(mc) {
+  if (!curUser || !PO_ROLES.includes(curUser.role)) { mc.innerHTML = '<div class="card"><div style="color:var(--ink3);padding:14px;font-size:13px;">此分頁僅 admin／PM／倉管 可用</div></div>'; return; }
+  mc.innerHTML = `
+  <div class="card" style="margin-bottom:10px;">
+    <div class="sec-hd"><div class="card-title" style="margin:0;">🛒 叫料／記帳</div><button class="btn btn-ghost btn-sm" onclick="poReload()" title="重新讀取">↻</button></div>
+    <div class="po-seg" id="poSeg"></div>
+    <div style="font-size:12px;color:var(--ink3);margin-top:8px;line-height:1.6;">叫料 → 把圖傳給供應商 → 到貨時在「待到貨」填實際金額，就會自動記進廠務支出。水電、稅金、物流、薪資這類不是叫料的支出，按「記一筆支出」。</div>
+  </div>
+  <div id="poArea"></div>`;
+  poSeg(); poRenderArea();
+}
+function poSeg() {
+  const el = document.getElementById('poSeg'); if (!el) return;
+  el.innerHTML = [['new', '＋ 叫料'], ['recv', '📥 待到貨'], ['exp', '💸 記一筆支出']].map(([k, lb]) => `<button class="btn btn-sm ${_poView === k ? 'po-on' : 'btn-ghost'}" onclick="poGo('${k}')">${lb}</button>`).join('');
+}
+function poGo(k) {
+  if (k === 'exp') { expShowModal(null); return; }
+  _poView = k; poSeg(); poRenderArea();
+}
+function poReload() { _poInit = null; _poInv = null; _poList = null; poRenderArea(); }
+const poLoading = '<div class="card"><div style="text-align:center;color:var(--ink3);padding:18px;font-size:13px;"><span class="ld-spin"></span>載入中…</div></div>';
+async function poRenderArea() {
+  const area = document.getElementById('poArea'); if (!area) return;
+  const my = ++_poKey;
+  if (_poView === 'new') {
+    if (!_poInit || !_poInv) {
+      area.innerHTML = poLoading;
+      const [a, b] = await Promise.all([api({ action: 'poInit' }, true), _poInv ? Promise.resolve({ ok: true, items: _poInv }) : api({ action: 'getInventory' }, true)]);
+      if (my !== _poKey) return;
+      if (!a.ok || !b.ok) { area.innerHTML = `<div class="card"><div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${_escf((!a.ok ? a.error : b.error) || '')}（按 ↻ 再試）</div></div>`; return; }
+      _poInit = a; _poInv = b.items || [];
+    }
+    area.innerHTML = poNewHtml();
+  } else {
+    area.innerHTML = poLoading;
+    const r = await api({ action: 'poList' }, true);
+    if (my !== _poKey) return;
+    if (!r.ok) { area.innerHTML = `<div class="card"><div style="color:var(--red);padding:12px;font-size:13px;">讀取失敗：${_escf(r.error || '')}（按 ↻ 再試）</div></div>`; return; }
+    _poList = r; area.innerHTML = poRecvHtml();
+  }
+}
+function poR() { const a = document.getElementById('poArea'); if (a && _poView === 'new' && _poInit) a.innerHTML = poNewHtml(); }
+
+// ── 叫料 ──
+function poNewHtml() {
+  const S = _po, I = _poInit;
+  if (S.sent) return poSentHtml(S.sent);
+  const orders = I.orders || [];
+  const so = orders.find(o => o.orderNo === S.ord);
+  const ordTxt = o => _escf([o.orderNo, o.client, o.lot].filter(Boolean).join('｜'));
+  let h = `<div class="card" style="margin-bottom:10px;"><div class="card-title">① 叫料目的 *</div>
+    <div class="po-g3">${[['order', '訂單用'], ['rd', '研發用'], ['other', '其他']].map(([k, lb]) => `<button class="btn btn-sm ${S.pur === k ? 'po-on' : 'btn-ghost'}" onclick="poPur('${k}')">${lb}</button>`).join('')}</div>`;
+  if (S.pur === 'order' && S.open) {
+    h += `<div class="po-lab">選訂單（全部 PM 的訂單，出貨日 ${poMd(I.orderFrom)}～${poMd(I.orderTo)}，共 ${orders.length} 張）</div>` +
+      (orders.length ? orders.map((o, i) => `<button class="po-ord ${S.ord === o.orderNo ? 'po-on' : ''}" onclick="poOrd(${i})"><span>${ordTxt(o)}</span><span class="po-meta">PM ${_escf(o.pm || '—')}・出貨 ${poMd(o.ship)}</span></button>`).join('') : '<div class="po-meta">這段期間沒有訂單</div>');
+  }
+  if (S.pur === 'order' && !S.open && so) h += `<div class="po-lab">已選訂單</div><div class="po-row"><div style="flex:1;min-width:0;font-weight:600;font-size:14px;">${ordTxt(so)}<div class="po-meta" style="font-weight:400;">PM ${_escf(so.pm || '—')}・出貨 ${poMd(so.ship)}</div></div><button class="btn btn-ghost btn-sm" onclick="poPur('order')">改選</button></div>`;
+  if (S.pur === 'other') {
+    h += `<div class="po-lab">請輸入叫料目的</div><input class="inp" style="margin:0;" id="poOther" maxlength="60" value="${_escf(S.other)}" placeholder="例：廠內備品、市集活動" oninput="_po.other=this.value">`;
+    if ((I.recentPurposes || []).length) h += `<div class="po-lab">最近用過</div><div class="po-chips">${I.recentPurposes.map((t, i) => `<button class="btn btn-ghost btn-sm" onclick="poOtherPick(${i})">${_escf(t)}</button>`).join('')}</div>`;
+  }
+  h += `<div class="po-lab">② 會計分類（按一下＝整張改成這類；加品項時會依大分類自動帶，可逐項改）</div>
+    <div class="po-g6">${PO_CATS.map(c => `<button class="btn btn-sm ${S.cat === c ? 'po-on' : 'btn-ghost'}" onclick="poCat('${c}')">${c}</button>`).join('')}</div>
+    <div class="form-row" style="margin-top:10px;">
+      <div class="fg" style="flex:1 1 140px"><label>希望到貨日</label><input class="inp" style="margin:0;" type="date" value="${_escf(S.want)}" onchange="_po.want=this.value"></div>
+      <div class="fg" style="flex:2 1 200px"><label>備註（會印在給供應商的圖上）</label><input class="inp" style="margin:0;" maxlength="100" value="${_escf(S.memo)}" placeholder="例：週四下午前送到" oninput="_po.memo=this.value"></div>
+    </div></div>`;
+  // 加品項（D9：大分類按鈕＋細項下拉＋直接輸入）
+  const groups = poGroups();
+  h += `<div class="card" style="margin-bottom:10px;"><div class="card-title">③ 加品項</div><div class="po-lab">先選大分類</div>
+    <div class="po-g3">${groups.map((g, i) => `<button class="btn btn-sm ${S.grp === g ? 'po-on' : 'btn-ghost'}" onclick="poGrp(${i})" title="${_escf(g)}">${_escf(g)}</button>`).join('')}</div>`;
+  if (S.grp) {
+    const items = poItems().filter(it => it.category === S.grp);
+    h += `<div class="po-lab">選「${_escf(S.grp)}」的品項</div><select class="inp" style="margin:0;" onchange="_po.pick=this.value;_po.err='';poR()"><option value="">請選擇</option>${items.map((it, i) => `<option value="${i}"${S.pick === String(i) ? ' selected' : ''}>${_escf(poItemName(it))}｜${_escf(it.platform || '未填供應商')}</option>`).join('')}<option value="new"${S.pick === 'new' ? ' selected' : ''}>＋ 清單裡沒有，直接輸入</option></select>`;
+    if (S.pick === 'new') h += `<div class="po-lab">品名 *</div><input class="inp" style="margin:0;" id="poCName" maxlength="80" placeholder="輸入品名">
+      <div style="font-size:12px;color:var(--yellow);margin-top:6px;">自行輸入的品項要補單價與規格，成本才算得出來；送出後會進「待補清單」等主公核准。</div>
+      <div class="po-row" style="margin-top:4px;align-items:flex-end;">
+        <div style="flex:1;min-width:0;"><div class="po-lab">單價（元）*</div><input class="inp" style="margin:0;" id="poCPrice" type="number" min="0" step="1" inputmode="decimal" placeholder="120"></div>
+        <div style="flex:1;min-width:0;"><div class="po-lab">容量／重量／數量 *</div><input class="inp" style="margin:0;" id="poCSize" type="number" min="0" step="any" inputmode="decimal" placeholder="500"></div>
+        <div style="flex:0 0 80px;"><div class="po-lab">單位</div><select class="inp" style="margin:0;" id="poCUnit">${PO_SPEC_UNITS.map(u => `<option>${u}</option>`).join('')}</select></div>
+      </div>`;
+    h += `<button class="btn btn-primary" style="width:100%;margin-top:10px;" onclick="poAdd()">加入清單</button>`;
+  }
+  h += `</div>`;
+  // 清單（依供應商分組）
+  const byV = poByVendor(S.lines), vs = Object.keys(byV);
+  const vdl = (I.vendors || []).map(v => `<option value="${_escf(v)}">`).join('');
+  h += `<div class="card" style="margin-bottom:10px;"><div class="card-title">清單（${S.lines.length} 項${S.lines.length ? '，' + vs.length + ' 家' : ''}）</div><datalist id="poVendorDl">${vdl}</datalist>`;
+  if (!S.lines.length) h += `<div class="po-meta" style="white-space:normal;">還沒有品項，從上面「加品項」加進來。</div>`;
+  vs.forEach(v => {
+    h += `<div class="po-vend"><span>${_escf(v)}${v === PO_SELF ? '（不出圖）' : ''}</span><span>${byV[v].length} 項</span></div>`;
+    byV[v].forEach(l => {
+      const k = S.lines.indexOf(l);
+      const units = PO_UNITS.includes(l.unit) ? PO_UNITS : [l.unit].concat(PO_UNITS);
+      h += `<div class="po-line"><div class="po-row">
+        <div style="flex:1;min-width:0;font-weight:600;font-size:14px;word-break:break-word;">${_escf(l.name)}${l.custom ? `<div class="po-meta" style="font-weight:400;white-space:normal;">自行輸入・${_escf(l.bigCat)}・單價 NT$${expW(l.refPrice)}／${_escf(l.spec)}</div>` : ''}</div>
+        <div class="po-step"><button class="btn btn-ghost" onclick="poQty(${k},-1)" aria-label="減少">−</button><input class="inp" type="number" min="0" step="any" inputmode="decimal" value="${l.qty}" onchange="poQtySet(${k},this.value)"><button class="btn btn-ghost" onclick="poQty(${k},1)" aria-label="增加">＋</button></div>
+        <button class="btn btn-ghost btn-sm" style="color:var(--red);padding:4px 8px;" onclick="poDel(${k})" aria-label="刪除">✕</button></div>
+        <div class="po-sub">單位 <select class="inp" onchange="_po.lines[${k}].unit=this.value">${units.map(u => `<option${u === l.unit ? ' selected' : ''}>${_escf(u)}</option>`).join('')}</select>
+          跟誰買 <input class="inp" style="width:110px;" list="poVendorDl" value="${_escf(l.vendor)}" placeholder="供應商" onchange="poVendor(${k},this.value)">
+          分類 <select class="inp" onchange="_po.lines[${k}].category=this.value">${PO_CATS.map(c => `<option${c === l.category ? ' selected' : ''}>${c}</option>`).join('')}</select></div></div>`;
+    });
+  });
+  h += `</div><div class="po-err">${_escf(S.err)}</div>
+    <button class="btn btn-primary" style="width:100%;padding:14px;font-size:15px;" onclick="poSubmitClick(this)">送出叫料單</button>
+    <div style="font-size:12px;color:var(--ink3);margin:6px 0 14px;">送出後依供應商各產生一張圖，可傳到 LINE。圖上有公司抬頭與統編，不會有價格、叫料目的與會計分類。</div>`;
+  return h;
+}
+function poPur(k) { const S = _po; S.open = k === 'order' ? (S.pur === 'order' ? !S.open : true) : false; S.pur = k; S.err = ''; poR(); }
+function poOrd(i) { const o = (_poInit.orders || [])[i]; if (!o) return; _po.ord = o.orderNo; _po.open = false; _po.err = ''; poR(); }
+function poOtherPick(i) { _po.other = (_poInit.recentPurposes || [])[i] || ''; poR(); }
+function poCat(c) { _po.cat = c; _po.lines.forEach(l => { l.category = c; }); poR(); }
+function poGrp(i) { const g = poGroups()[i]; _po.grp = (_po.grp === g) ? '' : g; _po.pick = ''; _po.err = ''; poR(); }
+function poQty(k, d) { const l = _po.lines[k]; if (!l) return; l.qty = Math.max(1, Math.round((Number(l.qty) + d) * 100) / 100); poR(); }
+function poQtySet(k, v) { const l = _po.lines[k]; if (!l) return; const n = Number(v); l.qty = n > 0 ? Math.round(n * 100) / 100 : 1; poR(); }
+function poDel(k) { _po.lines.splice(k, 1); poR(); }
+function poVendor(k, v) { const l = _po.lines[k]; if (!l) return; l.vendor = String(v || '').trim(); poR(); }
+function poAdd() {
+  const S = _po;
+  if (!S.pick) { S.err = '先從下拉選單選品項，或選「直接輸入」'; poR(); return; }
+  if (S.pick === 'new') {
+    const g = id => document.getElementById(id);
+    const name = g('poCName').value.trim(), price = Number(g('poCPrice').value), size = Number(g('poCSize').value), unit = g('poCUnit').value;
+    if (!name || !(price > 0) || !(size > 0)) {   // D8
+      const keep = [g('poCName').value, g('poCPrice').value, g('poCSize').value, unit];
+      S.err = !name ? '先輸入品名' : '自行輸入的品項要填單價與容量（或重量、數量）'; poR();
+      g('poCName').value = keep[0]; g('poCPrice').value = keep[1]; g('poCSize').value = keep[2]; g('poCUnit').value = keep[3];
+      return;
+    }
+    const cat = poCatOfGroup(S.grp);
+    S.lines.push({ bigCat: S.grp, name, qty: 1, unit: '個', vendor: PO_SELF, category: cat, refPrice: price, custom: true, spec: size + ' ' + unit });
+  } else {
+    const it = poItems().filter(x => x.category === S.grp)[Number(S.pick)];
+    if (!it) { S.err = '找不到品項，請重選'; poR(); return; }
+    const name = poItemName(it), vendor = String(it.platform || '').trim();
+    const ex = S.lines.find(l => !l.custom && l.name === name && l.vendor === vendor);
+    if (ex) ex.qty = Math.round((Number(ex.qty) + 1) * 100) / 100;
+    else { const cat = poCatOfGroup(S.grp); S.lines.push({ bigCat: S.grp, name, qty: 1, unit: poUnitOfCat(cat), vendor, category: cat, refPrice: Number(it.price) || 0, custom: false, spec: '' }); }
+  }
+  S.pick = ''; S.err = ''; poR();
+  toast('已加入清單');
+}
+async function poSubmitClick(btn) {
+  const S = _po;
+  const bad = !S.pur ? '先選叫料目的' : (S.pur === 'order' && !S.ord) ? '先選一張訂單' : (S.pur === 'other' && !S.other.trim()) ? '先輸入叫料目的' : !S.lines.length ? '清單是空的，先加品項' : '';
+  const noV = S.lines.find(l => !l.vendor);
+  if (bad || noV) { S.err = bad || ('「' + noV.name + '」還沒填跟誰買'); if (S.pur === 'order' && !S.ord) S.open = true; poR(); return; }
+  btn.disabled = true; btn.innerHTML = '<span class="btn-spin"></span>送出中…';
+  const slip = { purposeType: S.pur, orderNo: S.pur === 'order' ? S.ord : '', purposeText: S.pur === 'other' ? S.other.trim() : '', defaultCategory: S.cat, wishDate: S.want, note: S.memo.trim(),
+    lines: S.lines.map(l => ({ bigCat: l.bigCat, name: l.name, qty: l.qty, unit: l.unit, vendor: l.vendor, category: l.category, refPrice: l.refPrice, custom: l.custom, spec: l.spec })) };
+  const res = await api({ action: 'poSubmit', slip: JSON.stringify(slip) });
+  if (!res.ok) { S.err = '送出失敗：' + (res.error || ''); poR(); return; }
+  S.sent = res.slip; S.err = ''; poR();
+  toast('✅ 叫料單 ' + res.slip.id + ' 已送出');
+  const mc = document.getElementById('mainContent'); if (mc) mc.scrollTop = 0;
+}
+function poSentHtml(slip) {
+  const byV = poByVendor(slip.lines), vs = Object.keys(byV);
+  return `<div class="card" style="margin-bottom:10px;"><div class="sec-hd"><div class="card-title" style="margin:0;">✅ 叫料單 ${_escf(slip.id)} 已送出</div></div>
+    <div style="font-size:13px;color:var(--ink2);line-height:1.6;">${_escf(slip.attr)}・${slip.lines.length} 項・${vs.length} 家${slip.wishDate ? '・希望 ' + poMd(slip.wishDate) + ' 到貨' : ''}</div>
+    <div class="po-lab">傳給供應商（手機會跳出分享選單，可直接選 LINE）</div>
+    ${vs.filter(v => v !== PO_SELF).map(v => `<button class="btn btn-ghost" style="width:100%;margin-bottom:8px;border:1px solid var(--border);" onclick="poShare('${_escf(slip.id)}', ${JSON.stringify(v).replace(/"/g, '&quot;')})">📤 「${_escf(v)}」叫料圖（${byV[v].length} 項）</button>`).join('')}
+    ${byV[PO_SELF] ? `<div style="font-size:12px;color:var(--ink3);">「自行採買」${byV[PO_SELF].length} 項不出圖，買回來後到「待到貨」填實際金額。</div>` : ''}
+  </div>
+  <button class="btn btn-primary" style="width:100%;margin-bottom:8px;" onclick="poGo('recv')">📥 看待到貨</button>
+  <button class="btn btn-ghost" style="width:100%;border:1px solid var(--border);margin-bottom:14px;" onclick="poNewSlip()">＋ 再開一張新的</button>`;
+}
+function poNewSlip() { _po = poBlank(); _poInit = null; poRenderArea(); }
+function poFindSlip(id) {
+  if (_po.sent && _po.sent.id === id) return _po.sent;
+  return ((_poList && _poList.slips) || []).find(s => s.id === id) || null;
+}
+// ── 叫料圖（畫布直接畫；D7 抬頭統編；不放金額、目的、分類）──
+function poDraw(slip, vendor) {
+  const ls = slip.lines.filter(l => l.vendor === vendor && l.status !== '已取消');
+  const W = 1080, rowH = 84, top = 430;
+  const H = top + ls.length * rowH + 560 + (slip.note ? 60 : 0);
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d'), F = '"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif';
+  const fit = (txt, size, weight, maxW) => { let s = size; x.font = weight + ' ' + s + 'px ' + F; while (x.measureText(txt).width > maxW && s > 20) { s -= 2; x.font = weight + ' ' + s + 'px ' + F; } };
+  x.fillStyle = '#fff'; x.fillRect(0, 0, W, H);
+  x.fillStyle = '#7a5420'; x.fillRect(0, 0, W, 150);
+  x.fillStyle = '#fff'; fit(PO_CO.name + '　叫料單', 54, 600, W - 100); x.fillText(PO_CO.name + '　叫料單', 50, 96);
+  x.fillStyle = '#1e1710'; fit('致：' + vendor, 46, 600, W - 100); x.fillText('致：' + vendor, 50, 230);
+  x.fillStyle = '#6b5e4e'; x.font = '34px ' + F;
+  x.fillText('單號 ' + slip.id + '　　叫料日 ' + String(slip.createdAt || '').slice(0, 10).replace(/-/g, '/'), 50, 292);
+  x.fillText('希望到貨日：' + (slip.wishDate ? slip.wishDate.replace(/-/g, '/') : '盡快'), 50, 344);
+  x.fillStyle = '#f5ead8'; x.fillRect(50, 378, W - 100, 50);
+  x.fillStyle = '#7a5420'; x.font = '600 30px ' + F; x.fillText('品名', 70, 413); x.textAlign = 'right'; x.fillText('數量', W - 70, 413); x.textAlign = 'left';
+  ls.forEach((l, i) => {
+    const y = top + i * rowH, q = l.qty + ' ' + (l.unit || '');
+    x.textAlign = 'right'; x.fillStyle = '#1e1710'; x.font = '600 44px ' + F; x.fillText(q, W - 70, y + 58); const qw = x.measureText(q).width; x.textAlign = 'left';
+    const nm = (i + 1) + '. ' + l.name + (l.custom && l.spec ? '（' + l.spec + '）' : '');
+    fit(nm, 40, 400, W - 160 - qw); x.fillText(nm, 70, y + 58);
+    x.fillStyle = '#e8ddd0'; x.fillRect(50, y + rowH - 2, W - 100, 2);
+  });
+  let y = top + ls.length * rowH + 40;
+  x.fillStyle = '#fbf5ea'; x.fillRect(50, y, W - 100, 150); x.strokeStyle = '#7a5420'; x.lineWidth = 3; x.strokeRect(50, y, W - 100, 150);
+  x.fillStyle = '#7a5420'; x.font = '600 30px ' + F; x.fillText('發票資訊（請隨貨附發票）', 74, y + 46);
+  x.fillStyle = '#1e1710'; x.font = '600 38px ' + F; x.fillText('抬頭：' + PO_CO.name, 74, y + 108); x.fillText('統編：' + PO_CO.taxId, 640, y + 108);
+  y += 220; x.fillStyle = '#1e1710';
+  if (slip.note) { fit('備註：' + slip.note, 34, 400, W - 100); x.fillText('備註：' + slip.note, 50, y); y += 60; }
+  x.font = '34px ' + F; x.fillText('送貨地址：' + PO_CO.addr, 50, y); y += 60;
+  x.fillText('聯絡人：' + (slip.requester || ''), 50, y); y += 76;
+  x.fillStyle = '#7d6e5d'; x.font = '28px ' + F; x.fillText('共 ' + ls.length + ' 項｜本單由南坡萬廠務系統產生', 50, y);
+  return c;
+}
+async function poShare(slipId, vendor) {
+  const slip = poFindSlip(slipId); if (!slip) { toast('找不到叫料單，請按 ↻'); return; }
+  const c = poDraw(slip, vendor);
+  const fname = '叫料單_' + slip.id + '_' + vendor.replace(/[\\/:*?"<>|\s]/g, '') + '.png';
+  try {
+    const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+    const file = blob && new File([blob], fname, { type: 'image/png' });
+    if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: '叫料單 ' + slip.id + '（' + vendor + '）' });
+      return;
+    }
+  } catch (e) { if (e && e.name === 'AbortError') return; }
+  const url = c.toDataURL('image/png');   // 不支援分享（電腦／舊手機）：顯示圖＋下載
+  makeModal(`<div class="sec-hd"><div class="card-title" style="margin:0;">📤 ${_escf(vendor)} 叫料圖</div><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">✕ 關閉</button></div>
+    <img src="${url}" alt="叫料圖" style="width:100%;border:1px solid var(--border);border-radius:8px;display:block;">
+    <div style="font-size:12px;color:var(--ink3);margin-top:8px;line-height:1.6;">手機：長按圖片可存檔或分享。電腦：<a href="${url}" download="${_escf(fname)}">下載 PNG</a> 後拖進 LINE。</div>`);
+}
+
+// ── 待到貨 ──
+function poOpenGroups() {
+  const out = [];
+  ((_poList && _poList.slips) || []).forEach(s => {
+    const byV = poByVendor(s.lines.filter(l => !l.status));
+    Object.keys(byV).forEach(v => out.push({ slip: s, vendor: v, lines: byV[v] }));
+  });
+  return out;
+}
+function poRecvHtml() {
+  const G = poOpenGroups();
+  const me = curUser ? curUser.username : '', admin = curUser && curUser.role === 'admin';
+  let h = '';
+  if (!G.length) h += `<div class="card" style="margin-bottom:10px;"><div style="text-align:center;color:var(--ink3);padding:16px;font-size:13px;">目前沒有待到貨的叫料 👍</div></div>`;
+  G.forEach((g, gi) => {
+    const s = g.slip, cats = [...new Set(g.lines.map(l => l.category))];
+    const est = g.lines.reduce((a, l) => a + (Number(l.refPrice) || 0) * (Number(l.qty) || 0), 0);
+    const self = g.vendor === PO_SELF;
+    h += `<div class="card" style="margin-bottom:10px;">
+      <div class="sec-hd" style="margin-bottom:4px;"><div class="card-title" style="margin:0;">${_escf(g.vendor)}</div><span class="perf-chip warn">${self ? '待填金額' : '未到貨'}</span></div>
+      <div style="font-size:12px;color:var(--ink3);line-height:1.6;">${_escf(s.id)}・${_escf(s.requester)} ${poMd(s.createdAt.slice(0, 10))} 叫${s.wishDate ? '・希望 ' + poMd(s.wishDate) + ' 到' : ''}<br>${_escf(s.attr)}</div>
+      <div style="font-size:13.5px;margin:6px 0;line-height:1.6;">${g.lines.map(l => _escf(l.name) + ' <b>' + l.qty + _escf(l.unit) + '</b>').join('、')}</div>
+      ${cats.map((c, ci) => `<div class="fg" style="margin-bottom:6px;"><label>實際金額${cats.length > 1 ? '（' + c + '）' : ''} *（看送貨單或發票）</label><input class="inp" style="margin:0;" id="poAmt_${gi}_${ci}" type="number" min="0" step="1" inputmode="decimal" placeholder="${est > 0 && cats.length === 1 ? '參考 ' + expW(est) : '金額'}"></div>`).join('')}
+      <div class="fg" style="margin-bottom:6px;"><label>付款出處 *</label><select class="inp" style="margin:0;" id="poSrc_${gi}"><option value="">請選擇</option>${PO_SRC_OPTS.map(([v, lb]) => `<option value="${v}">${lb}</option>`).join('')}</select></div>
+      <label class="po-row" style="font-size:13px;margin:8px 0;"><input type="checkbox" id="poInv_${gi}" style="width:18px;height:18px;"> 發票有隨貨</label>
+      <input class="inp" style="margin:0 0 8px;" id="poNote_${gi}" maxlength="120" placeholder="備註（選填）">
+      <div class="po-err" id="poErr_${gi}"></div>
+      <button class="btn btn-primary" style="width:100%;" onclick="poReceiveClick(${gi}, this)">${self ? '✅ 已買回，記帳' : '✅ 確認到貨'}</button>
+      <div class="po-row" style="margin-top:8px;">
+        ${self ? '' : `<button class="btn btn-ghost btn-sm" style="flex:1;border:1px solid var(--border);" onclick="poShare('${_escf(s.id)}', ${JSON.stringify(g.vendor).replace(/"/g, '&quot;')})">📤 叫料圖</button>`}
+        ${(admin || s.requester === me) ? `<button class="btn btn-ghost btn-sm" style="flex:1;border:1px solid var(--border);color:var(--red);" onclick="poCancelClick(${gi})">取消這組</button>` : ''}
+      </div></div>`;
+  });
+  const done = ((_poList && _poList.slips) || []).filter(s => s.lines.every(l => l.status));
+  if (done.length) h += `<div class="card" style="margin-bottom:14px;"><div class="card-title">最近一個月已處理</div>${done.map(s => `<div style="font-size:12.5px;padding:5px 0;border-bottom:1px solid var(--border);">${_escf(s.id)}・${_escf(s.requester)}・${_escf(s.attr)}・<b>${_escf(s.status)}</b><div style="color:var(--ink3);">${_escf([...new Set(s.lines.map(l => l.vendor + (l.status === '已取消' ? '（取消）' : '')))].join('、'))}</div></div>`).join('')}</div>`;
+  return h;
+}
+async function poReceiveClick(gi, btn) {
+  const g = poOpenGroups()[gi]; if (!g) return;
+  const err = document.getElementById('poErr_' + gi);
+  const cats = [...new Set(g.lines.map(l => l.category))], amounts = {};
+  for (let ci = 0; ci < cats.length; ci++) {
+    const el = document.getElementById('poAmt_' + gi + '_' + ci), n = Number(el.value);
+    if (!(n > 0)) { err.textContent = '請填' + (cats.length > 1 ? '「' + cats[ci] + '」的' : '') + '實際金額'; el.focus(); return; }   // D11
+    amounts[cats[ci]] = n;
+  }
+  const sv = document.getElementById('poSrc_' + gi).value;
+  if (!sv) { err.textContent = '請選付款出處（不確定就選「不確定」）'; return; }
+  const note0 = document.getElementById('poNote_' + gi).value.trim();
+  const p = { action: 'poReceive', slipId: g.slip.id, vendor: g.vendor, amounts: JSON.stringify(amounts),
+    source: (sv === 'adv' || sv === 'unsure') ? '其他' : sv, advance: sv === 'adv' ? 'TRUE' : 'FALSE',
+    invoice: document.getElementById('poInv_' + gi).checked ? 'TRUE' : 'FALSE', note: (sv === 'unsure' ? '付款出處待確認' + (note0 ? '｜' : '') : '') + note0 };
+  err.textContent = ''; btn.disabled = true; btn.innerHTML = '<span class="btn-spin"></span>寫入中…';
+  const res = await api(p);
+  if (!res.ok) { btn.disabled = false; btn.textContent = '✅ 確認到貨'; err.textContent = '失敗：' + (res.error || ''); return; }
+  toast('✅ 已記進廠務支出 NT$' + expW(res.total));
+  poRenderArea();
+}
+async function poCancelClick(gi) {
+  const g = poOpenGroups()[gi]; if (!g) return;
+  if (!confirm('取消這組叫料？\n' + g.slip.id + '｜' + g.vendor + '｜' + g.lines.map(l => l.name + '×' + l.qty).join('、'))) return;
+  const res = await api({ action: 'poCancel', slipId: g.slip.id, vendor: g.vendor });
+  if (!res.ok) { toast('取消失敗：' + (res.error || '')); return; }
+  toast('已取消 ' + res.cancelled + ' 項'); poRenderArea();
+}
+// ── Molly 複檢（廠務支出頁；D17）──
+async function expReviewToggle(id, on) {
+  const res = await api({ action: 'expReview', id, reviewed: on ? 'TRUE' : 'FALSE' });
+  if (!res.ok) { toast('失敗：' + (res.error || '')); return; }
+  const r = (_expData && _expData.rows || []).find(x => x.id === id);
+  if (r) { r.reviewed = res.reviewed; r.reviewer = res.reviewer; r.reviewedAt = res.reviewedAt; }
+  if (_expData && _expData.summary) _expData.summary.unreviewed = _expData.rows.filter(x => x.category !== '零用金補款' && !x.reviewed).length;
+  expRender();
+  toast(on ? '☑ 已複檢' : '已取消複檢');
 }
 
 // ════════════════════════════════════════════════
