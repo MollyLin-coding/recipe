@@ -7158,7 +7158,7 @@ const PO_ROLES = ['admin', '財務', 'PM', '倉管'];
 const PO_CATS = ['食材', '酒材', '資材', '設備', '廠務', '雜支'];
 const PO_UNITS = ['瓶', '包', '罐', '桶', '箱', '盒', '袋', '個', '支', 'kg', 'g', 'L', 'ml', 'pcs'];
 const PO_SPEC_UNITS = ['ml', 'L', 'g', 'kg', 'pcs'];
-const PO_CO = { name: '凱文南坡萬實業社', taxId: '92719710', addr: '新北市新莊區化成路554巷37號1樓' };   // D7；地址＝登記地址（主公 11/19 同意）
+const PO_CO = { name: '凱文南坡萬實業社', taxId: '92719710', addr: '新北市新莊區化成路554巷37號1樓', tel: '(02) 8991 0068' };   // D7；地址＝登記地址、電話（主公 11/19 提供）
 const PO_SELF = '自行採買';
 const PO_SRC_OPTS = [['Molly零用金', 'Molly 零用金'], ['月結', '月結'], ['adv', '我先墊（員工代墊）'], ['Kevin轉帳', 'Kevin 轉帳'], ['Kevin現金', 'Kevin 現金'], ['Kevin信用卡', 'Kevin 信用卡'], ['unsure', '不確定（請 Molly 複檢時補）']];
 let _poView = 'new';          // new＝叫料／recv＝待到貨
@@ -7376,7 +7376,7 @@ function poDraw(slip, vendor) {
   y += 220; x.fillStyle = '#1e1710';
   if (slip.note) { fit('備註：' + slip.note, 34, 400, W - 100); x.fillText('備註：' + slip.note, 50, y); y += 60; }
   x.font = '34px ' + F; x.fillText('送貨地址：' + PO_CO.addr, 50, y); y += 60;
-  x.fillText('聯絡人：' + (slip.requester || ''), 50, y); y += 76;
+  x.fillText('聯絡人：' + (slip.requester || '') + '　電話：' + PO_CO.tel, 50, y); y += 76;
   x.fillStyle = '#7d6e5d'; x.font = '28px ' + F; x.fillText('共 ' + ls.length + ' 項｜本單由南坡萬廠務系統產生', 50, y);
   return c;
 }
