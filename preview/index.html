@@ -7326,7 +7326,7 @@ async function poSubmitClick(btn, mode) {   // v4.05 mode：share＝送出後跳
     lines: S.lines.map(l => ({ bigCat: l.bigCat, name: l.name, qty: l.qty, unit: l.unit, vendor: l.vendor, category: l.category, refPrice: l.refPrice, custom: l.custom, spec: l.spec })) };
   const res = await api({ action: 'poSubmit', slip: JSON.stringify(slip) });
   if (!res.ok) { S.err = '送出失敗：' + (res.error || ''); poR(); return; }
-  S.sent = res.slip; S.sentMode = mode === 'dl' ? 'dl' : 'share'; S.err = ''; poR();
+  S.sent = res.slip; S.sentMode = mode === 'dl' ? 'dl' : 'share'; S.sentStat = {}; S.err = ''; poR();
   toast('✅ 叫料單 ' + res.slip.id + ' 已送出');
   const mc = document.getElementById('mainContent'); if (mc) mc.scrollTop = 0;
   const vs = Object.keys(poByVendor(res.slip.lines)).filter(v => v !== PO_SELF);   // v4.05
@@ -7337,10 +7337,18 @@ async function poSubmitClick(btn, mode) {   // v4.05 mode：share＝送出後跳
 }
 function poSentHtml(slip) {
   const byV = poByVendor(slip.lines), vs = Object.keys(byV);
-  return `<div class="card" style="margin-bottom:10px;"><div class="sec-hd"><div class="card-title" style="margin:0;">✅ 叫料單 ${_escf(slip.id)} 已送出</div></div>
+  const st = (slip === _po.sent && _po.sentStat) || {}, vv = vs.filter(v => v !== PO_SELF);   // v4.07 即時狀態（只記在這個畫面；分享無法得知選了哪個 App）
+  const nS = vv.filter(v => st[v] === 'share').length, nD = vv.filter(v => st[v] === 'dl').length, nDone = vv.filter(v => st[v]).length;
+  const title = !vv.length || !nDone ? '叫料單已進系統'
+    : nDone < vv.length ? `叫料單已進系統（已傳 ${nDone}／${vv.length} 家）`
+    : nS === vv.length ? '叫料單已經以 LINE 分享給供應商'
+    : nD === vv.length ? '叫料單已下載到手機' : '叫料單已分享／下載給供應商';
+  const tag = v => st[v] === 'share' ? '<span class="perf-chip ok" style="margin-left:6px;">已分享</span>' : st[v] === 'dl' ? '<span class="perf-chip ok" style="margin-left:6px;">已下載</span>' : '<span class="perf-chip warn" style="margin-left:6px;">未傳</span>';
+  return `<div class="card" style="margin-bottom:10px;"><div class="sec-hd"><div class="card-title" style="margin:0;">✅ ${title}</div></div>
+    <div style="font-size:13px;color:var(--ink3);margin-bottom:2px;">單號 ${_escf(slip.id)}</div>
     <div style="font-size:13px;color:var(--ink2);line-height:1.6;">${_escf(slip.attr)}・${slip.lines.length} 項・${vs.length} 家${slip.wishDate ? '・希望 ' + poMd(slip.wishDate) + ' 到貨' : ''}</div>
     <div class="po-lab">傳給供應商（一家一張圖；分享一次只能傳給一個聊天室）</div>
-    ${vs.filter(v => v !== PO_SELF).map(v => { const a = `'${_escf(slip.id)}', ${JSON.stringify(v).replace(/"/g, '&quot;')}`; return `<div style="font-size:13.5px;font-weight:600;margin:6px 0 4px;">「${_escf(v)}」${byV[v].length} 項</div>
+    ${vs.filter(v => v !== PO_SELF).map(v => { const a = `'${_escf(slip.id)}', ${JSON.stringify(v).replace(/"/g, '&quot;')}`; return `<div style="font-size:13.5px;font-weight:600;margin:6px 0 4px;">「${_escf(v)}」${byV[v].length} 項${slip === _po.sent ? tag(v) : ''}</div>
       <div class="po-row" style="margin-bottom:8px;"><button class="btn ${slip === _po.sent && _po.sentMode === 'dl' ? 'btn-ghost' : 'btn-primary'}" style="flex:1;border:1px solid var(--border);" onclick="poShare(${a})">📤 分享（LINE 等）</button>
       <button class="btn ${slip === _po.sent && _po.sentMode === 'dl' ? 'btn-primary' : 'btn-ghost'}" style="flex:1;border:1px solid var(--border);" onclick="poDownload(${a})">⬇️ 下載圖</button></div>`; }).join('')}
     ${vs.some(v => v !== PO_SELF) ? `<div style="font-size:12px;color:var(--ink3);line-height:1.6;margin-bottom:6px;">${PO_DL_HINT}</div>` : ''}
@@ -7391,10 +7399,15 @@ function poDraw(slip, vendor) {
 }
 const PO_DL_HINT = '⬇️ 下載圖：iPhone 會跳出圖片，<b>長按圖片 →「儲存到照片」</b>就會存進相簿；Android 會直接下載到相簿或「下載」資料夾。存好後可用 email 等方式傳給不在 LINE 好友裡的供應商。';
 const PO_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);   // v4.06 iPhone 的瀏覽器多半不支援網頁直接下載（會跳「開啟外部應用程式」後沒動作）→ 改顯示圖片讓同仁長按存到照片
+function poMark(slip, vendors, how) {   // v4.07 記下這張單哪家供應商已分享／已下載，更新標題
+  if (!slip || slip !== _po.sent) return;
+  _po.sentStat = _po.sentStat || {}; vendors.forEach(v => { _po.sentStat[v] = how; }); poR();
+}
 function poShowImgs(slip, vendors) {
   const imgs = vendors.map(v => `<div style="font-size:13.5px;font-weight:600;margin:10px 0 4px;">「${_escf(v)}」</div><img src="${poDraw(slip, v).toDataURL('image/png')}" alt="${_escf(v)} 叫料圖" style="width:100%;border:1px solid var(--border);border-radius:8px;display:block;">`).join('');
   makeModal(`<div class="sec-hd"><div class="card-title" style="margin:0;">⬇️ 叫料圖</div><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">✕ 關閉</button></div>
     <div style="font-size:14px;color:var(--ink1);background:var(--card2,#f5ead8);border-radius:8px;padding:8px 10px;line-height:1.6;"><b>長按圖片 →「儲存到照片」</b>，就會存進相簿。${vendors.length > 1 ? '每家供應商一張，請逐張存。' : ''}</div>${imgs}`);
+  poMark(slip, vendors, 'dl');   // iPhone 偵測不到長按存圖，跳出圖片即視為已下載
 }
 function poImgName(slip, vendor) { return '叫料單_' + slip.id + '_' + vendor.replace(/[\\/:*?"<>|\s]/g, '') + '.png'; }
 async function poDownload(slipId, vendor) {   // v4.05 直接下載叫料圖（供應商不在 LINE 好友時改用 email 等）
@@ -7408,7 +7421,7 @@ async function poDownload(slipId, vendor) {   // v4.05 直接下載叫料圖（�
     const url = URL.createObjectURL(blob), a = document.createElement('a');
     a.href = url; a.download = fname; a.style.display = 'none'; document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 60000);
-    toast('⬇️ 已下載「' + vendor + '」叫料圖');
+    toast('⬇️ 已下載「' + vendor + '」叫料圖'); poMark(slip, [vendor], 'dl');
   } catch (e) {
     const url = c.toDataURL('image/png');
     makeModal(`<div class="sec-hd"><div class="card-title" style="margin:0;">⬇️ ${_escf(vendor)} 叫料圖</div><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">✕ 關閉</button></div>
@@ -7425,6 +7438,7 @@ async function poShare(slipId, vendor, auto) {
     const file = blob && new File([blob], fname, { type: 'image/png' });
     if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
       await navigator.share({ files: [file], title: '叫料單 ' + slip.id + '（' + vendor + '）' });
+      poMark(slip, [vendor], 'share');   // 分享完成（取消會丟 AbortError，不記）
       return;
     }
   } catch (e) {
