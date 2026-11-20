@@ -550,7 +550,7 @@ if (API !== 'https://lzbkbzrhwbnajoxkbcle.supabase.co/functions/v1/factory-api')
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v4.07';
+const APP_VERSION='v4.08';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -3149,7 +3149,7 @@ const TYPE_CLIENTS = {
     ['全客製-昭和浪漫冰室', '全客製-昭和浪漫冰室'], ['全客製-日富一日', '全客製-日富一日'],
     ['Feeling Bar', '全客製-Feeling Bar']
   ],
-  [TYPE_OEM_RELABEL_UI]: [['換前標-滿枝枒', '換前標-滿枝枒']],
+  [TYPE_OEM_RELABEL_UI]: [['換前標-滿枝枒', '換前標-滿枝枒'], ['換前標-明茗餐飲(The BBQ House)', '換前標-明茗餐飲(The BBQ House)']],   // v4.08 The BBQ House 貼牌（統編 95013716，主公 2026-11-20）
   '南坡萬自有酒款投產單，無金流': [['南坡萬v.2', '補充自廠酒款水位']],
   [TYPE_SHIP]: [['經銷商－日光貳參', '經銷商－日光貳參'], ['經銷商－文博會', '經銷商－文博會'], ['經銷商－島羽', '經銷商－島羽']]   // v3.24 島羽 Wing Islands（2026-08-29 確認寄售合作；經銷商不需酒譜表/毛利分頁，故僅此一行）
 };
