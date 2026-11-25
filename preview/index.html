@@ -889,7 +889,7 @@ async function _bootApp(username, role) {
   showStockAlerts(window._bootStockAlerts);
   showShipDateAlerts(window._bootOrders);   // v3.14.4 與訂單列表共用同一份，不再重複打 getOrders
   _consignApplyBoot(_b);                    // v3.28 經銷商設定快取＋結帳日到期提醒（一天一次）
-  showStockNotices(_b && _b.stockNotices);   // v4.09 倉管庫存異動通知（後端只給倉管帶這包）
+  showStockNotices(_b && _b.stockNotices);   // v4.09 庫存異動通知（後端只給名單內的人帶這包）
   window._bootStockAlerts = null;
   window._bootOrders = null;   // 開機預抓用完即丟：之後的 ↻／切分頁一律重新取
 }
@@ -6234,8 +6234,8 @@ function showConsignReminder(res) {
     <div class="fe" style="margin-top:12px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">稍後</button><button class="btn btn-primary btn-sm" id="cr_go">前往經銷商寄售統計 ›</button></div>`);
   m.querySelector('#cr_go').onclick = () => { m.remove(); switchTab('consign'); };
 }
-// ── v4.09 倉管庫存異動通知（主公 2026-11-25）：其他同事動了庫存（出貨／成品／玻璃瓶／資材）→ 倉管登入即彈紅框卡。
-//   資料由後端 bootstrap.stockNotices 帶回（只給倉管）；按「我知道了」才記為看過（跨裝置），按「稍後再看」＝下次登入再跳。
+// ── v4.09 庫存異動通知（主公 2026-11-25）：其他同事動了庫存（出貨／成品／玻璃瓶／資材）→ 登入即彈紅框卡。
+//   資料由後端 bootstrap.stockNotices 帶回（對象由後端 STOCK_NOTICE_USERS 決定：小李／Molly／阿軒／Vic）；按「我知道了」才記為看過（跨裝置），按「稍後再看」＝下次登入再跳。
 function showStockNotices(res) {
   if (!curUser || !res || !res.ok || !(res.events || []).length) return;
   if (document.querySelector('div[data-stocknotice]')) return;
