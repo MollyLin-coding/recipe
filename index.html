@@ -550,7 +550,7 @@ if (API !== 'https://lzbkbzrhwbnajoxkbcle.supabase.co/functions/v1/factory-api')
 }
 
 // APP 版本號：promote.sh 升版時自動以 sed 蓋上該次 tag（勿手改格式）
-const APP_VERSION='v4.08';
+const APP_VERSION='v4.09';
 window.addEventListener('DOMContentLoaded', function () {
   const v=document.getElementById('appVer'); if(v) v.textContent='版本 '+APP_VERSION;
 });
@@ -889,6 +889,7 @@ async function _bootApp(username, role) {
   showStockAlerts(window._bootStockAlerts);
   showShipDateAlerts(window._bootOrders);   // v3.14.4 與訂單列表共用同一份，不再重複打 getOrders
   _consignApplyBoot(_b);                    // v3.28 經銷商設定快取＋結帳日到期提醒（一天一次）
+  showStockNotices(_b && _b.stockNotices);   // v4.09 庫存異動通知（後端只給名單內的人帶這包）
   window._bootStockAlerts = null;
   window._bootOrders = null;   // 開機預抓用完即丟：之後的 ↻／切分頁一律重新取
 }
@@ -6232,6 +6233,57 @@ function showConsignReminder(res) {
     ${rows}${pendRows}
     <div class="fe" style="margin-top:12px;"><button class="btn btn-ghost btn-sm" onclick="this.closest('.modal-bg').remove()">稍後</button><button class="btn btn-primary btn-sm" id="cr_go">前往經銷商寄售統計 ›</button></div>`);
   m.querySelector('#cr_go').onclick = () => { m.remove(); switchTab('consign'); };
+}
+// ── v4.09 庫存異動通知（主公 2026-11-25）：其他同事動了庫存（出貨／成品／玻璃瓶／資材）→ 登入即彈紅框卡。
+//   資料由後端 bootstrap.stockNotices 帶回（對象由後端 STOCK_NOTICE_USERS 決定：小李／Molly／阿軒／Vic）；按「我知道了」才記為看過（跨裝置），按「稍後再看」＝下次登入再跳。
+function showStockNotices(res) {
+  if (!curUser || !res || !res.ok || !(res.events || []).length) return;
+  if (document.querySelector('div[data-stocknotice]')) return;
+  const ICON = { '出貨': '🚚', '成品': '🥃', '玻璃瓶': '🍾', '資材': '🏷️' };
+  const lineHtml = (e, ln) => {
+    const out = e.type === '出貨' || e.type === '出庫', ng = e.type === 'NG';
+    const sign = ng ? 'NG ' : (out ? '−' : '＋');
+    const color = ng ? 'var(--yellow)' : (out ? 'var(--red)' : 'var(--green)');
+    const stock = (ln.stock == null) ? '' : `<span style="color:${ln.low ? 'var(--red)' : 'var(--ink3)'};${ln.low ? 'font-weight:700;' : ''}">目前 ${ln.stock}${ln.low ? '（低於安全水位 ' + ln.low + '）' : ''}</span>`;
+    return `<div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin-top:3px;">
+      <div style="min-width:0;">${_escf(ln.item)}${ln.bottleType ? `<span style="color:var(--ink3);font-size:11px;">・${_escf(ln.bottleType)}</span>` : ''}</div>
+      <div style="white-space:nowrap;text-align:right;"><b style="color:${color};font-size:15px;">${sign}${ln.qty}</b> <span style="font-size:11px;color:var(--ink3);">${_escf(ln.unit || '')}</span>${stock ? `<div style="font-size:11px;">${stock}</div>` : ''}</div></div>`;
+  };
+  const cards = res.events.map(e => {
+    let title;
+    if (e.kind === '出貨') title = `訂單出貨 ${_escf(e.orderNo)}${e.seq ? '・第 ' + e.seq + ' 次' : ''}`;
+    else title = `${e.kind}${e.type === 'NG' ? ' NG 登記' : e.type}`;
+    const sub = [e.kind !== '玻璃瓶' && e.kind !== '資材' && e.client ? _escf(clientLabel(e.client)) : '', e.kind === '成品' && e.orderNo ? '訂單 ' + _escf(e.orderNo) : '', e.lot ? 'Lot ' + _escf(e.lot) : '', e.note ? _escf(e.note) : ''].filter(Boolean).join('・');
+    return `<div style="border:1px solid var(--border);border-radius:10px;padding:9px 11px;margin-top:8px;text-align:left;font-size:13px;background:#fff;">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline;">
+        <b>${ICON[e.kind] || '📦'} ${title}</b><span style="font-size:11px;color:var(--ink3);white-space:nowrap;">${_escf(e.time)}・<b style="color:var(--ink2);">${_escf(e.operator || '未記名')}</b></span></div>
+      ${sub ? `<div style="font-size:11px;color:var(--ink3);margin-top:2px;line-height:1.5;">${sub}</div>` : ''}
+      ${(e.lines || []).map(ln => lineHtml(e, ln)).join('')}</div>`;
+  }).join('');
+  const total = res.count || res.events.length;
+  const bg = document.createElement('div');
+  bg.setAttribute('data-stocknotice', '1');
+  bg.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:5000;padding:14px;';
+  bg.innerHTML = `<div style="background:var(--bg);border:3px solid #c0392b;border-radius:14px;max-width:460px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 30px rgba(0,0,0,.3);">
+    <div style="padding:14px 14px 8px;text-align:center;">
+      <div style="font-size:30px;line-height:1;">📣</div>
+      <div style="font-size:16px;font-weight:800;color:#c0392b;margin-top:6px;">庫存異動通知（${total} 則）</div>
+      <div style="font-size:12px;color:var(--ink2);margin-top:3px;">你上次看過之後，其他同事做了這些會影響庫存的動作</div>
+    </div>
+    <div style="overflow-y:auto;padding:0 12px 4px;flex:1;-webkit-overflow-scrolling:touch;">${cards}
+      ${res.more ? `<div style="font-size:12px;color:var(--ink3);text-align:center;margin-top:8px;">另有較早的 ${res.more} 則未列出，請到各庫存頁最下方「異動歷史」查看</div>` : ''}</div>
+    <div style="padding:10px 12px 12px;">
+      <button class="btn btn-primary" style="width:100%;" id="sn_ok">✅ 我知道了</button>
+      <button class="btn btn-ghost btn-sm" style="width:100%;margin-top:6px;" id="sn_later">稍後再看（下次登入再提醒）</button>
+    </div></div>`;
+  document.body.appendChild(bg);
+  bg.querySelector('#sn_later').onclick = () => bg.remove();
+  bg.querySelector('#sn_ok').onclick = async function () {
+    this.disabled = true; this.textContent = '記錄中…';
+    const r = await api({ action: 'stockNoticeAck', upTo: res.upTo }, true);
+    bg.remove();
+    if (!r || !r.ok) toast('已關閉，但「看過」沒記到（' + ((r && r.error) || '連線問題') + '），下次登入會再提醒一次');
+  };
 }
 function _periodLabel(p) { return p ? (p.slice(0, 4) + ' 年 ' + Number(p.slice(5, 7)) + ' 月') : '—'; }
 const _ntf = n => 'NT$' + (Math.round(Number(n) || 0)).toLocaleString('zh-TW');
